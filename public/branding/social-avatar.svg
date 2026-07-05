@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">Racketshop.bg Social Avatar</title>
+  <desc id="desc">Round social avatar logo for profiles and cards.</desc>
+  <rect width="512" height="512" rx="256" fill="#f4efe6" />
+  <circle cx="256" cy="256" r="208" fill="#0b6b57" />
+  <circle cx="330" cy="170" r="22" fill="#1a1a1a" />
+  <path d="M96 330c54-90 146-156 290-198" fill="none" stroke="#f2c230" stroke-width="30" stroke-linecap="round" />
+  <path d="M136 376c86-120 188-198 268-250" fill="none" stroke="#ffd769" stroke-width="16" stroke-linecap="round" />
+</svg>

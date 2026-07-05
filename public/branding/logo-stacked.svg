@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 520" role="img" aria-labelledby="title desc">
+  <title id="title">Racketshop.bg Stacked Logo</title>
+  <desc id="desc">Stacked version of the Double Arc + Ball logo.</desc>
+  <rect width="420" height="520" rx="44" fill="#f4efe6" />
+  <g transform="translate(56 42)">
+    <rect x="0" y="0" width="308" height="308" rx="50" fill="#0b6b57" />
+    <circle cx="208" cy="104" r="18" fill="#1a1a1a" />
+    <path d="M36 234c46-72 116-124 236-154" fill="none" stroke="#f2c230" stroke-width="22" stroke-linecap="round" />
+    <path d="M66 268c66-90 158-150 220-188" fill="none" stroke="#ffd769" stroke-width="12" stroke-linecap="round" />
+    <circle cx="208" cy="104" r="5" fill="#f2c230" />
+  </g>
+  <text x="210" y="424" text-anchor="middle" font-family="Trebuchet MS, Verdana, Arial, sans-serif" font-size="56" font-weight="700" fill="#0c2a24">RACKETSHOP</text>
+  <text x="210" y="476" text-anchor="middle" font-family="Trebuchet MS, Verdana, Arial, sans-serif" font-size="44" font-weight="700" fill="#f2c230">.BG</text>
+</svg>

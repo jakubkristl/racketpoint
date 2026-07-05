@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 240" role="img" aria-labelledby="title desc">
+  <title id="title">Racketshop.bg Horizontal Logo</title>
+  <desc id="desc">Double arc squash-inspired brand mark with wordmark.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0b6b57" />
+      <stop offset="100%" stop-color="#083e33" />
+    </linearGradient>
+  </defs>
+  <rect width="920" height="240" rx="34" fill="#f4efe6" />
+  <g transform="translate(40 28)">
+    <rect x="0" y="0" width="184" height="184" rx="34" fill="url(#bg)" />
+    <circle cx="121" cy="64" r="12" fill="#1a1a1a" />
+    <path d="M24 142c26-42 70-74 136-92" fill="none" stroke="#f2c230" stroke-width="16" stroke-linecap="round" />
+    <path d="M42 164c42-58 92-92 130-114" fill="none" stroke="#ffd769" stroke-width="10" stroke-linecap="round" />
+    <circle cx="122" cy="64" r="3.5" fill="#f2c230" />
+  </g>
+  <g transform="translate(262 66)">
+    <text x="0" y="48" font-family="Trebuchet MS, Verdana, Arial, sans-serif" font-size="58" font-weight="700" fill="#0c2a24">RACKETSHOP</text>
+    <text x="518" y="48" font-family="Trebuchet MS, Verdana, Arial, sans-serif" font-size="58" font-weight="700" fill="#f2c230">.BG</text>
+    <text x="0" y="96" font-family="Trebuchet MS, Verdana, Arial, sans-serif" font-size="24" font-weight="600" fill="#36514a" letter-spacing="2">DOUBLE YELLOW SQUASH STORE</text>
+  </g>
+</svg>

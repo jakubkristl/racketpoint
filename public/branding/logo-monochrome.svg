@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 240" role="img" aria-labelledby="title desc">
+  <title id="title">Racketshop.bg Monochrome Logo</title>
+  <desc id="desc">One-color horizontal logo variant for print and dark overlays.</desc>
+  <rect width="920" height="240" rx="34" fill="#ffffff" />
+  <g transform="translate(40 28)" stroke="#0c2a24" fill="none" stroke-linecap="round">
+    <rect x="0" y="0" width="184" height="184" rx="34" fill="#ffffff" stroke="#0c2a24" stroke-width="8" />
+    <circle cx="121" cy="64" r="12" fill="#0c2a24" stroke="none" />
+    <path d="M24 142c26-42 70-74 136-92" stroke-width="16" />
+    <path d="M42 164c42-58 92-92 130-114" stroke-width="10" />
+  </g>
+  <g transform="translate(262 66)">
+    <text x="0" y="48" font-family="Trebuchet MS, Verdana, Arial, sans-serif" font-size="58" font-weight="700" fill="#0c2a24">RACKETSHOP.BG</text>
+    <text x="0" y="96" font-family="Trebuchet MS, Verdana, Arial, sans-serif" font-size="24" font-weight="600" fill="#0c2a24" letter-spacing="2">DOUBLE YELLOW SQUASH STORE</text>
+  </g>
+</svg>
