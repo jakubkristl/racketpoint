@@ -8,6 +8,7 @@ import { getStoreSnapshot, saveStoreSnapshot, type StoreSnapshot } from './data/
 import { isAdminAuthenticated } from './data/adminAuth';
 import BrandLogo from './components/BrandLogo';
 import CartDrawer from './components/CartDrawer';
+import WorkInProgressBanner from './components/WorkInProgressBanner';
 
 type CartLine = {
   sku: string;
@@ -135,6 +136,8 @@ function App() {
 
   return (
     <>
+      {location.pathname !== '/admin' ? <WorkInProgressBanner /> : null}
+
       <Routes>
         <Route
           path="/"
