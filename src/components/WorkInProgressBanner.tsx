@@ -2,8 +2,8 @@ function WorkInProgressBanner() {
   return (
     <div className="work-in-progress-banner">
       <div className="banner-content">
-        <p className="banner-eyebrow">Work in Progress</p>
-        <p className="banner-text">Racketpoint.bg is under active development. Expected launch: August 10, 2026.</p>
+        <p className="banner-eyebrow">В процес на разработка</p>
+        <p className="banner-text">Racketpoint.bg е в активна разработка. Очакван старт: 10 август 2026 г.</p>
       </div>
     </div>
   );
