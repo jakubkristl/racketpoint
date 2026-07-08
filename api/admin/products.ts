@@ -92,7 +92,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     } else if (req.method === 'PUT') {
       // Update product (stock, price, etc.)
-      const { sku, stock, priceBgn, priceBgn: newPrice } = req.body;
+      const { sku, stock, priceEur } = req.body;
 
       if (!sku) {
         return res.status(400).json({ message: 'Product SKU is required' });
@@ -100,7 +100,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       const updateData: any = { updatedAt: new Date() };
       if (stock !== undefined) updateData.stock = Math.max(0, stock);
-      if (newPrice !== undefined) updateData.priceBgn = newPrice;
+      if (priceEur !== undefined) updateData.priceEur = priceEur;
 
       const result = await db.collection('products').updateOne(
         { sku },

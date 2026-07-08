@@ -28,18 +28,16 @@ Stripe API (Payments)
 ```
 MONGODB_URI=mongodb+srv://user:password@cluster.mongodb.net/racketpoint
 JWT_SECRET=your-super-secret-key-generate-random
-STRIPE_SECRET_KEY=sk_test_your_stripe_secret_key
-STRIPE_PUBLISHABLE_KEY=pk_test_your_stripe_public_key
 ADMIN_PASSWORD=racketpoint-admin
 ```
 
-## 2. Stripe Payment Setup
+## 2. Payment Methods Setup
 
-### Steps:
-1. Create account: https://stripe.com
-2. Go to API keys section
-3. Copy Publishable and Secret keys
-4. Add to Vercel Environment Variables
+This version supports two payment methods:
+- **Online Card Payment**: For credit/debit cards (requires payment gateway integration later)
+- **Cash on Delivery**: Orders are collected with payment due on delivery
+
+No payment gateway configuration needed for initial launch.
 
 ## 3. Database Schema
 
@@ -80,7 +78,6 @@ ADMIN_PASSWORD=racketpoint-admin
   categorySlug: String,
   type: String,
   priceEur: Number,
-  priceBgn: Number,
   description: String,
   descriptionBg: String,
   imageUrl: String,
@@ -96,23 +93,23 @@ ADMIN_PASSWORD=racketpoint-admin
 ```javascript
 {
   _id: ObjectId,
-  orderNumber: String (unique, e.g., "RP-20260708-00001"),
+  orderNumber: String (unique, e.g., "RP-2026-00001"),
   userId: ObjectId (ref to Users),
   items: [{
     sku: String,
     name: String,
     quantity: Number,
-    priceBgn: Number,
+    priceEur: Number,
     subtotal: Number
   }],
   billingAddress: Object,
   shippingAddress: Object,
-  total: Number,
-  tax: Number,
-  shippingCost: Number,
+  subtotal: Number (EUR),
+  shippingCost: Number (EUR),
+  total: Number (EUR),
+  currency: 'EUR',
   status: 'pending' | 'paid' | 'shipped' | 'delivered' | 'cancelled',
-  paymentMethod: 'stripe' | 'bank_transfer',
-  stripePaymentIntentId: String,
+  paymentMethod: 'card' | 'cash_on_delivery',
   notes: String,
   createdAt: Date,
   updatedAt: Date
@@ -138,15 +135,11 @@ ADMIN_PASSWORD=racketpoint-admin
 - `DELETE /api/products/:sku` (admin) - Delete product
 
 ### Orders
-- `POST /api/orders` - Create order
+- `POST /api/orders/create` - Create order (EUR, no VAT)
 - `GET /api/orders` - User's orders
 - `GET /api/orders/:id` - Order details
 - `PUT /api/orders/:id` (admin) - Update order status
 - `POST /api/orders/:id/cancel` - Cancel order
-
-### Payments
-- `POST /api/payments/create-intent` - Stripe payment intent
-- `POST /api/payments/webhook` - Stripe webhook
 
 ### Admin
 - `GET /api/admin/users` (admin) - List users
@@ -158,7 +151,7 @@ ADMIN_PASSWORD=racketpoint-admin
 
 ### Step 1: Install Dependencies
 ```bash
-npm install jsonwebtoken bcryptjs mongodb stripe axios
+npm install jsonwebtoken bcryptjs mongodb
 ```
 
 ### Step 2: Create API Routes
@@ -167,17 +160,20 @@ All files go in `/api` directory. Vercel auto-detects them.
 ### Step 3: Database Migration
 Create script to seed Unsquashable products:
 ```bash
-npm run seed:products
+node scripts/seedProducts.js
 ```
 
 ### Step 4: Set Environment Variables in Vercel
 1. Go to Vercel Dashboard → Project → Settings → Environment Variables
-2. Add all values from section 1
+2. Add these variables:
+   - `MONGODB_URI` (from MongoDB Atlas)
+   - `JWT_SECRET` (random key)
+   - `ADMIN_PASSWORD`
 
 ### Step 5: Deploy
 ```bash
 git add .
-git commit -m "Add full backend: auth, products, payments, admin CRM"
+git commit -m "Add full backend: auth, products, orders, admin CRM"
 git push origin main
 ```
 
@@ -211,8 +207,9 @@ Vercel auto-deploys when code is pushed.
 - [ ] Set secure/httpOnly cookies for tokens
 - [ ] Add logging & monitoring
 - [ ] Configure email notifications (order confirmations)
-- [ ] Implement SSL certificate via Vercel
 - [ ] Set production environment variables in Vercel
+- [ ] Payment gateway integration for card payments (future)
+- [ ] Implement SSL certificate via Vercel
 
 ## 8. Testing Accounts
 

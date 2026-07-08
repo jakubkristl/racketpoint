@@ -37,7 +37,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(401).json({ message: 'Unauthorized - invalid token' });
   }
 
-  const { items, billingAddress, shippingAddress, notes } = req.body;
+  const { items, billingAddress, shippingAddress, notes, paymentMethod } = req.body;
 
   if (!items || !Array.isArray(items) || items.length === 0) {
     return res.status(400).json({ message: 'Order must have at least one item' });
@@ -47,20 +47,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ message: 'Billing address is required' });
   }
 
+  if (!paymentMethod || !['card', 'cash_on_delivery'].includes(paymentMethod)) {
+    return res.status(400).json({ message: 'Payment method must be "card" or "cash_on_delivery"' });
+  }
+
   const client = new MongoClient(MONGODB_URI);
 
   try {
     await client.connect();
     const db = client.db('racketpoint');
 
-    // Calculate totals
+    // Calculate totals (EUR, no VAT)
     const subtotal = items.reduce((sum: number, item: any) => {
-      return sum + (Number(item.priceBgn) * Number(item.quantity));
+      return sum + (Number(item.priceEur) * Number(item.quantity));
     }, 0);
 
-    const tax = Math.round(subtotal * 20) / 100; // 20% VAT
-    const shippingCost = subtotal > 100 ? 0 : 7.99; // Free shipping over 100 BGN
-    const total = subtotal + tax + shippingCost;
+    const shippingCost = subtotal > 100 ? 0 : 8.95; // Free shipping over €100
+    const total = subtotal + shippingCost;
 
     // Generate order number
     const orderCount = await db.collection('orders').countDocuments();
@@ -73,11 +76,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       billingAddress,
       shippingAddress: shippingAddress || billingAddress,
       subtotal: Math.round(subtotal * 100) / 100,
-      tax: Math.round(tax * 100) / 100,
       shippingCost: Math.round(shippingCost * 100) / 100,
       total: Math.round(total * 100) / 100,
+      currency: 'EUR',
       status: 'pending',
-      paymentMethod: 'pending',
+      paymentMethod,
       notes: notes || '',
       createdAt: new Date(),
       updatedAt: new Date(),

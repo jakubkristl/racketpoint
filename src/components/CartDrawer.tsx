@@ -45,6 +45,7 @@ function CartDrawer({
   const [city, setCity] = useState('');
   const [address, setAddress] = useState('');
   const [notes, setNotes] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState<'card' | 'cash_on_delivery'>('card');
   const [status, setStatus] = useState<string | null>(null);
 
   const cartItems = useMemo(() => {
@@ -57,10 +58,11 @@ function CartDrawer({
           return null;
         }
 
+        const price = product.priceEur || parsePrice(product.price || '0');
         return {
           ...line,
           product,
-          lineTotal: parsePrice(product.price) * line.quantity,
+          lineTotal: price * line.quantity,
         };
       })
       .filter((item) => item !== null);
@@ -81,6 +83,7 @@ function CartDrawer({
       `Phone: ${phone}`,
       `City: ${city}`,
       `Address: ${address}`,
+      `Payment method: ${paymentMethod === 'card' ? 'Online payment' : 'Cash on delivery'}`,
       notes ? `Notes: ${notes}` : '',
     ]
       .filter(Boolean)
@@ -89,7 +92,13 @@ function CartDrawer({
     const result = await submitOrderRequest({
       fullName,
       email,
-      items: cartItems.map((item) => ({ sku: item.sku, quantity: item.quantity })),
+      items: cartItems.map((item) => ({ 
+        sku: item.sku, 
+        quantity: item.quantity,
+        priceEur: item.product.priceEur,
+      })),
+      billingAddress: { city, address, phone },
+      paymentMethod,
       notes: orderNotes,
     });
 
@@ -100,6 +109,7 @@ function CartDrawer({
     setCity('');
     setAddress('');
     setNotes('');
+    setPaymentMethod('card');
     onClear();
   }
 
@@ -177,6 +187,13 @@ function CartDrawer({
           <label>
             Notes
             <textarea value={notes} onChange={(event) => setNotes(event.target.value)} rows={2} />
+          </label>
+          <label>
+            Payment Method *
+            <select value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value as 'card' | 'cash_on_delivery')} required>
+              <option value="card">💳 Online Card Payment</option>
+              <option value="cash_on_delivery">💰 Cash on Delivery</option>
+            </select>
           </label>
           <button className="button button-primary" type="submit" disabled={cartItems.length === 0}>
             Submit order request

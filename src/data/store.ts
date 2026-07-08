@@ -14,7 +14,14 @@ export type OrderInput = {
   items: Array<{
     sku: string;
     quantity: number;
+    priceEur?: number;
   }>;
+  billingAddress?: {
+    city: string;
+    address: string;
+    phone: string;
+  };
+  paymentMethod?: 'card' | 'cash_on_delivery';
   notes?: string;
 };
 

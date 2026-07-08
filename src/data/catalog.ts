@@ -24,10 +24,16 @@ export type Product = {
   categorySlug: CategorySlug;
   type: ProductType;
   brand: string;
-  price: string;
+  price?: string;
+  priceEur?: number;
   details: string;
+  detailsBg?: string;
+  description?: string;
+  descriptionBg?: string;
   badges: string[];
   imageUrl: string;
+  stock?: number;
+  nameBg?: string;
 };
 
 export function createProductArtwork(title: string, subtitle: string, accent: string) {
