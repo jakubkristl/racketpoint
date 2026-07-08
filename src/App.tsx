@@ -142,12 +142,7 @@ function App() {
         <Route
           path="/"
           element={
-            <HomePage
-              categories={store.categories}
-              brands={store.brands}
-              featuredProducts={store.products}
-              onAddToCart={handleAddToCart}
-            />
+            <HomePage />
           }
         />
         <Route path="/category/:slug" element={<CategoryRoute snapshot={store} onAddToCart={handleAddToCart} />} />
