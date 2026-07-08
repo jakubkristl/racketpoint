@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, Navigate, Route, Routes, useLocation, useParams } from 'react-router-dom';
+import { Analytics } from '@vercel/analytics/react';
 import HomePage from './pages/HomePage';
 import CategoryPage from './pages/CategoryPage';
 import type { CategorySlug } from './data/catalog';
@@ -191,6 +192,8 @@ function App() {
           onClear={handleClearCart}
         />
       ) : null}
+
+      <Analytics />
     </>
   );
 }
