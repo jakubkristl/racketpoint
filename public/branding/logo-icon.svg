@@ -1,9 +1,26 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title desc">
-  <title id="title">Racketshop.bg Icon Logo</title>
-  <desc id="desc">Icon-only logo with crossing yellow arcs and a squash ball.</desc>
-  <rect width="256" height="256" rx="52" fill="#0b6b57" />
-  <circle cx="166" cy="80" r="16" fill="#1a1a1a" />
-  <path d="M28 184c34-54 90-97 192-124" fill="none" stroke="#f2c230" stroke-width="20" stroke-linecap="round" />
-  <path d="M54 210c52-72 122-120 178-154" fill="none" stroke="#ffd769" stroke-width="12" stroke-linecap="round" />
-  <circle cx="166" cy="80" r="4" fill="#f2c230" />
+  <title id="title">Racketpoint.bg Icon Logo</title>
+  <desc id="desc">Blue racket, green ball and orange motion trail.</desc>
+  <defs>
+    <linearGradient id="iconFrame" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#1c6cb1" />
+      <stop offset="100%" stop-color="#0a3f7a" />
+    </linearGradient>
+    <linearGradient id="iconBall" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#d9ef61" />
+      <stop offset="100%" stop-color="#94bf27" />
+    </linearGradient>
+  </defs>
+  <rect width="256" height="256" rx="54" fill="#ffffff"/>
+  <path d="M90 160c-20 20-34 43-46 69l-18-11c11-28 27-54 53-77" fill="url(#iconFrame)"/>
+  <path d="M96 48c25 0 49 8 66 25 19 18 27 38 22 58-6 19-22 39-48 56-24 16-56 30-84 35 25-17 45-35 67-59 20-21 35-44 40-62 4-15 1-31-10-43-11-12-30-18-53-10z" fill="none" stroke="url(#iconFrame)" stroke-width="13" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M70 73l63 57" stroke="#ffffff" stroke-width="5"/>
+  <path d="M55 92l65 60" stroke="#ffffff" stroke-width="5"/>
+  <path d="M108 53l-32 81" stroke="#ffffff" stroke-width="5"/>
+  <path d="M134 60l-40 98" stroke="#ffffff" stroke-width="5"/>
+  <circle cx="160" cy="73" r="28" fill="url(#iconBall)" stroke="#ffffff" stroke-width="6"/>
+  <path d="M144 64c10-8 21-10 32-6" fill="none" stroke="#ffffff" stroke-width="5" stroke-linecap="round"/>
+  <path d="M184 74c22 0 37 2 52 7" fill="none" stroke="#e56717" stroke-width="11" stroke-linecap="round"/>
+  <path d="M181 91c27 5 46 11 56 17" fill="none" stroke="#e56717" stroke-width="7" stroke-linecap="round"/>
+  <circle cx="236" cy="103" r="8" fill="#e56717"/>
 </svg>

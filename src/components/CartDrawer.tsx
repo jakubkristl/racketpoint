@@ -1,6 +1,6 @@
-import { useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import type { Product } from '../data/catalog';
-import { submitOrderRequest } from '../data/store';
 
 type CartLine = {
   sku: string;
@@ -10,10 +10,10 @@ type CartLine = {
 type CartDrawerProps = {
   products: Product[];
   lines: CartLine[];
+  autoOpenToken?: string;
   onIncrement: (sku: string) => void;
   onDecrement: (sku: string) => void;
   onRemove: (sku: string) => void;
-  onClear: () => void;
 };
 
 function parsePrice(price: string) {
@@ -33,85 +33,55 @@ function formatCurrency(value: number) {
 function CartDrawer({
   products,
   lines,
+  autoOpenToken,
   onIncrement,
   onDecrement,
   onRemove,
-  onClear,
 }: CartDrawerProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const [fullName, setFullName] = useState('');
-  const [email, setEmail] = useState('');
-  const [phone, setPhone] = useState('');
-  const [city, setCity] = useState('');
-  const [address, setAddress] = useState('');
-  const [notes, setNotes] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState<'card' | 'cash_on_delivery'>('card');
   const [status, setStatus] = useState<string | null>(null);
 
   const cartItems = useMemo(() => {
     const productBySku = new Map(products.map((product) => [product.sku, product] as const));
 
-    return lines
-      .map((line) => {
-        const product = productBySku.get(line.sku);
-        if (!product) {
-          return null;
-        }
+    const items: Array<{ sku: string; quantity: number; product: Product; lineTotal: number }> = [];
 
-        const price = product.priceEur || parsePrice(product.price || '0');
-        return {
-          ...line,
-          product,
-          lineTotal: price * line.quantity,
-        };
-      })
-      .filter((item) => item !== null);
+    for (const line of lines) {
+      const product = productBySku.get(line.sku);
+      if (!product) {
+        continue;
+      }
+
+      const unitPrice = product.priceEur || parsePrice(product.price || '0');
+      items.push({
+        sku: line.sku,
+        quantity: line.quantity,
+        product,
+        lineTotal: unitPrice * line.quantity,
+      });
+    }
+
+    return items;
   }, [lines, products]);
 
   const totalItems = cartItems.reduce((sum, item) => sum + item.quantity, 0);
   const totalPrice = cartItems.reduce((sum, item) => sum + item.lineTotal, 0);
 
-  async function handleCheckoutSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  useEffect(() => {
+    if (autoOpenToken) {
+      setIsOpen(true);
+      setStatus('Card payment was not completed. You can continue from checkout.');
+    }
+  }, [autoOpenToken]);
 
-    if (cartItems.length === 0) {
-      setStatus('Добави поне един продукт в количката.');
-      return;
+  useEffect(() => {
+    function onOpenCart() {
+      setIsOpen(true);
     }
 
-    const orderNotes = [
-      `Phone: ${phone}`,
-      `City: ${city}`,
-      `Address: ${address}`,
-      `Payment method: ${paymentMethod === 'card' ? 'Online payment' : 'Cash on delivery'}`,
-      notes ? `Notes: ${notes}` : '',
-    ]
-      .filter(Boolean)
-      .join('\n');
-
-    const result = await submitOrderRequest({
-      fullName,
-      email,
-      items: cartItems.map((item) => ({ 
-        sku: item.sku, 
-        quantity: item.quantity,
-        priceEur: item.product.priceEur,
-      })),
-      billingAddress: { city, address, phone },
-      paymentMethod,
-      notes: orderNotes,
-    });
-
-    setStatus(`Заявката е приета с номер ${result.reference}.`);
-    setFullName('');
-    setEmail('');
-    setPhone('');
-    setCity('');
-    setAddress('');
-    setNotes('');
-    setPaymentMethod('card');
-    onClear();
-  }
+    window.addEventListener('racketpoint:open-cart', onOpenCart as EventListener);
+    return () => window.removeEventListener('racketpoint:open-cart', onOpenCart as EventListener);
+  }, []);
 
   return (
     <>
@@ -133,27 +103,28 @@ function CartDrawer({
           {cartItems.length > 0 ? (
             cartItems.map((item) => (
               <article key={item.sku} className="cart-line">
-                <div>
-                  <p className="product-category">{item.product.brand}</p>
-                  <h3>{item.product.name}</h3>
-                  <p>{item.product.price}</p>
+                <div className="cart-line-main">
+                  <img className="cart-line-thumb" src={item.product.imageUrl} alt={item.product.name} loading="lazy" />
+                  <div>
+                    <p className="product-category">{item.product.brand}</p>
+                    <h3>{item.product.name}</h3>
+                    <p className="support-copy">Unit: {formatCurrency(item.product.priceEur || parsePrice(item.product.price || '0'))}</p>
+                    <p className="cart-line-total">Line total: {formatCurrency(item.lineTotal)}</p>
+                  </div>
                 </div>
+
                 <div className="cart-line-actions">
-                  <button type="button" onClick={() => onDecrement(item.sku)}>
-                    -
-                  </button>
-                  <span>{item.quantity}</span>
-                  <button type="button" onClick={() => onIncrement(item.sku)}>
-                    +
-                  </button>
-                  <button type="button" onClick={() => onRemove(item.sku)}>
+                  <button type="button" className="qty-btn" onClick={() => onDecrement(item.sku)}>-</button>
+                  <span className="qty-value">{item.quantity}</span>
+                  <button type="button" className="qty-btn" onClick={() => onIncrement(item.sku)}>+</button>
+                  <button type="button" className="button button-secondary cart-remove-btn" onClick={() => onRemove(item.sku)}>
                     Remove
                   </button>
                 </div>
               </article>
             ))
           ) : (
-            <p className="support-copy">Количката е празна. Добави продукти от каталога.</p>
+            <p className="support-copy">Your cart is empty. Add products from the catalog.</p>
           )}
         </div>
 
@@ -162,44 +133,12 @@ function CartDrawer({
           <strong>{formatCurrency(totalPrice)}</strong>
         </div>
 
-        <form className="checkout-form" onSubmit={handleCheckoutSubmit}>
-          <p className="eyebrow">Checkout request</p>
-          <label>
-            Full name
-            <input value={fullName} onChange={(event) => setFullName(event.target.value)} required />
-          </label>
-          <label>
-            Email
-            <input type="email" value={email} onChange={(event) => setEmail(event.target.value)} required />
-          </label>
-          <label>
-            Phone
-            <input value={phone} onChange={(event) => setPhone(event.target.value)} required />
-          </label>
-          <label>
-            City
-            <input value={city} onChange={(event) => setCity(event.target.value)} required />
-          </label>
-          <label>
-            Address
-            <textarea value={address} onChange={(event) => setAddress(event.target.value)} rows={2} required />
-          </label>
-          <label>
-            Notes
-            <textarea value={notes} onChange={(event) => setNotes(event.target.value)} rows={2} />
-          </label>
-          <label>
-            Payment Method *
-            <select value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value as 'card' | 'cash_on_delivery')} required>
-              <option value="card">💳 Online Card Payment</option>
-              <option value="cash_on_delivery">💰 Cash on Delivery</option>
-            </select>
-          </label>
-          <button className="button button-primary" type="submit" disabled={cartItems.length === 0}>
-            Submit order request
-          </button>
+        <div className="cart-drawer-footer">
+          <Link className="button button-primary" to={totalItems > 0 ? '/checkout' : '/'} onClick={() => setIsOpen(false)}>
+            {totalItems > 0 ? 'Proceed to checkout' : 'Back to store'}
+          </Link>
           {status ? <p className="form-status">{status}</p> : null}
-        </form>
+        </div>
       </aside>
     </>
   );

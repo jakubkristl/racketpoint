@@ -6,15 +6,11 @@ type BrandLogoProps = {
 function BrandLogo({ subtitle = 'Racketpoint Premium Storefront', compact = false }: BrandLogoProps) {
   return (
     <div className={compact ? 'brand-lockup compact' : 'brand-lockup'}>
-      <img
-        className="brand-mark"
-        src="/branding/logo-icon.svg"
-        alt="Racketpoint.bg logo"
-        width={compact ? 44 : 56}
-        height={compact ? 44 : 56}
-      />
-      <div className="brand-wording">
-        <img className="brand-wordmark" src="/branding/logo-horizontal.svg" alt="Racketpoint.bg" />
+      <div className="brand-wording brand-logo-frame">
+        <picture>
+          <source srcSet="/branding/logo.webp" type="image/webp" />
+          <img className="brand-logo-image" src="/branding/logo-fallback.png" alt="Racketpoint.bg Everything for Racket Sports" />
+        </picture>
         <p className="brand-subtitle">{subtitle}</p>
       </div>
     </div>

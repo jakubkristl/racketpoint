@@ -5,7 +5,7 @@ function hasWindow() {
 }
 
 function readPassword() {
-  return import.meta.env.VITE_ADMIN_PASSWORD?.trim() || 'racketpoint-admin';
+  return import.meta.env.VITE_ADMIN_PASSWORD?.trim() || '';
 }
 
 export function isAdminAuthenticated() {
@@ -17,7 +17,12 @@ export function isAdminAuthenticated() {
 }
 
 export function signInAdmin(password: string) {
-  const isValid = password.trim() === readPassword();
+  const configuredPassword = readPassword();
+  if (!configuredPassword) {
+    return false;
+  }
+
+  const isValid = password.trim() === configuredPassword;
 
   if (hasWindow() && isValid) {
     window.sessionStorage.setItem(authKey, 'true');
@@ -35,5 +40,5 @@ export function signOutAdmin() {
 export function getAdminPasswordHint() {
   return import.meta.env.VITE_ADMIN_PASSWORD
     ? 'Конфигурирана в VITE_ADMIN_PASSWORD'
-    : 'Парола по подразбиране: racketpoint-admin';
+    : 'VITE_ADMIN_PASSWORD is required for frontend admin unlock.';
 }

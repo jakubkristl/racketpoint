@@ -1,9 +1,7 @@
-import { useMemo, useState, type FormEvent } from 'react';
-import { Link } from 'react-router-dom';
-import type { Brand, Category, Product } from '../data/catalog';
-import type { OrderInput } from '../data/store';
-import { submitOrderRequest } from '../data/store';
-import BrandLogo from '../components/BrandLogo';
+import { useEffect, useMemo, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import type { BalanceProfile, Brand, Category, Product } from '../data/catalog';
+import { getFavoriteSkus, isFavoriteSku, toggleFavoriteSku } from '../data/favorites';
 
 type CategoryPageProps = {
   category: Category;
@@ -13,171 +11,535 @@ type CategoryPageProps = {
 };
 
 const productTypeLabels: Record<string, string> = {
-  Racket: 'Ракета',
-  Balls: 'Топки',
-  Wear: 'Облекло',
-  Bag: 'Чанта',
-  Accessory: 'Аксесоар',
-  String: 'Кордaж',
-  Grip: 'Grip',
+  Racket: 'Rackets',
+  Balls: 'Balls',
+  Wear: 'Apparel',
+  Shoe: 'Footwear',
+  Bag: 'Bags',
+  Accessory: 'Accessories',
+  String: 'Rackets',
+  Grip: 'Grips',
 };
 
-function CategoryPage({ category, products, brands, onAddToCart }: CategoryPageProps) {
-  const [fullName, setFullName] = useState('');
-  const [email, setEmail] = useState('');
-  const [notes, setNotes] = useState('');
-  const [status, setStatus] = useState<string | null>(null);
+const subcategoryOptions = ['Rackets', 'Balls', 'Apparel', 'Grips', 'Footwear', 'Bags', 'Accessories'];
+const sizeOptions = ['S', 'M', 'L', 'XL', '39', '40', '41', '42', '43', '44'];
 
-  const primaryProductSku = useMemo(() => products[0]?.sku ?? '', [products]);
+const subcategoryStockImages: Record<string, string> = {
+  Rackets: '/branding/category/subcategories/rackets.jpg',
+  Balls: '/branding/category/subcategories/balls.jpg',
+  Apparel: '/branding/category/subcategories/apparel.jpg',
+  Grips: '/branding/category/subcategories/grips.jpg',
+  Footwear: '/branding/category/subcategories/footwear.jpg',
+  Bags: '/branding/category/subcategories/bags.jpg',
+  Accessories: '/branding/category/subcategories/accessories.jpg',
+};
 
-  async function handleOrderSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+const categoryMoodBySlug: Record<string, { imageUrl: string; title: string; copy: string }> = {
+  squash: {
+    imageUrl: '/branding/category/mood/squash.jpg',
+    title: 'Squash performance edit',
+    copy: 'Built for speed, control and hard match tempo.',
+  },
+  tennis: {
+    imageUrl: '/branding/category/mood/tennis.jpg',
+    title: 'Tennis precision edit',
+    copy: 'Court-ready setups for club and tournament play.',
+  },
+  badminton: {
+    imageUrl: '/branding/category/mood/badminton.jpg',
+    title: 'Badminton speed edit',
+    copy: 'Lightweight gear for acceleration and quick recovery.',
+  },
+  padel: {
+    imageUrl: '/branding/category/mood/padel.jpg',
+    title: 'Padel momentum edit',
+    copy: 'Modern glass-court focus with power and touch balance.',
+  },
+  'table-tennis': {
+    imageUrl: '/branding/category/mood/table-tennis.jpg',
+    title: 'Table tennis control edit',
+    copy: 'Spin-ready setups for compact and technical play.',
+  },
+};
 
-    const payload: OrderInput = {
-      fullName,
-      email,
-      items: primaryProductSku ? [{ sku: primaryProductSku, quantity: 1 }] : [],
-      notes,
+function getPriceValue(product: Product) {
+  if (typeof product.priceEur === 'number') {
+    return product.priceEur;
+  }
+
+  if (!product.price) {
+    return 0;
+  }
+
+  const parsed = Number.parseFloat(product.price.replace(/[^\d.,-]/g, '').replace(',', '.'));
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function getStockLabel(product: Product) {
+  if (typeof product.stock !== 'number') {
+    return 'Limited';
+  }
+
+  if (product.stock <= 0) {
+    return 'Out of stock';
+  }
+
+  if (product.stock < 5) {
+    return 'Low stock';
+  }
+
+  return 'In stock';
+}
+
+function isOutOfStock(product: Product) {
+  return typeof product.stock === 'number' && product.stock <= 0;
+}
+
+function hasSize(product: Product, requestedSize: string) {
+  const normalized = requestedSize.trim().toUpperCase();
+  const text = `${product.name} ${product.details} ${product.badges.join(' ')}`.toUpperCase();
+  const marker = new RegExp(`(^|\\s|-)${normalized}($|\\s|-)`, 'i');
+  return marker.test(text);
+}
+
+function weightMatches(product: Product, requestedWeight: string) {
+  if (!requestedWeight) {
+    return true;
+  }
+
+  if (typeof product.weightGrams !== 'number') {
+    return false;
+  }
+
+  if (requestedWeight === 'lte120') {
+    return product.weightGrams <= 120;
+  }
+
+  if (requestedWeight === '121to130') {
+    return product.weightGrams >= 121 && product.weightGrams <= 130;
+  }
+
+  if (requestedWeight === 'gte131') {
+    return product.weightGrams >= 131;
+  }
+
+  return true;
+}
+
+function formatEur(value: number) {
+  return `EUR ${value.toFixed(2)}`;
+}
+
+function getProductTitleClass(name: string) {
+  if (name.length > 62) {
+    return 'product-title product-title-xlong';
+  }
+
+  if (name.length > 44) {
+    return 'product-title product-title-long';
+  }
+
+  return 'product-title';
+}
+
+function getPricePresentation(product: Product) {
+  const salePrice = typeof product.salePriceEur === 'number' ? product.salePriceEur : product.priceEur;
+  const originalPrice = typeof product.originalPriceEur === 'number' ? product.originalPriceEur : undefined;
+  const isOnSale = typeof salePrice === 'number' && typeof originalPrice === 'number' && salePrice < originalPrice;
+
+  if (isOnSale) {
+    return {
+      isOnSale: true,
+      sale: formatEur(salePrice),
+      original: formatEur(originalPrice),
     };
+  }
 
-    const result = await submitOrderRequest(payload);
+  const fallbackPrice = typeof product.priceEur === 'number'
+    ? formatEur(product.priceEur)
+    : (product.price?.includes('EUR') ? product.price : `EUR ${(product.price ?? '0.00').replace('€', '')}`);
 
-    setStatus(`Заявката е записана с номер ${result.reference}.`);
-    setFullName('');
-    setEmail('');
-    setNotes('');
+  return {
+    isOnSale: false,
+    sale: fallbackPrice,
+    original: null,
+  };
+}
+
+function CategoryPage({ category, products, brands, onAddToCart }: CategoryPageProps) {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const [favoriteSkus, setFavoriteSkus] = useState<string[]>(() => getFavoriteSkus());
+
+  useEffect(() => {
+    function handleFavoritesChanged() {
+      setFavoriteSkus(getFavoriteSkus());
+    }
+
+    window.addEventListener('racketpoint:favorites-changed', handleFavoritesChanged as EventListener);
+    return () => window.removeEventListener('racketpoint:favorites-changed', handleFavoritesChanged as EventListener);
+  }, []);
+
+  const requestedSub = searchParams.get('sub') ?? 'all';
+  const requestedBrand = searchParams.get('brand') ?? 'all';
+  const requestedMinPrice = searchParams.get('minPrice') ?? '';
+  const requestedMaxPrice = searchParams.get('maxPrice') ?? '';
+  const requestedSize = searchParams.get('size') ?? '';
+  const requestedWeight = searchParams.get('weight') ?? '';
+  const requestedBalance = searchParams.get('balance') ?? '';
+  const requestedStock = searchParams.get('stock') ?? 'all';
+  const requestedQuery = searchParams.get('q') ?? '';
+
+  const availableBalances = useMemo(
+    () => Array.from(new Set(products.map((item) => item.balance).filter((item): item is BalanceProfile => Boolean(item)))),
+    [products],
+  );
+
+  const availableBrands = useMemo(
+    () => Array.from(new Set(products.map((item) => item.brand))).sort((a, b) => a.localeCompare(b)),
+    [products],
+  );
+
+  const subcategoryBlocks = useMemo(
+    () => subcategoryOptions.map((subCategory) => ({
+      label: subCategory,
+      count: products.filter((product) => (productTypeLabels[product.type] ?? product.type) === subCategory).length,
+    })),
+    [products],
+  );
+
+  const filteredProducts = useMemo(() => {
+    return products.filter((product) => {
+      const mappedSub = productTypeLabels[product.type] ?? product.type;
+      const productPrice = getPriceValue(product);
+      const queryText = `${product.name} ${product.details} ${product.brand}`.toLowerCase();
+
+      if (requestedSub !== 'all' && mappedSub !== requestedSub) {
+        return false;
+      }
+
+      if (requestedBrand !== 'all' && product.brand !== requestedBrand) {
+        return false;
+      }
+
+      if (requestedMinPrice) {
+        const min = Number(requestedMinPrice);
+        if (Number.isFinite(min) && productPrice < min) {
+          return false;
+        }
+      }
+
+      if (requestedMaxPrice) {
+        const max = Number(requestedMaxPrice);
+        if (Number.isFinite(max) && productPrice > max) {
+          return false;
+        }
+      }
+
+      if (requestedSize && !hasSize(product, requestedSize)) {
+        return false;
+      }
+
+      if (!weightMatches(product, requestedWeight)) {
+        return false;
+      }
+
+      if (requestedBalance && product.balance !== requestedBalance) {
+        return false;
+      }
+
+      if (requestedStock === 'in-stock' && (typeof product.stock === 'number' ? product.stock <= 0 : false)) {
+        return false;
+      }
+
+      if (requestedStock === 'out-of-stock' && (typeof product.stock === 'number' ? product.stock > 0 : true)) {
+        return false;
+      }
+
+      if (requestedQuery && !queryText.includes(requestedQuery.toLowerCase())) {
+        return false;
+      }
+
+      return true;
+    });
+  }, [
+    products,
+    requestedSub,
+    requestedBrand,
+    requestedMinPrice,
+    requestedMaxPrice,
+    requestedSize,
+    requestedWeight,
+    requestedBalance,
+    requestedStock,
+    requestedQuery,
+  ]);
+  const categoryMood = categoryMoodBySlug[category.slug] ?? {
+    imageUrl: 'https://images.pexels.com/photos/274422/pexels-photo-274422.jpeg?auto=compress&cs=tinysrgb&w=1800',
+    title: `${category.name} visual edit`,
+    copy: category.description,
+  };
+
+  function setParam(key: string, value: string) {
+    const next = new URLSearchParams(searchParams);
+
+    if (!value || value === 'all') {
+      next.delete(key);
+    } else {
+      next.set(key, value);
+    }
+
+    setSearchParams(next, { replace: false });
+  }
+
+  function clearAllFilters() {
+    const next = new URLSearchParams();
+    if (requestedQuery) {
+      next.set('q', requestedQuery);
+    }
+    setSearchParams(next, { replace: false });
+  }
+
+  function selectSubCategory(value: string) {
+    setParam('sub', value === requestedSub ? 'all' : value);
+  }
+
+  function openProduct(productSku: string) {
+    navigate(`/product/${encodeURIComponent(productSku)}`);
   }
 
   return (
     <div className="page-shell">
-      <header className="category-hero hero">
-        <nav className="topbar">
-          <div>
-            <BrandLogo compact subtitle="Категориен преглед" />
-            <h1>{category.name}</h1>
-          </div>
-          <Link className="nav-cta" to="/">
-            Обратно към началото
-          </Link>
-        </nav>
-
-        <div className="category-hero-grid">
-          <section className="hero-copy">
-            <p className="badge">{category.accent}</p>
-            <p className="intro">{category.heroCopy}</p>
-            <div className="hero-actions">
-              <a className="button button-primary" href="#products">
-                Виж продуктите
-              </a>
-              <a className="button button-secondary" href="#brands">
-                Виж марките
-              </a>
-            </div>
-          </section>
-
-          <aside className="hero-panel">
-            <p className="panel-label">Фокус на категорията</p>
-            <div className="focus-list">
-              {category.focus.map((focusItem) => (
-                <span key={focusItem}>{focusItem}</span>
-              ))}
-            </div>
-          </aside>
-        </div>
-      </header>
-
       <main>
-        <section className="section" id="products">
-          <div className="section-heading split">
-            <div>
-              <p className="eyebrow">Продукти</p>
-              <h2>{category.heroTitle}</h2>
-            </div>
-            <p className="support-copy">Продуктите са групирани по категория, тип и марка.</p>
-          </div>
-          <div className="product-grid">
-            {products.length > 0 ? (
-              products.map((product) => (
-                <article className="product-card" key={product.sku}>
-                  <img className="product-image" src={product.imageUrl} alt={product.name} />
-                  <div className="product-body">
-                    <div>
-                        <p className="product-category">
-                          {product.brand} · {productTypeLabels[product.type] ?? product.type}
-                        </p>
-                      <h3>{product.name}</h3>
-                      <p>{product.details}</p>
-                    </div>
-                    <div className="product-badges">
-                      {product.badges.map((badge) => (
-                        <span key={badge}>{badge}</span>
-                      ))}
-                    </div>
-                    <div className="product-footer">
-                      <strong>{product.price}</strong>
-                      <button type="button" onClick={() => onAddToCart(product.sku)}>
-                        Add to cart
-                      </button>
-                    </div>
-                  </div>
-                </article>
-              ))
-            ) : (
-              <article className="empty-state">
-                <h3>Все още няма продукти</h3>
-                <p>Категорията е готова за реален склад, когато свържем backend или CMS.</p>
-              </article>
-            )}
+        <section className="section compact-page-intro">
+          <p className="eyebrow">Category</p>
+          <h1>{category.name}</h1>
+          <p className="intro">{category.heroCopy}</p>
+        </section>
+
+        <section className="section category-mood-banner">
+          <img
+            src={categoryMood.imageUrl}
+            alt={`${category.name} banner`}
+            loading="lazy"
+            onError={(event) => {
+              const target = event.currentTarget;
+              if (target.src.endsWith('/branding/logo-fallback.png')) {
+                return;
+              }
+              target.src = '/branding/logo-fallback.png';
+            }}
+          />
+          <div className="category-mood-overlay">
+            <p className="eyebrow">{categoryMood.title}</p>
+            <h2>{categoryMood.copy}</h2>
           </div>
         </section>
 
-        <section className="section order-section">
-          <div className="section-heading split">
-            <div>
-              <p className="eyebrow">Поръчки</p>
-              <h2>Форма за заявка, готова за backend или CMS.</h2>
+        <section className="section" id="products">
+          <div className="catalog-top-row">
+            <div className="subcategory-block-grid">
+              {subcategoryBlocks.map((subCategory) => {
+                const imageUrl = subcategoryStockImages[subCategory.label] ?? 'https://images.pexels.com/photos/274422/pexels-photo-274422.jpeg?auto=compress&cs=tinysrgb&w=1200';
+                const fallbackImage = '/branding/logo-fallback.png';
+
+                return (
+                  <button
+                    key={subCategory.label}
+                    type="button"
+                    className={requestedSub === subCategory.label ? 'subcategory-block active' : 'subcategory-block'}
+                    onClick={() => selectSubCategory(subCategory.label)}
+                  >
+                    <img
+                      className="subcategory-block-media"
+                      src={imageUrl}
+                      alt={`${subCategory.label} stock visual`}
+                      loading="lazy"
+                      onError={(event) => {
+                        const target = event.currentTarget;
+                        if (target.src.endsWith(fallbackImage)) {
+                          return;
+                        }
+                        target.src = fallbackImage;
+                      }}
+                    />
+                    <div className="subcategory-block-copy">
+                      <span>{subCategory.label}</span>
+                      <strong>{subCategory.count} items</strong>
+                    </div>
+                  </button>
+                );
+              })}
             </div>
-            <p className="support-copy">
-              Тази форма подава заявка за поръчка и по-късно може да се свърже с реален API.
-            </p>
           </div>
 
-          <form className="order-form" onSubmit={handleOrderSubmit}>
-            <label>
-              Име и фамилия
-              <input value={fullName} onChange={(event) => setFullName(event.target.value)} required />
-            </label>
-            <label>
-              Имейл
-              <input
-                type="email"
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-                required
-              />
-            </label>
-            <label>
-              Бележки
-              <textarea value={notes} onChange={(event) => setNotes(event.target.value)} rows={4} />
-            </label>
-            <button className="button button-primary" type="submit">
-              Изпрати заявка
-            </button>
-            {status ? <p className="form-status">{status}</p> : null}
-          </form>
+          <div className="catalog-layout">
+            <aside className="catalog-sidebar" id="filters">
+              <div className="catalog-sidebar-header">
+                <h3>Filters</h3>
+              </div>
+              <div className="filter-block">
+                <h3>Sub-category</h3>
+                <select value={requestedSub} onChange={(event) => setParam('sub', event.target.value)}>
+                  <option value="all">All</option>
+                  {subcategoryOptions.map((item) => <option key={item} value={item}>{item}</option>)}
+                </select>
+              </div>
+
+              <div className="filter-block">
+                <h3>Brand</h3>
+                <select value={requestedBrand} onChange={(event) => setParam('brand', event.target.value)}>
+                  <option value="all">All brands</option>
+                  {availableBrands.map((brand) => <option key={brand} value={brand}>{brand}</option>)}
+                </select>
+              </div>
+
+              <div className="filter-block filter-row-2">
+                <div>
+                  <h3>Min EUR</h3>
+                  <input value={requestedMinPrice} onChange={(event) => setParam('minPrice', event.target.value)} placeholder="0" />
+                </div>
+                <div>
+                  <h3>Max EUR</h3>
+                  <input value={requestedMaxPrice} onChange={(event) => setParam('maxPrice', event.target.value)} placeholder="300" />
+                </div>
+              </div>
+
+              <div className="filter-block">
+                <h3>Size</h3>
+                <select value={requestedSize} onChange={(event) => setParam('size', event.target.value)}>
+                  <option value="">All sizes</option>
+                  {sizeOptions.map((size) => <option key={size} value={size}>{size}</option>)}
+                </select>
+              </div>
+
+              <div className="filter-block">
+                <h3>Weight</h3>
+                <select value={requestedWeight} onChange={(event) => setParam('weight', event.target.value)}>
+                  <option value="">All weights</option>
+                  <option value="lte120">Up to 120g</option>
+                  <option value="121to130">121g - 130g</option>
+                  <option value="gte131">131g+</option>
+                </select>
+              </div>
+
+              <div className="filter-block">
+                <h3>Balance</h3>
+                <select value={requestedBalance} onChange={(event) => setParam('balance', event.target.value)}>
+                  <option value="">All balances</option>
+                  {availableBalances.map((balance) => <option key={balance} value={balance}>{balance}</option>)}
+                </select>
+              </div>
+
+              <div className="filter-block">
+                <h3>Stock</h3>
+                <select value={requestedStock} onChange={(event) => setParam('stock', event.target.value)}>
+                  <option value="all">All</option>
+                  <option value="in-stock">In stock</option>
+                  <option value="out-of-stock">Out of stock</option>
+                </select>
+              </div>
+
+              <button className="button button-secondary" type="button" onClick={clearAllFilters}>Clear filters</button>
+            </aside>
+
+            <div className="product-grid">
+              {filteredProducts.length > 0 ? (
+                filteredProducts.map((product) => (
+                  (() => {
+                    const isFavorite = favoriteSkus.includes(product.sku) || isFavoriteSku(product.sku);
+
+                    return (
+                      <article
+                        className="product-card clickable-card product-card-compact"
+                        key={product.sku}
+                        onClick={() => openProduct(product.sku)}
+                        role="link"
+                        tabIndex={0}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter' || event.key === ' ') {
+                            event.preventDefault();
+                            openProduct(product.sku);
+                          }
+                        }}
+                      >
+                        <img className="product-image" src={product.imageUrl} alt={product.name} loading="lazy" />
+                        <div className="product-body">
+                          <h3 className={getProductTitleClass(product.name)}>{product.name}</h3>
+
+                          <p className="product-availability">{getStockLabel(product)}</p>
+                          {isOutOfStock(product) ? <p className="delivery-note">Delivery 7-14 days</p> : null}
+
+                          <div className="product-footer">
+                            <div className="price-stack">
+                              {(() => {
+                                const pricing = getPricePresentation(product);
+                                return (
+                                  <>
+                                    {pricing.isOnSale && pricing.original ? (
+                                      <p className="price-original">{pricing.original}</p>
+                                    ) : null}
+                                    <strong className={pricing.isOnSale ? 'price-sale' : ''}>{pricing.sale}</strong>
+                                    <p className="price-tax-note">VAT included</p>
+                                  </>
+                                );
+                              })()}
+                            </div>
+                            <div className="product-action-stack">
+                              <button
+                                type="button"
+                                className={isFavorite ? 'retail-icon-btn favorite-toggle-btn active' : 'retail-icon-btn favorite-toggle-btn'}
+                                aria-label={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+                                title={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  toggleFavoriteSku(product.sku);
+                                }}
+                              >
+                                <span className="retail-icon-svg" aria-hidden="true">
+                                  <svg viewBox="0 0 24 24" fill={isFavorite ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78L12 21.23l8.84-8.84a5.5 5.5 0 0 0 0-7.78z" />
+                                  </svg>
+                                </span>
+                              </button>
+                              <button
+                                type="button"
+                                className="button button-primary product-action-button"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  onAddToCart(product.sku);
+                                }}
+                              >
+                                Add to Cart
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </article>
+                    );
+                  })()
+                ))
+              ) : (
+                <article className="empty-state">
+                  <h3>No products match the current filters.</h3>
+                  <p>Adjust filters or clear them to broaden results.</p>
+                </article>
+              )}
+            </div>
+          </div>
         </section>
 
         <section className="section" id="brands">
           <div className="section-heading split">
             <div>
-              <p className="eyebrow">Марки</p>
-              <h2>Подходящи марки за тази категория.</h2>
+              <p className="eyebrow">Brands</p>
+              <h2>Brand context for this sport category.</h2>
             </div>
           </div>
           <div className="brand-grid">
             {brands.map((brand) => (
-              <article className="brand-card" key={brand.name}>
-                <p className="eyebrow">Марка</p>
+              <article className="brand-card clickable-card" key={brand.name}>
+                <p className="eyebrow">Brand</p>
                 <h3>{brand.name}</h3>
                 <p>{brand.note}</p>
               </article>
@@ -190,3 +552,4 @@ function CategoryPage({ category, products, brands, onAddToCart }: CategoryPageP
 }
 
 export default CategoryPage;
+

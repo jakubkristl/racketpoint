@@ -1,13 +1,25 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link, Navigate, Route, Routes, useLocation, useParams } from 'react-router-dom';
 import HomePage from './pages/HomePage';
 import CategoryPage from './pages/CategoryPage';
 import type { CategorySlug } from './data/catalog';
 import AdminPage from './pages/AdminPage';
-import { getStoreSnapshot, saveStoreSnapshot, type StoreSnapshot } from './data/store';
+import { getStoreSnapshot, loadStoreSnapshot, saveStoreSnapshot, submitOrderRequest, type StoreSnapshot } from './data/store';
 import { isAdminAuthenticated } from './data/adminAuth';
 import BrandLogo from './components/BrandLogo';
 import CartDrawer from './components/CartDrawer';
+import { getPendingBoricaOrder, removePendingBoricaOrder } from './data/paymentSession';
+import PaymentResultPage from './pages/PaymentResultPage';
+import AccountPage from './pages/AccountPage';
+import ForgotPasswordPage from './pages/ForgotPasswordPage';
+import ResetPasswordPage from './pages/ResetPasswordPage';
+import VerifyEmailPage from './pages/VerifyEmailPage';
+import ContactPage from './pages/ContactPage';
+import { getSessionUser } from './data/accountStore';
+import StoreHeader from './components/StoreHeader';
+import ProductDetailPage from './pages/ProductDetailPage';
+import FavoritesPage from './pages/FavoritesPage';
+import CheckoutPage from './pages/CheckoutPage';
 
 type CartLine = {
   sku: string;
@@ -72,14 +84,83 @@ function CategoryRoute({
   );
 }
 
+function ProductRoute({
+  snapshot,
+  onAddToCart,
+}: {
+  snapshot: StoreSnapshot;
+  onAddToCart: (sku: string) => void;
+}) {
+  const { sku } = useParams();
+  const product = snapshot.products.find((item) => item.sku === sku);
+
+  if (!product) {
+    return <Navigate replace to="/" />;
+  }
+
+  return <ProductDetailPage product={product} onAddToCart={onAddToCart} />;
+}
+
+function FavoritesRoute({
+  snapshot,
+  onAddToCart,
+}: {
+  snapshot: StoreSnapshot;
+  onAddToCart: (sku: string) => void;
+}) {
+  return <FavoritesPage products={snapshot.products} onAddToCart={onAddToCart} />;
+}
+
+function hasAdminRole() {
+  return getSessionUser()?.role === 'ADMIN';
+}
+
 function App() {
   const [store, setStore] = useState<StoreSnapshot>(() => getStoreSnapshot());
   const [isAdminAuthed, setIsAdminAuthed] = useState(() => isAdminAuthenticated());
   const [cartLines, setCartLines] = useState<CartLine[]>(() => loadCartLines());
   const location = useLocation();
+  const checkoutRetryToken = location.search.includes('checkout=retry') ? location.search : '';
+  const isAdminRoute = location.pathname.startsWith('/admin');
+  const isAccountRoute = location.pathname.startsWith('/account');
+  const isPaymentResultRoute = location.pathname.startsWith('/payments/borica/result');
+  const isCheckoutRoute = location.pathname.startsWith('/checkout');
+  const isNotFoundRoute = !['/', '/account', '/contact', '/forgot-password', '/reset-password', '/verify-email'].includes(location.pathname)
+    && !location.pathname.startsWith('/category/')
+    && !location.pathname.startsWith('/product/')
+    && !location.pathname.startsWith('/favorites')
+    && !location.pathname.startsWith('/checkout');
+  const showGlobalHeader = !isAdminRoute && !isAccountRoute && !isPaymentResultRoute && !isNotFoundRoute;
+  const activeSportSlug = location.pathname.startsWith('/category/')
+    ? decodeURIComponent(location.pathname.replace('/category/', '').split('/')[0] || '')
+    : undefined;
 
   useEffect(() => {
-    setStore(getStoreSnapshot());
+    let canceled = false;
+
+    async function bootstrapStore() {
+      const snapshot = await loadStoreSnapshot().catch(() => getStoreSnapshot());
+      if (!canceled) {
+        setStore(snapshot);
+      }
+    }
+
+    bootstrapStore();
+
+    return () => {
+      canceled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    function handleAuthChanged() {
+      loadStoreSnapshot()
+        .then((snapshot) => setStore(snapshot))
+        .catch(() => undefined);
+    }
+
+    window.addEventListener('racketpoint:auth-changed', handleAuthChanged as EventListener);
+    return () => window.removeEventListener('racketpoint:auth-changed', handleAuthChanged as EventListener);
   }, []);
 
   useEffect(() => {
@@ -133,26 +214,118 @@ function App() {
     setCartLines([]);
   }
 
+  const handleBoricaApproved = useCallback(async (params: {
+    order: string;
+    rc?: string;
+    action?: string;
+    rrn?: string;
+    intRef?: string;
+    amount?: string;
+    currency?: string;
+  }) => {
+    const pending = getPendingBoricaOrder(params.order);
+    if (!pending) {
+      return { status: 'missing_pending' as const };
+    }
+
+    const approvedAmount = Number(params.amount);
+    if (Number.isFinite(approvedAmount) && Math.abs(approvedAmount - pending.amount) > 0.01) {
+      return { status: 'amount_mismatch' as const };
+    }
+
+    if (params.currency && params.currency.toUpperCase() !== 'EUR') {
+      return { status: 'amount_mismatch' as const };
+    }
+
+    removePendingBoricaOrder(params.order);
+
+    const paymentNotes = [
+      pending.request.notes ?? '',
+      'Payment method: Online card payment (BORICA)',
+      `BORICA ORDER: ${params.order}`,
+      params.rrn ? `BORICA RRN: ${params.rrn}` : '',
+      params.intRef ? `BORICA INT_REF: ${params.intRef}` : '',
+      params.amount && params.currency ? `BORICA AMOUNT: ${params.amount} ${params.currency}` : '',
+      'Payment status: APPROVED',
+    ]
+      .filter(Boolean)
+      .join('\n');
+
+    const result = await submitOrderRequest({
+      ...pending.request,
+      idempotencyKey: `borica-${params.order}`,
+      paymentMethod: 'card',
+      notes: paymentNotes,
+      payment: {
+        provider: 'borica',
+        status: 'approved',
+        gatewayOrder: params.order,
+        rrn: params.rrn,
+        intRef: params.intRef,
+        amountEur: pending.amount,
+        currency: params.currency ?? 'EUR',
+        rc: params.rc,
+        action: params.action,
+        signatureValid: true,
+        approvedAt: new Date().toISOString(),
+      },
+    });
+
+    handleClearCart();
+    return { status: 'approved' as const, reference: result.reference };
+  }, []);
+
   return (
     <>
+      {showGlobalHeader ? (
+        <div className="page-shell global-header-shell">
+          <StoreHeader activeSportSlug={activeSportSlug} />
+        </div>
+      ) : null}
+
       <Routes>
         <Route
           path="/"
           element={
-            <HomePage />
+            <HomePage
+              categories={store.categories}
+              products={store.products}
+              onAddToCart={handleAddToCart}
+            />
           }
         />
         <Route path="/category/:slug" element={<CategoryRoute snapshot={store} onAddToCart={handleAddToCart} />} />
+        <Route path="/product/:sku" element={<ProductRoute snapshot={store} onAddToCart={handleAddToCart} />} />
+        <Route path="/favorites" element={<FavoritesRoute snapshot={store} onAddToCart={handleAddToCart} />} />
+        <Route
+          path="/checkout"
+          element={(
+            <CheckoutPage
+              products={store.products}
+              lines={cartLines}
+              onIncrement={handleIncrementCartLine}
+              onDecrement={handleDecrementCartLine}
+              onRemove={handleRemoveCartLine}
+              onClear={handleClearCart}
+            />
+          )}
+        />
+        <Route path="/account" element={<AccountPage />} />
+        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
+        <Route path="/verify-email" element={<VerifyEmailPage />} />
+        <Route path="/contact" element={<ContactPage />} />
+        <Route path="/payments/borica/result" element={<PaymentResultPage onBoricaApproved={handleBoricaApproved} />} />
         <Route
           path="/admin"
-          element={
+          element={(
             <AdminPage
               snapshot={store}
               onSnapshotChange={handleSnapshotChange}
-              isAuthenticated={isAdminAuthed}
+              isAuthenticated={isAdminAuthed || hasAdminRole()}
               onAuthChange={handleAdminAuthChange}
             />
-          }
+          )}
         />
         <Route
           path="*"
@@ -173,14 +346,14 @@ function App() {
         />
       </Routes>
 
-      {location.pathname !== '/admin' ? (
+      {location.pathname !== '/admin' && !isCheckoutRoute && location.pathname !== '/payments/borica/result' ? (
         <CartDrawer
           products={store.products}
           lines={cartLines}
+          autoOpenToken={checkoutRetryToken}
           onIncrement={handleIncrementCartLine}
           onDecrement={handleDecrementCartLine}
           onRemove={handleRemoveCartLine}
-          onClear={handleClearCart}
         />
       ) : null}
     </>

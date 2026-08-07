@@ -1,0 +1,98 @@
+{
+  "categories": [],
+  "brands": [
+    {
+      "name": "Unsquashable",
+      "categorySlugs": [
+        "squash"
+      ],
+      "note": "Auto-created from bulk CSV import."
+    },
+    {
+      "name": "Karakal",
+      "categorySlugs": [
+        "squash"
+      ],
+      "note": "Auto-created from bulk CSV import."
+    },
+    {
+      "name": "Tecnifibre",
+      "categorySlugs": [
+        "tennis"
+      ],
+      "note": "Auto-created from bulk CSV import."
+    }
+  ],
+  "products": [
+    {
+      "sku": "SQ-1001",
+      "name": "Unsquashable Tour Tec Pro 125",
+      "categorySlug": "squash",
+      "type": "Racket",
+      "brand": "Unsquashable",
+      "price": "EUR 139.00",
+      "priceEur": 139,
+      "originalPriceEur": 159,
+      "salePriceEur": 139,
+      "costEur": 78,
+      "stock": 14,
+      "details": "Control-focused racket for intermediate and advanced players Sizes: S M",
+      "badges": [
+        "PRO",
+        "NEW"
+      ],
+      "imageUrl": "/imports/product-images/unsquashable-tour-tec-pro-125.jpg",
+      "color": "Black",
+      "headShape": "Teardrop",
+      "balance": "Balanced",
+      "weightGrams": 125,
+      "attributes": {
+        "sizes": "S|M"
+      }
+    },
+    {
+      "sku": "SQ-1002",
+      "name": "Karakal PU Super Grip Twin Pack",
+      "categorySlug": "squash",
+      "type": "Grip",
+      "brand": "Karakal",
+      "price": "EUR 8.90",
+      "priceEur": 8.9,
+      "salePriceEur": 8.9,
+      "costEur": 3.2,
+      "stock": 80,
+      "details": "Twin pack grips for all racket sports",
+      "badges": [
+        "POPULAR"
+      ],
+      "imageUrl": "/imports/product-images/karakal-pu-super-grip-twin-pack.jpg"
+    },
+    {
+      "sku": "TN-1001",
+      "name": "Tecnifibre T-Fight 300 ISOFLEX",
+      "categorySlug": "tennis",
+      "type": "Racket",
+      "brand": "Tecnifibre",
+      "price": "EUR 219.00",
+      "priceEur": 219,
+      "originalPriceEur": 239,
+      "salePriceEur": 219,
+      "costEur": 145,
+      "stock": 9,
+      "details": "Modern baseline racket with controlled power Sizes: L3 L4",
+      "badges": [
+        "PRO",
+        "LIMITED"
+      ],
+      "imageUrl": "/imports/product-images/tecnifibre-tfight-300-isoflex.jpg",
+      "color": "White",
+      "headShape": "Hybrid",
+      "balance": "Head-light",
+      "weightGrams": 300,
+      "attributes": {
+        "sizes": "L3|L4"
+      }
+    }
+  ],
+  "orders": []
+}
