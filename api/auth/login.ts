@@ -3,6 +3,7 @@ import { ensureSchema, sql } from '../_lib/db';
 import { methodNotAllowed, readBody } from '../_lib/http';
 import { signSession } from '../_lib/auth';
 import { enforceRateLimit, getClientIp } from '../_lib/rateLimit';
+import { setNoStore } from '../_lib/security';
 import { isValidEmail, normalizeEmail } from '../_lib/validation';
 
 type LoginBody = {
@@ -16,6 +17,8 @@ function requiresEmailVerification() {
 }
 
 export default async function handler(req: any, res: any) {
+  setNoStore(res);
+
   if (req.method !== 'POST') {
     methodNotAllowed(res);
     return;

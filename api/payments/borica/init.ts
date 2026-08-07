@@ -1,4 +1,7 @@
 import crypto from 'node:crypto';
+import { enforceRateLimit, getClientIp } from '../../_lib/rateLimit';
+import { enforceTrustedOrigin, setNoStore } from '../../_lib/security';
+import { isValidEmail, normalizeEmail, sanitizeText } from '../../_lib/validation';
 
 type InitRequestBody = {
   amount: number;
@@ -68,8 +71,19 @@ function parseJsonBody(raw: unknown): InitRequestBody {
 }
 
 export default function handler(req: any, res: any) {
+  setNoStore(res);
+
   if (req.method !== 'POST') {
     res.status(405).json({ error: 'Method not allowed' });
+    return;
+  }
+
+  const ip = getClientIp(req);
+  if (!enforceRateLimit(req, res, { key: `payments:borica:init:${ip}`, max: 20, windowMs: 10 * 60 * 1000 })) {
+    return;
+  }
+
+  if (!enforceTrustedOrigin(req, res, { allowWithoutOrigin: true })) {
     return;
   }
 
@@ -90,7 +104,13 @@ export default function handler(req: any, res: any) {
       return;
     }
 
-    if (!body.fullName || !body.email) {
+    const email = normalizeEmail(body.email);
+    const fullName = sanitizeText(body.fullName, 90);
+    const city = sanitizeText(body.city ?? '', 64);
+    const address = sanitizeText(body.address ?? '', 120);
+    const description = sanitizeText(body.orderDescription ?? 'Racketpoint order', 50);
+
+    if (!fullName || !email || !isValidEmail(email)) {
       res.status(400).json({ error: 'Missing customer details.' });
       return;
     }
@@ -108,19 +128,19 @@ export default function handler(req: any, res: any) {
       .slice(0, 16);
     const addendum = 'AD,TD';
     const customOrderId = `${order}${orderRefSuffix}`.slice(0, 22);
-    const desc = (body.orderDescription ?? 'Racketpoint order').slice(0, 50);
+    const desc = description;
 
     const mInfoPayload = {
-      cardholderName: body.fullName.slice(0, 45),
-      email: body.email,
+      cardholderName: fullName.slice(0, 45),
+      email,
       mobilePhone: body.phone
         ? {
             cc: '359',
             subscriber: body.phone.replace(/\D/g, '').slice(-9),
           }
         : undefined,
-      billAddrLine1: `${body.city ?? ''} ${body.address ?? ''}`.trim().slice(0, 50),
-      shipAddrLine1: `${body.city ?? ''} ${body.address ?? ''}`.trim().slice(0, 50),
+      billAddrLine1: `${city} ${address}`.trim().slice(0, 50),
+      shipAddrLine1: `${city} ${address}`.trim().slice(0, 50),
     };
 
     const mInfo = Buffer.from(JSON.stringify(mInfoPayload), 'utf8').toString('base64');
@@ -139,7 +159,7 @@ export default function handler(req: any, res: any) {
       MERCHANT: (process.env.BORICA_MERCHANT_ID ?? '').trim(),
       MERCH_NAME: (process.env.BORICA_MERCHANT_NAME ?? 'Racketpoint.bg').trim(),
       MERCH_URL: (process.env.BORICA_MERCHANT_URL ?? 'https://racketpoint.bg').trim(),
-      EMAIL: body.email,
+      EMAIL: email,
       COUNTRY: (process.env.BORICA_COUNTRY ?? 'BG').trim(),
       MERCH_GMT: (process.env.BORICA_MERCH_GMT ?? '+03').trim(),
       LANG: (process.env.BORICA_LANG ?? 'BG').trim(),
@@ -165,7 +185,7 @@ export default function handler(req: any, res: any) {
       message: 'BORICA payment form is ready.',
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown error';
-    res.status(500).json({ error: message });
+    console.error('BORICA init failed', error);
+    res.status(500).json({ error: 'Unable to initialize payment at the moment.' });
   }
 }

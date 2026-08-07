@@ -1,4 +1,6 @@
 import { methodNotAllowed, readBody } from '../../_lib/http';
+import { enforceRateLimit, getClientIp } from '../../_lib/rateLimit';
+import { enforceTrustedOrigin, setNoStore } from '../../_lib/security';
 
 type CheckoutGatewayBody = {
   gateway: 'borica' | 'cash_on_delivery';
@@ -13,8 +15,19 @@ type CheckoutGatewayBody = {
 };
 
 export default function handler(req: any, res: any) {
+  setNoStore(res);
+
   if (req.method !== 'POST') {
     methodNotAllowed(res);
+    return;
+  }
+
+  const ip = getClientIp(req);
+  if (!enforceRateLimit(req, res, { key: `payments:gateway:checkout:${ip}`, max: 30, windowMs: 10 * 60 * 1000 })) {
+    return;
+  }
+
+  if (!enforceTrustedOrigin(req, res, { allowWithoutOrigin: true })) {
     return;
   }
 

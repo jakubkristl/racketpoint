@@ -2,6 +2,7 @@ import { ensureSchema, sql } from '../_lib/db';
 import { getSessionUser } from '../_lib/auth';
 import { methodNotAllowed, readBody, toNumber } from '../_lib/http';
 import { enforceRateLimit, getClientIp } from '../_lib/rateLimit';
+import { enforceTrustedOrigin, setNoStore } from '../_lib/security';
 
 type OrderLine = {
   sku: string;
@@ -134,6 +135,8 @@ function mapExistingOrder(row: any) {
 }
 
 export default async function handler(req: any, res: any) {
+  setNoStore(res);
+
   if (req.method !== 'POST') {
     methodNotAllowed(res);
     return;
@@ -141,6 +144,10 @@ export default async function handler(req: any, res: any) {
 
   const ip = getClientIp(req);
   if (!enforceRateLimit(req, res, { key: `orders:create:${ip}`, max: 60, windowMs: 10 * 60 * 1000 })) {
+    return;
+  }
+
+  if (!enforceTrustedOrigin(req, res, { allowWithoutOrigin: true })) {
     return;
   }
 

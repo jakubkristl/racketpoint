@@ -1,5 +1,6 @@
 import crypto from 'node:crypto';
 import { ensureSchema, sql } from '../../_lib/db';
+import { setNoStore } from '../../_lib/security';
 
 function normalizePem(value?: string) {
   if (!value) {
@@ -71,6 +72,8 @@ function toStringRecord(input: unknown) {
 }
 
 export default async function handler(req: any, res: any) {
+  setNoStore(res);
+
   if (req.method !== 'POST' && req.method !== 'GET') {
     res.status(405).json({ error: 'Method not allowed' });
     return;
