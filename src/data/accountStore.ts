@@ -43,15 +43,19 @@ function writeSession(user: AccountUser | null, token?: string | null) {
   }
 
   if (!user) {
+    window.sessionStorage.removeItem(sessionKey);
+    window.sessionStorage.removeItem(sessionTokenKey);
     window.localStorage.removeItem(sessionKey);
     window.localStorage.removeItem(sessionTokenKey);
     return;
   }
 
-  window.localStorage.setItem(sessionKey, JSON.stringify(user));
+  window.sessionStorage.setItem(sessionKey, JSON.stringify(user));
+  window.localStorage.removeItem(sessionKey);
 
   if (token) {
-    window.localStorage.setItem(sessionTokenKey, token);
+    window.sessionStorage.setItem(sessionTokenKey, token);
+    window.localStorage.removeItem(sessionTokenKey);
   }
 }
 
@@ -60,13 +64,19 @@ function readStoredSessionUser() {
     return null;
   }
 
-  const raw = window.localStorage.getItem(sessionKey);
+  const fromSession = window.sessionStorage.getItem(sessionKey);
+  const fromLocal = window.localStorage.getItem(sessionKey);
+  const raw = fromSession || fromLocal;
   if (!raw) {
     return null;
   }
 
   try {
     const parsed = JSON.parse(raw) as AccountUser;
+    if (fromLocal && !fromSession) {
+      window.sessionStorage.setItem(sessionKey, fromLocal);
+      window.localStorage.removeItem(sessionKey);
+    }
     return parsed && parsed.email ? parsed : null;
   } catch {
     return null;
@@ -78,7 +88,19 @@ export function getSessionToken() {
     return null;
   }
 
-  return window.localStorage.getItem(sessionTokenKey);
+  const fromSession = window.sessionStorage.getItem(sessionTokenKey);
+  if (fromSession) {
+    return fromSession;
+  }
+
+  const fromLocal = window.localStorage.getItem(sessionTokenKey);
+  if (fromLocal) {
+    window.sessionStorage.setItem(sessionTokenKey, fromLocal);
+    window.localStorage.removeItem(sessionTokenKey);
+    return fromLocal;
+  }
+
+  return null;
 }
 
 export function getAuthHeaders(extra?: Record<string, string>) {

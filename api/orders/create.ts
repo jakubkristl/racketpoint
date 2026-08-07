@@ -147,7 +147,7 @@ export default async function handler(req: any, res: any) {
     return;
   }
 
-  if (!enforceTrustedOrigin(req, res, { allowWithoutOrigin: true })) {
+  if (!enforceTrustedOrigin(req, res, { allowWithoutOrigin: false })) {
     return;
   }
 

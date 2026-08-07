@@ -1,6 +1,7 @@
 import { ensureSchema, sql } from '../_lib/db';
 import { methodNotAllowed } from '../_lib/http';
 import { enforceRateLimit, getClientIp } from '../_lib/rateLimit';
+import { setNoStore } from '../_lib/security';
 
 function readToken(req: any) {
   const queryToken = typeof req.query?.token === 'string' ? req.query.token : '';
@@ -9,6 +10,8 @@ function readToken(req: any) {
 }
 
 export default async function handler(req: any, res: any) {
+  setNoStore(res);
+
   if (req.method !== 'GET' && req.method !== 'POST') {
     methodNotAllowed(res);
     return;

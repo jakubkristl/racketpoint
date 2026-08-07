@@ -1,8 +1,11 @@
 import { ensureSchema, sql } from '../_lib/db';
 import { requireAdmin } from '../_lib/auth';
 import { methodNotAllowed } from '../_lib/http';
+import { setNoStore } from '../_lib/security';
 
 export default async function handler(req: any, res: any) {
+  setNoStore(res);
+
   if (req.method !== 'GET') {
     methodNotAllowed(res);
     return;

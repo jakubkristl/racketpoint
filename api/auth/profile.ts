@@ -1,6 +1,7 @@
 import { ensureSchema, sql } from '../_lib/db';
 import { methodNotAllowed, readBody } from '../_lib/http';
 import { requireSession } from '../_lib/auth';
+import { setNoStore } from '../_lib/security';
 import { sanitizeAddresses, sanitizeText } from '../_lib/validation';
 
 type UpdateProfileBody = {
@@ -9,6 +10,8 @@ type UpdateProfileBody = {
 };
 
 export default async function handler(req: any, res: any) {
+  setNoStore(res);
+
   if (req.method !== 'GET' && req.method !== 'PUT') {
     methodNotAllowed(res);
     return;

@@ -1,6 +1,7 @@
 import { ensureSchema, sql } from '../_lib/db';
 import { methodNotAllowed, readBody } from '../_lib/http';
 import { requireAdmin } from '../_lib/auth';
+import { setNoStore } from '../_lib/security';
 
 type UpdateStatusBody = {
   orderId: string;
@@ -35,6 +36,8 @@ function shouldRestock(nextStatus: UpdateStatusBody['status']) {
 }
 
 export default async function handler(req: any, res: any) {
+  setNoStore(res);
+
   if (req.method !== 'PUT') {
     methodNotAllowed(res);
     return;

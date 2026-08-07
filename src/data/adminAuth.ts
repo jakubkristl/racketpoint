@@ -1,10 +1,18 @@
 const authKey = 'racketpoint-admin-auth';
 
+function allowFrontendAdminPassword() {
+  return import.meta.env.DEV || import.meta.env.VITE_ENABLE_FRONTEND_ADMIN_PASSWORD === 'true';
+}
+
 function hasWindow() {
   return typeof window !== 'undefined';
 }
 
 function readPassword() {
+  if (!allowFrontendAdminPassword()) {
+    return '';
+  }
+
   return import.meta.env.VITE_ADMIN_PASSWORD?.trim() || '';
 }
 
@@ -38,6 +46,10 @@ export function signOutAdmin() {
 }
 
 export function getAdminPasswordHint() {
+  if (!allowFrontendAdminPassword()) {
+    return 'Frontend admin password unlock is disabled in production.';
+  }
+
   return import.meta.env.VITE_ADMIN_PASSWORD
     ? 'Конфигурирана в VITE_ADMIN_PASSWORD'
     : 'VITE_ADMIN_PASSWORD is required for frontend admin unlock.';

@@ -2,6 +2,7 @@ import bcrypt from 'bcryptjs';
 import { ensureSchema, sql } from '../_lib/db';
 import { methodNotAllowed, readBody } from '../_lib/http';
 import { enforceRateLimit, getClientIp } from '../_lib/rateLimit';
+import { setNoStore } from '../_lib/security';
 import { isStrongPassword } from '../_lib/validation';
 
 type ResetPasswordBody = {
@@ -10,6 +11,8 @@ type ResetPasswordBody = {
 };
 
 export default async function handler(req: any, res: any) {
+  setNoStore(res);
+
   if (req.method !== 'POST') {
     methodNotAllowed(res);
     return;

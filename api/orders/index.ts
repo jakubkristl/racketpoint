@@ -1,6 +1,7 @@
 import { ensureSchema, sql } from '../_lib/db';
 import { requireSession } from '../_lib/auth';
 import { methodNotAllowed } from '../_lib/http';
+import { setNoStore } from '../_lib/security';
 
 function mapOrder(row: any) {
   return {
@@ -22,6 +23,8 @@ function mapOrder(row: any) {
 }
 
 export default async function handler(req: any, res: any) {
+  setNoStore(res);
+
   if (req.method !== 'GET') {
     methodNotAllowed(res);
     return;

@@ -8,6 +8,7 @@ type PendingPaymentOrder = {
 };
 
 const pendingPaymentStorageKey = 'racketpoint-borica-pending-v1';
+const pendingPaymentMaxAgeMs = 2 * 60 * 60 * 1000;
 
 function hasWindow() {
   return typeof window !== 'undefined';
@@ -18,14 +19,28 @@ function loadAll(): PendingPaymentOrder[] {
     return [];
   }
 
-  const raw = window.localStorage.getItem(pendingPaymentStorageKey);
+  const raw = window.sessionStorage.getItem(pendingPaymentStorageKey);
   if (!raw) {
     return [];
   }
 
   try {
     const parsed = JSON.parse(raw) as PendingPaymentOrder[];
-    return Array.isArray(parsed) ? parsed : [];
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+
+    const now = Date.now();
+    const fresh = parsed.filter((item) => {
+      const created = new Date(item.createdAt).getTime();
+      return Number.isFinite(created) && now - created <= pendingPaymentMaxAgeMs;
+    });
+
+    if (fresh.length !== parsed.length) {
+      saveAll(fresh);
+    }
+
+    return fresh;
   } catch {
     return [];
   }
@@ -36,13 +51,13 @@ function saveAll(items: PendingPaymentOrder[]) {
     return;
   }
 
-  window.localStorage.setItem(pendingPaymentStorageKey, JSON.stringify(items));
+  window.sessionStorage.setItem(pendingPaymentStorageKey, JSON.stringify(items));
 }
 
 export function savePendingBoricaOrder(order: string, amount: number, request: OrderInput) {
   const current = loadAll().filter((item) => item.order !== order);
   current.unshift({ order, amount, request, createdAt: new Date().toISOString() });
-  saveAll(current.slice(0, 40));
+  saveAll(current.slice(0, 12));
 }
 
 export function getPendingBoricaOrder(order: string): PendingPaymentOrder | null {
