@@ -2,7 +2,6 @@ import { type FormEvent, type ReactNode, useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import BrandLogo from './BrandLogo';
 import { getFavoriteSkus } from '../data/favorites';
-import { createSportArtwork } from '../data/catalog';
 
 type StoreHeaderProps = {
   activeSportSlug?: string;
@@ -15,11 +14,6 @@ type NavItem = {
   hover: string;
 };
 
-type NavThumbnail = {
-  src: string;
-  alt: string;
-};
-
 const navOrder: NavItem[] = [
   { key: 'squash', label: 'Squash', to: '/category/squash', hover: 'Rackets, grips, shoes and accessories for squash.' },
   { key: 'badminton', label: 'Badminton', to: '/category/badminton', hover: 'Rackets, shuttlecocks, apparel and bags.' },
@@ -28,29 +22,6 @@ const navOrder: NavItem[] = [
   { key: 'tennis', label: 'Tennis', to: '/category/tennis', hover: 'Tennis rackets, strings, shoes and bags.' },
   { key: 'contact', label: 'Contact', to: '/contact', hover: 'Customer care, delivery and company details.' },
 ];
-
-const navThumbnails: Record<string, NavThumbnail> = {
-  squash: {
-    src: createSportArtwork('Squash', 'Select', '#0d4e8f'),
-    alt: 'Squash thumbnail',
-  },
-  badminton: {
-    src: createSportArtwork('Badminton', 'Select', '#1b7bd1'),
-    alt: 'Badminton thumbnail',
-  },
-  padel: {
-    src: createSportArtwork('Padel', 'Select', '#e56717'),
-    alt: 'Padel thumbnail',
-  },
-  'table-tennis': {
-    src: createSportArtwork('Table Tennis', 'Select', '#4d6f8f'),
-    alt: 'Table tennis thumbnail',
-  },
-  tennis: {
-    src: createSportArtwork('Tennis', 'Select', '#1f6b3a'),
-    alt: 'Tennis thumbnail',
-  },
-};
 
 function HeaderIcon({ children }: { children: ReactNode }) {
   return <span className="retail-icon-svg" aria-hidden="true">{children}</span>;
@@ -165,17 +136,7 @@ function StoreHeader({ activeSportSlug }: StoreHeaderProps) {
               to={item.to}
               title={item.hover}
             >
-              <span className="retail-link-icon retail-link-thumb" aria-hidden="true">
-                {navThumbnails[item.key] ? (
-                  <img
-                    src={navThumbnails[item.key].src}
-                    alt={navThumbnails[item.key].alt}
-                    loading="lazy"
-                  />
-                ) : (
-                  <CategoryPictogram category={item.key} />
-                )}
-              </span>
+              <span className="retail-link-icon" aria-hidden="true"><CategoryPictogram category={item.key} /></span>
               <span>{item.label}</span>
               <span className="retail-link-hover">{item.hover}</span>
             </Link>
