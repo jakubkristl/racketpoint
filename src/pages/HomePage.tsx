@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import type { Category, Product } from '../data/catalog';
+import { createSportArtwork } from '../data/catalog';
 import { getPublicShortDetails } from '../data/publicCatalog';
 
 type HomePageProps = {
@@ -19,42 +20,47 @@ const subcategoryBySport: Record<string, string[]> = {
 };
 
 const heroVideoPath = '/branding/homepage/hero/launch-loop.mp4';
-const heroPosterPath = '/branding/homepage/hero/launch-poster.jpg';
+
+function createHomeHeroArtwork() {
+  return createSportArtwork('Hero', 'Racketpoint editorial storefront', '#0d4e8f');
+}
+
+const heroPosterPath = createHomeHeroArtwork();
 
 const sportVisuals = [
   {
     slug: 'squash',
     sport: 'Squash',
     caption: 'Rackets, grips, footwear and match-day essentials.',
-    imageUrl: '/branding/homepage/categories/squash.jpg',
+    imageUrl: createSportArtwork('Squash', 'Rackets, grips and shoes', '#0d4e8f'),
     href: '/category/squash',
   },
   {
     slug: 'badminton',
     sport: 'Badminton',
     caption: 'Fast setups for speed, control and quick transitions.',
-    imageUrl: '/branding/homepage/categories/badminton.jpg',
+    imageUrl: createSportArtwork('Badminton', 'Speed and control', '#1b7bd1'),
     href: '/category/badminton',
   },
   {
     slug: 'padel',
     sport: 'Padel',
     caption: 'Urban court momentum with technical product picks.',
-    imageUrl: '/branding/homepage/categories/padel.jpg',
+    imageUrl: createSportArtwork('Padel', 'Momentum and touch', '#e56717'),
     href: '/category/padel',
   },
   {
     slug: 'table-tennis',
     sport: 'Table Tennis',
     caption: 'Compact power and precision-focused control lines.',
-    imageUrl: '/branding/homepage/categories/table-tennis.jpg',
+    imageUrl: createSportArtwork('Table Tennis', 'Compact precision', '#4d6f8f'),
     href: '/category/table-tennis',
   },
   {
     slug: 'tennis',
     sport: 'Tennis',
     caption: 'Premium rackets and accessories for all-court players.',
-    imageUrl: '/branding/homepage/categories/tennis.jpg',
+    imageUrl: createSportArtwork('Tennis', 'All-court performance', '#1f6b3a'),
     href: '/category/tennis',
   },
 ];
@@ -136,13 +142,6 @@ function HomePage({ categories, products, onAddToCart }: HomePageProps) {
               alt="Racketpoint hero"
               className="home-editorial-poster"
               loading="eager"
-              onError={(event) => {
-                const target = event.currentTarget;
-                if (target.src.endsWith('/branding/logo-fallback.png')) {
-                  return;
-                }
-                target.src = '/branding/logo-fallback.png';
-              }}
             />
             <video className="home-editorial-video" autoPlay muted loop playsInline poster={heroPosterPath}>
               <source src={heroVideoPath} type="video/mp4" />

@@ -14,6 +14,11 @@ type NavItem = {
   hover: string;
 };
 
+type NavThumbnail = {
+  src: string;
+  alt: string;
+};
+
 const navOrder: NavItem[] = [
   { key: 'squash', label: 'Squash', to: '/category/squash', hover: 'Rackets, grips, shoes and accessories for squash.' },
   { key: 'badminton', label: 'Badminton', to: '/category/badminton', hover: 'Rackets, shuttlecocks, apparel and bags.' },
@@ -22,6 +27,29 @@ const navOrder: NavItem[] = [
   { key: 'tennis', label: 'Tennis', to: '/category/tennis', hover: 'Tennis rackets, strings, shoes and bags.' },
   { key: 'contact', label: 'Contact', to: '/contact', hover: 'Customer care, delivery and company details.' },
 ];
+
+const navThumbnails: Record<string, NavThumbnail> = {
+  squash: {
+    src: '/branding/navigation/thumbnails/squash.png',
+    alt: 'Squash thumbnail',
+  },
+  badminton: {
+    src: '/branding/navigation/thumbnails/badminton.png',
+    alt: 'Badminton thumbnail',
+  },
+  padel: {
+    src: '/branding/navigation/thumbnails/padel.png',
+    alt: 'Padel thumbnail',
+  },
+  'table-tennis': {
+    src: '/branding/navigation/thumbnails/table-tennis.png',
+    alt: 'Table tennis thumbnail',
+  },
+  tennis: {
+    src: '/branding/navigation/thumbnails/tennis.png',
+    alt: 'Tennis thumbnail',
+  },
+};
 
 function HeaderIcon({ children }: { children: ReactNode }) {
   return <span className="retail-icon-svg" aria-hidden="true">{children}</span>;
@@ -136,7 +164,24 @@ function StoreHeader({ activeSportSlug }: StoreHeaderProps) {
               to={item.to}
               title={item.hover}
             >
-              <span className="retail-link-icon"><CategoryPictogram category={item.key} /></span>
+              <span className="retail-link-icon retail-link-thumb" aria-hidden="true">
+                {navThumbnails[item.key] ? (
+                  <img
+                    src={navThumbnails[item.key].src}
+                    alt={navThumbnails[item.key].alt}
+                    loading="lazy"
+                    onError={(event) => {
+                      const target = event.currentTarget;
+                      if (target.src.endsWith('/branding/logo-fallback.png')) {
+                        return;
+                      }
+                      target.src = '/branding/logo-fallback.png';
+                    }}
+                  />
+                ) : (
+                  <CategoryPictogram category={item.key} />
+                )}
+              </span>
               <span>{item.label}</span>
               <span className="retail-link-hover">{item.hover}</span>
             </Link>

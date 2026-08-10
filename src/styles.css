@@ -352,6 +352,20 @@ button {
   color: #5b6b7d;
 }
 
+.retail-link-thumb {
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 0 0 1px rgba(91, 107, 125, 0.14);
+}
+
+.retail-link-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
 .retail-link-icon svg {
   width: 18px;
   height: 18px;
@@ -1713,6 +1727,7 @@ button {
   font-size: 0.86rem;
   color: #7c8793;
   text-decoration: line-through;
+}
 .home-editorial-page {
   width: min(1320px, calc(100% - 32px));
 }
@@ -1854,7 +1869,6 @@ button {
   color: rgba(235, 241, 255, 0.95);
   font-size: 0.82rem;
   line-height: 1.4;
-}
 }
 
 .price-sale {
@@ -2500,6 +2514,42 @@ button {
   .page-shell {
     width: min(100% - 20px, 1180px);
     padding-top: 10px;
+  }
+
+  .retail-mainnav {
+    grid-template-columns: auto 1fr;
+    align-items: start;
+    gap: 10px 8px;
+    min-height: auto;
+    padding: 12px;
+  }
+
+  .retail-logo-link .brand-logo-image,
+  .retail-logo-link .brand-lockup.compact .brand-logo-image {
+    width: min(160px, 48vw);
+  }
+
+  .retail-links {
+    grid-column: 1 / -1;
+    gap: 8px;
+    padding-bottom: 2px;
+  }
+
+  .retail-link {
+    gap: 6px;
+    font-size: 0.82rem;
+  }
+
+  .retail-link-thumb {
+    width: 16px;
+    height: 16px;
+    flex: 0 0 16px;
+  }
+
+  .retail-icons {
+    grid-column: 2;
+    justify-self: end;
+    gap: 8px;
   }
 
   .hero {

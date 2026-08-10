@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import type { BalanceProfile, Brand, Category, Product } from '../data/catalog';
+import { createSportArtwork, type BalanceProfile, type Brand, type Category, type Product } from '../data/catalog';
 import { getFavoriteSkus, isFavoriteSku, toggleFavoriteSku } from '../data/favorites';
 
 type CategoryPageProps = {
@@ -25,38 +25,38 @@ const subcategoryOptions = ['Rackets', 'Balls', 'Apparel', 'Grips', 'Footwear', 
 const sizeOptions = ['S', 'M', 'L', 'XL', '39', '40', '41', '42', '43', '44'];
 
 const subcategoryStockImages: Record<string, string> = {
-  Rackets: '/branding/category/subcategories/rackets.jpg',
-  Balls: '/branding/category/subcategories/balls.jpg',
-  Apparel: '/branding/category/subcategories/apparel.jpg',
-  Grips: '/branding/category/subcategories/grips.jpg',
-  Footwear: '/branding/category/subcategories/footwear.jpg',
-  Bags: '/branding/category/subcategories/bags.jpg',
-  Accessories: '/branding/category/subcategories/accessories.jpg',
+  Rackets: createSportArtwork('Rackets', 'Selected frames', '#0d4e8f'),
+  Balls: createSportArtwork('Balls', 'Match essentials', '#e56717'),
+  Apparel: createSportArtwork('Apparel', 'Court-ready layers', '#1b7bd1'),
+  Grips: createSportArtwork('Grips', 'Touch and control', '#1f6b3a'),
+  Footwear: createSportArtwork('Footwear', 'Fast support', '#4d6f8f'),
+  Bags: createSportArtwork('Bags', 'Travel ready', '#8c5bbf'),
+  Accessories: createSportArtwork('Accessories', 'Daily add-ons', '#c24c6b'),
 };
 
 const categoryMoodBySlug: Record<string, { imageUrl: string; title: string; copy: string }> = {
   squash: {
-    imageUrl: '/branding/category/mood/squash.jpg',
+    imageUrl: createSportArtwork('Squash', 'Performance edit', '#0d4e8f'),
     title: 'Squash performance edit',
     copy: 'Built for speed, control and hard match tempo.',
   },
   tennis: {
-    imageUrl: '/branding/category/mood/tennis.jpg',
+    imageUrl: createSportArtwork('Tennis', 'Precision edit', '#1f6b3a'),
     title: 'Tennis precision edit',
     copy: 'Court-ready setups for club and tournament play.',
   },
   badminton: {
-    imageUrl: '/branding/category/mood/badminton.jpg',
+    imageUrl: createSportArtwork('Badminton', 'Speed edit', '#1b7bd1'),
     title: 'Badminton speed edit',
     copy: 'Lightweight gear for acceleration and quick recovery.',
   },
   padel: {
-    imageUrl: '/branding/category/mood/padel.jpg',
+    imageUrl: createSportArtwork('Padel', 'Momentum edit', '#e56717'),
     title: 'Padel momentum edit',
     copy: 'Modern glass-court focus with power and touch balance.',
   },
   'table-tennis': {
-    imageUrl: '/branding/category/mood/table-tennis.jpg',
+    imageUrl: createSportArtwork('Table Tennis', 'Control edit', '#4d6f8f'),
     title: 'Table tennis control edit',
     copy: 'Spin-ready setups for compact and technical play.',
   },
@@ -322,13 +322,6 @@ function CategoryPage({ category, products, brands, onAddToCart }: CategoryPageP
             src={categoryMood.imageUrl}
             alt={`${category.name} banner`}
             loading="lazy"
-            onError={(event) => {
-              const target = event.currentTarget;
-              if (target.src.endsWith('/branding/logo-fallback.png')) {
-                return;
-              }
-              target.src = '/branding/logo-fallback.png';
-            }}
           />
           <div className="category-mood-overlay">
             <p className="eyebrow">{categoryMood.title}</p>
@@ -341,7 +334,6 @@ function CategoryPage({ category, products, brands, onAddToCart }: CategoryPageP
             <div className="subcategory-block-grid">
               {subcategoryBlocks.map((subCategory) => {
                 const imageUrl = subcategoryStockImages[subCategory.label] ?? 'https://images.pexels.com/photos/274422/pexels-photo-274422.jpeg?auto=compress&cs=tinysrgb&w=1200';
-                const fallbackImage = '/branding/logo-fallback.png';
 
                 return (
                   <button
@@ -355,13 +347,6 @@ function CategoryPage({ category, products, brands, onAddToCart }: CategoryPageP
                       src={imageUrl}
                       alt={`${subCategory.label} stock visual`}
                       loading="lazy"
-                      onError={(event) => {
-                        const target = event.currentTarget;
-                        if (target.src.endsWith(fallbackImage)) {
-                          return;
-                        }
-                        target.src = fallbackImage;
-                      }}
                     />
                     <div className="subcategory-block-copy">
                       <span>{subCategory.label}</span>

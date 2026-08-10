@@ -38,6 +38,16 @@ One image per sport:
 - `public/branding/category/subcategories/bags.jpg`
 - `public/branding/category/subcategories/accessories.jpg`
 
+## 5) Header navigation thumbnails
+
+One image per sport for the top navigation:
+
+- `public/branding/navigation/thumbnails/squash.png`
+- `public/branding/navigation/thumbnails/badminton.png`
+- `public/branding/navigation/thumbnails/padel.png`
+- `public/branding/navigation/thumbnails/table-tennis.png`
+- `public/branding/navigation/thumbnails/tennis.png`
+
 ## Recommended sizes
 
 - Hero video: 1920x1080 or wider, H.264 MP4, muted loop.
