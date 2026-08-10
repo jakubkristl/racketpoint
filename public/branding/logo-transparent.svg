@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 240" role="img" aria-labelledby="title desc">
+  <title id="title">Racketpoint.bg Transparent Logo</title>
+  <desc id="desc">Horizontal transparent logo with racket, ball and motion trail.</desc>
+  <g transform="translate(28 22)">
+    <g transform="translate(0 0)" fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M78 164c-22 22-40 47-54 78l-16-10c13-33 32-60 62-88" fill="#0a3f7a" opacity="0.95"/>
+      <path d="M88 32c30 0 58 10 78 30 21 20 31 43 26 66-6 22-24 45-55 65-28 19-63 35-95 41 29-19 52-39 78-67 23-24 41-50 47-70 5-17 2-35-11-49-13-14-34-21-61-11z" fill="none" stroke="#1c6cb1" stroke-width="13"/>
+      <path d="M64 60l73 66" stroke="#ffffff" stroke-width="5"/>
+      <path d="M48 82l75 69" stroke="#ffffff" stroke-width="5"/>
+      <path d="M109 37l-36 91" stroke="#ffffff" stroke-width="5"/>
+      <path d="M137 45l-44 110" stroke="#ffffff" stroke-width="5"/>
+      <circle cx="166" cy="64" r="27" fill="url(#ballGrad)" stroke="#ffffff" stroke-width="6"/>
+      <path d="M150 56c10-8 21-10 31-6" fill="none" stroke="#ffffff" stroke-width="5"/>
+      <path d="M190 66c20 0 33 2 47 6" fill="none" stroke="#e56717" stroke-width="10"/>
+      <path d="M187 82c24 5 42 10 52 16" fill="none" stroke="#e56717" stroke-width="7"/>
+      <circle cx="240" cy="98" r="8" fill="#e56717"/>
+    </g>
+    <defs>
+      <linearGradient id="ballGrad" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0%" stop-color="#d9ef61"/>
+        <stop offset="100%" stop-color="#94bf27"/>
+      </linearGradient>
+    </defs>
+  </g>
+  <g transform="translate(292 67)">
+    <text x="0" y="47" font-family="Trebuchet MS, Verdana, Arial, sans-serif" font-size="58" font-weight="700" fill="#0c2a24">Racketpoint.bg</text>
+    <text x="0" y="96" font-family="Trebuchet MS, Verdana, Arial, sans-serif" font-size="24" font-weight="600" fill="#e56717" letter-spacing="2">EVERYTHING FOR RACKET SPORTS</text>
+  </g>
+</svg>

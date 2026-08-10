@@ -7,10 +7,7 @@ function BrandLogo({ subtitle = 'Racketpoint Premium Storefront', compact = fals
   return (
     <div className={compact ? 'brand-lockup compact' : 'brand-lockup'}>
       <div className="brand-wording brand-logo-frame">
-        <picture>
-          <source srcSet="/branding/logo.webp" type="image/webp" />
-          <img className="brand-logo-image" src="/branding/logo-fallback.png" alt="Racketpoint.bg Everything for Racket Sports" />
-        </picture>
+        <img className="brand-logo-image" src="/branding/logo-transparent.svg" alt="Racketpoint.bg Everything for Racket Sports" />
         <p className="brand-subtitle">{subtitle}</p>
       </div>
     </div>

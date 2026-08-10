@@ -312,7 +312,7 @@ button {
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  gap: 10px;
+  gap: 14px;
   flex-wrap: nowrap;
   min-width: 0;
   overflow-x: auto;
@@ -328,9 +328,9 @@ button {
   position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 12px;
   color: #111820;
-  font-size: 0.9rem;
+  font-size: 1rem;
   font-weight: 700;
   letter-spacing: -0.01em;
   white-space: nowrap;
@@ -346,15 +346,15 @@ button {
 }
 
 .retail-link-icon {
-  width: 18px;
-  height: 18px;
+  width: 34px;
+  height: 34px;
   display: inline-flex;
   color: #5b6b7d;
 }
 
 .retail-link-thumb {
   overflow: hidden;
-  border-radius: 999px;
+  border-radius: 12px;
   background: rgba(255, 255, 255, 0.92);
   box-shadow: 0 0 0 1px rgba(91, 107, 125, 0.14);
 }
@@ -367,8 +367,8 @@ button {
 }
 
 .retail-link-icon svg {
-  width: 18px;
-  height: 18px;
+  width: 34px;
+  height: 34px;
 }
 
 .retail-link-hover {
@@ -2536,14 +2536,14 @@ button {
   }
 
   .retail-link {
-    gap: 6px;
-    font-size: 0.82rem;
+    gap: 8px;
+    font-size: 0.88rem;
   }
 
   .retail-link-thumb {
-    width: 16px;
-    height: 16px;
-    flex: 0 0 16px;
+    width: 28px;
+    height: 28px;
+    flex: 0 0 28px;
   }
 
   .retail-icons {

@@ -2,6 +2,7 @@ import { type FormEvent, type ReactNode, useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import BrandLogo from './BrandLogo';
 import { getFavoriteSkus } from '../data/favorites';
+import { createSportArtwork } from '../data/catalog';
 
 type StoreHeaderProps = {
   activeSportSlug?: string;
@@ -30,23 +31,23 @@ const navOrder: NavItem[] = [
 
 const navThumbnails: Record<string, NavThumbnail> = {
   squash: {
-    src: '/branding/navigation/thumbnails/squash.png',
+    src: createSportArtwork('Squash', 'Select', '#0d4e8f'),
     alt: 'Squash thumbnail',
   },
   badminton: {
-    src: '/branding/navigation/thumbnails/badminton.png',
+    src: createSportArtwork('Badminton', 'Select', '#1b7bd1'),
     alt: 'Badminton thumbnail',
   },
   padel: {
-    src: '/branding/navigation/thumbnails/padel.png',
+    src: createSportArtwork('Padel', 'Select', '#e56717'),
     alt: 'Padel thumbnail',
   },
   'table-tennis': {
-    src: '/branding/navigation/thumbnails/table-tennis.png',
+    src: createSportArtwork('Table Tennis', 'Select', '#4d6f8f'),
     alt: 'Table tennis thumbnail',
   },
   tennis: {
-    src: '/branding/navigation/thumbnails/tennis.png',
+    src: createSportArtwork('Tennis', 'Select', '#1f6b3a'),
     alt: 'Tennis thumbnail',
   },
 };
@@ -170,13 +171,6 @@ function StoreHeader({ activeSportSlug }: StoreHeaderProps) {
                     src={navThumbnails[item.key].src}
                     alt={navThumbnails[item.key].alt}
                     loading="lazy"
-                    onError={(event) => {
-                      const target = event.currentTarget;
-                      if (target.src.endsWith('/branding/logo-fallback.png')) {
-                        return;
-                      }
-                      target.src = '/branding/logo-fallback.png';
-                    }}
                   />
                 ) : (
                   <CategoryPictogram category={item.key} />
