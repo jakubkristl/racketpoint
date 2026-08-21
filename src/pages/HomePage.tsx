@@ -2,21 +2,12 @@ import { Link } from 'react-router-dom';
 import type { Category, Product } from '../data/catalog';
 import { createSportArtwork } from '../data/catalog';
 import { getPublicShortDetails } from '../data/publicCatalog';
+import { shopSubcategories } from '../data/subcategories';
 
 type HomePageProps = {
   categories: Category[];
   products: Product[];
   onAddToCart: (sku: string) => void;
-};
-
-const subcategoryBlueprint = ['Rackets', 'Grips', 'Apparel', 'Bags', 'Balls', 'Accessories'];
-
-const subcategoryBySport: Record<string, string[]> = {
-  squash: ['Rackets', 'Grips', 'Strings', 'Apparel', 'Bags', 'Accessories'],
-  tennis: ['Rackets', 'Overgrips', 'Apparel', 'Bags', 'Balls', 'Accessories'],
-  'table-tennis': ['Bats', 'Rubbers', 'Balls', 'Bags', 'Grips', 'Accessories'],
-  badminton: ['Rackets', 'Shuttlecocks', 'Grips', 'Apparel', 'Bags', 'Accessories'],
-  padel: ['Rackets', 'Overgrips', 'Apparel', 'Bags', 'Balls', 'Accessories'],
 };
 
 const heroVideoPath = '/branding/homepage/hero/launch-loop.mp4';
@@ -30,55 +21,60 @@ const heroPosterPath = createHomeHeroArtwork();
 const sportVisuals = [
   {
     slug: 'squash',
-    sport: 'Squash',
-    caption: 'Rackets, grips, footwear and match-day essentials.',
-    imageUrl: createSportArtwork('Squash', 'Rackets, grips and shoes', '#0d4e8f'),
+    sport: 'Скуош',
+    caption: '',
+    imageUrl: '/branding/homepage/categories/squash.webp',
+    fallbackImageUrl: 'https://images.pexels.com/photos/7648269/pexels-photo-7648269.jpeg?auto=compress&cs=tinysrgb&w=1200',
     href: '/category/squash',
   },
   {
     slug: 'badminton',
-    sport: 'Badminton',
-    caption: 'Fast setups for speed, control and quick transitions.',
-    imageUrl: createSportArtwork('Badminton', 'Speed and control', '#1b7bd1'),
+    sport: 'Бадминтон',
+    caption: '',
+    imageUrl: '/branding/homepage/categories/badminton.webp',
+    fallbackImageUrl: 'https://images.pexels.com/photos/2202685/pexels-photo-2202685.jpeg?auto=compress&cs=tinysrgb&w=1200',
     href: '/category/badminton',
   },
   {
     slug: 'padel',
-    sport: 'Padel',
-    caption: 'Urban court momentum with technical product picks.',
-    imageUrl: createSportArtwork('Padel', 'Momentum and touch', '#e56717'),
+    sport: 'Падел',
+    caption: '',
+    imageUrl: '/branding/homepage/categories/padel.webp',
+    fallbackImageUrl: 'https://images.pexels.com/photos/35248332/pexels-photo-35248332.jpeg?auto=compress&cs=tinysrgb&w=1200',
     href: '/category/padel',
   },
   {
     slug: 'table-tennis',
-    sport: 'Table Tennis',
-    caption: 'Compact power and precision-focused control lines.',
-    imageUrl: createSportArtwork('Table Tennis', 'Compact precision', '#4d6f8f'),
+    sport: 'Тенис на маса',
+    caption: '',
+    imageUrl: '/branding/homepage/categories/table-tennis.webp',
+    fallbackImageUrl: 'https://images.pexels.com/photos/709134/pexels-photo-709134.jpeg?auto=compress&cs=tinysrgb&w=1200',
     href: '/category/table-tennis',
   },
   {
     slug: 'tennis',
-    sport: 'Tennis',
-    caption: 'Premium rackets and accessories for all-court players.',
-    imageUrl: createSportArtwork('Tennis', 'All-court performance', '#1f6b3a'),
+    sport: 'Тенис',
+    caption: '',
+    imageUrl: '/branding/homepage/categories/tennis.webp',
+    fallbackImageUrl: 'https://images.pexels.com/photos/209977/pexels-photo-209977.jpeg?auto=compress&cs=tinysrgb&w=1200',
     href: '/category/tennis',
   },
 ];
 
 function getInventoryBadge(product: Product) {
   if (typeof product.stock !== 'number') {
-    return 'Limited';
+    return 'Ограничено количество';
   }
 
   if (product.stock <= 0) {
-    return 'Out of stock';
+    return 'Изчерпано';
   }
 
   if (product.stock < 5) {
-    return 'Low stock';
+    return 'Ограничени бройки';
   }
 
-  return 'In stock';
+  return 'Налично';
 }
 
 function isOutOfStock(product: Product) {
@@ -86,6 +82,10 @@ function isOutOfStock(product: Product) {
 }
 
 function getDisplayPriceValue(product: Product) {
+  if (typeof product.salePriceEur === 'number' && Number.isFinite(product.salePriceEur)) {
+    return `EUR ${product.salePriceEur.toFixed(2)}`;
+  }
+
   if (typeof product.priceEur === 'number' && Number.isFinite(product.priceEur)) {
     return `EUR ${product.priceEur.toFixed(2)}`;
   }
@@ -109,8 +109,49 @@ function getProductTitleClass(name: string) {
   return 'product-title';
 }
 
+function hasHomepageFeatureTag(product: Product) {
+  const badgeText = product.badges.join(' ').toLowerCase();
+
+  return badgeText.includes('hot')
+    || badgeText.includes('хит')
+    || badgeText.includes('new')
+    || badgeText.includes('нов')
+    || badgeText.includes('sale')
+    || badgeText.includes('akcia')
+    || badgeText.includes('акция')
+    || badgeText.includes('%')
+    || (typeof product.originalPriceEur === 'number'
+      && typeof product.salePriceEur === 'number'
+      && product.salePriceEur < product.originalPriceEur);
+}
+
+function getHomepageFeatureBadges(product: Product) {
+  const badgeText = product.badges.join(' ').toLowerCase();
+  const badges: string[] = [];
+
+  if (badgeText.includes('hot') || badgeText.includes('хит')) {
+    badges.push('HOT');
+  }
+
+  if (badgeText.includes('new') || badgeText.includes('нов')) {
+    badges.push('NEW');
+  }
+
+  if (badgeText.includes('sale')
+    || badgeText.includes('akcia')
+    || badgeText.includes('акция')
+    || badgeText.includes('%')
+    || (typeof product.originalPriceEur === 'number'
+      && typeof product.salePriceEur === 'number'
+      && product.salePriceEur < product.originalPriceEur)) {
+    badges.push('SALE');
+  }
+
+  return badges;
+}
+
 function HomePage({ categories, products, onAddToCart }: HomePageProps) {
-  const featuredProducts = products.slice(0, 8);
+  const featuredProducts = products.filter(hasHomepageFeatureTag).slice(0, 8);
   const homeCategoryOrder = ['squash', 'badminton', 'padel', 'table-tennis', 'tennis'];
   const primaryCategories = homeCategoryOrder
     .map((slug) => categories.find((category) => category.slug === slug))
@@ -121,18 +162,18 @@ function HomePage({ categories, products, onAddToCart }: HomePageProps) {
       <main className="home-editorial-main">
         <section className="home-editorial-hero">
           <article className="home-editorial-copy">
-            <p className="eyebrow">New Season</p>
-            <h1>Move Faster. Shop The Court.</h1>
+            <p className="eyebrow">Нов сезон</p>
+            <h1>Движи се по-бързо. Пазарувай за корта.</h1>
             <p className="intro">
-              Premium racket sports storefront inspired by modern editorial retail.
-              One click takes customers straight to each sport collection.
+              Премиум магазин за ракетни спортове, вдъхновен от модерна редакционна търговия.
+              С един клик клиентите отиват директно към всяка спортна колекция.
             </p>
             <div className="home-editorial-actions">
-              <a className="button button-primary" href="#shop-categories">Shop categories</a>
-              <a className="button button-secondary" href="#featured-products">Shop featured</a>
+              <a className="button button-primary" href="#shop-categories">Категории</a>
+              <a className="button button-secondary" href="#featured-products">Избрани продукти</a>
             </div>
             <div className="home-editorial-tags">
-              {subcategoryBlueprint.map((section) => <span key={section}>{section}</span>)}
+              {shopSubcategories.slice(0, 6).map((section) => <span key={section.slug}>{section.label}</span>)}
             </div>
           </article>
 
@@ -147,7 +188,7 @@ function HomePage({ categories, products, onAddToCart }: HomePageProps) {
               <source src={heroVideoPath} type="video/mp4" />
             </video>
             <div className="home-editorial-media-overlay">
-              <strong>Drop your animation file into:</strong>
+              <strong>Поставете анимационния файл тук:</strong>
               <span>/public/branding/homepage/hero/launch-loop.mp4</span>
             </div>
           </article>
@@ -156,8 +197,8 @@ function HomePage({ categories, products, onAddToCart }: HomePageProps) {
         <section className="section" id="shop-categories">
           <div className="section-heading split">
             <div>
-              <p className="eyebrow">Shop by sport</p>
-              <h2>One-click entry to every main category.</h2>
+              <p className="eyebrow">Пазарувай по спорт</p>
+              <h2>Директен достъп до всяка основна категория.</h2>
             </div>
           </div>
 
@@ -173,12 +214,16 @@ function HomePage({ categories, products, onAddToCart }: HomePageProps) {
                     if (target.src.endsWith('/branding/logo-fallback.png')) {
                       return;
                     }
-                    target.src = '/branding/logo-fallback.png';
+                    if (target.src === visual.fallbackImageUrl) {
+                      target.src = '/branding/logo-fallback.png';
+                      return;
+                    }
+                    target.src = visual.fallbackImageUrl;
                   }}
                 />
                 <div className="home-category-card-overlay">
                   <h3>{visual.sport}</h3>
-                  <p>{visual.caption}</p>
+                  {visual.caption ? <p>{visual.caption}</p> : null}
                 </div>
               </Link>
             ))}
@@ -188,8 +233,8 @@ function HomePage({ categories, products, onAddToCart }: HomePageProps) {
         <section className="section" id="featured-products">
           <div className="section-heading split">
             <div>
-              <p className="eyebrow">Featured now</p>
-              <h2>Fast picks ready for cart.</h2>
+              <p className="eyebrow">Избрани предложения</p>
+              <h2>Бързи предложения, готови за количката.</h2>
             </div>
           </div>
 
@@ -207,12 +252,12 @@ function HomePage({ categories, products, onAddToCart }: HomePageProps) {
                   </div>
                   <div className="product-badges">
                     <span className="stock-pill">{getInventoryBadge(product)}</span>
-                    {product.badges.map((badge) => <span key={badge}>{badge}</span>)}
+                    {getHomepageFeatureBadges(product).map((badge) => <span key={badge}>{badge}</span>)}
                   </div>
-                  {isOutOfStock(product) ? <p className="delivery-note">Delivery 7-14 days</p> : null}
+                  {isOutOfStock(product) ? <p className="delivery-note">Доставка 7-14 дни</p> : null}
                   <div className="product-footer">
                     <strong>{getDisplayPriceValue(product)}</strong>
-                    <button type="button" onClick={() => onAddToCart(product.sku)}>Quick Add</button>
+                    <button type="button" onClick={() => onAddToCart(product.sku)}>Бързо добавяне</button>
                   </div>
                 </div>
               </article>
@@ -223,8 +268,8 @@ function HomePage({ categories, products, onAddToCart }: HomePageProps) {
         <section className="section">
           <div className="section-heading split">
             <div>
-              <p className="eyebrow">Category shortcuts</p>
-              <h2>Go straight to sub-categories.</h2>
+              <p className="eyebrow">Бързи връзки</p>
+              <h2>Отиди директно към подкатегориите.</h2>
             </div>
           </div>
 
@@ -232,11 +277,10 @@ function HomePage({ categories, products, onAddToCart }: HomePageProps) {
             {primaryCategories.map((category) => (
               <article className="mega-menu-column" key={`home-${category.slug}`}>
                 <h3>{category.name}</h3>
-                <p>{category.heroCopy}</p>
                 <div className="mega-menu-links">
-                  {(subcategoryBySport[category.slug] ?? subcategoryBlueprint).map((sub) => (
-                    <Link key={`${category.slug}-${sub}`} to={`/category/${category.slug}?sub=${encodeURIComponent(sub)}`}>
-                      {sub}
+                  {shopSubcategories.map((sub) => (
+                    <Link key={`${category.slug}-${sub.slug}`} to={`/category/${category.slug}?sub=${encodeURIComponent(sub.slug)}`}>
+                      {sub.label}
                     </Link>
                   ))}
                 </div>

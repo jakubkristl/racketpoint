@@ -70,7 +70,7 @@ function CartDrawer({
   useEffect(() => {
     if (autoOpenToken) {
       setIsOpen(true);
-      setStatus('Card payment was not completed. You can continue from checkout.');
+      setStatus('Картовото плащане не беше завършено. Можете да продължите от страницата за поръчка.');
     }
   }, [autoOpenToken]);
 
@@ -86,16 +86,16 @@ function CartDrawer({
   return (
     <>
       <button className="cart-toggle" type="button" onClick={() => setIsOpen(true)}>
-        Cart {totalItems > 0 ? `(${totalItems})` : ''}
+        Количка {totalItems > 0 ? `(${totalItems})` : ''}
       </button>
 
-      {isOpen ? <button className="cart-overlay" type="button" aria-label="Close cart" onClick={() => setIsOpen(false)} /> : null}
+      {isOpen ? <button className="cart-overlay" type="button" aria-label="Затвори количката" onClick={() => setIsOpen(false)} /> : null}
 
-      <aside className={isOpen ? 'cart-drawer open' : 'cart-drawer'} aria-label="Shopping cart drawer">
+      <aside className={isOpen ? 'cart-drawer open' : 'cart-drawer'} aria-label="Панел на количката">
         <div className="cart-drawer-header">
-          <h2>Your cart</h2>
+          <h2>Твоята количка</h2>
           <button className="button button-secondary" type="button" onClick={() => setIsOpen(false)}>
-            Close
+            Затвори
           </button>
         </div>
 
@@ -108,8 +108,8 @@ function CartDrawer({
                   <div>
                     <p className="product-category">{item.product.brand}</p>
                     <h3>{item.product.name}</h3>
-                    <p className="support-copy">Unit: {formatCurrency(item.product.priceEur || parsePrice(item.product.price || '0'))}</p>
-                    <p className="cart-line-total">Line total: {formatCurrency(item.lineTotal)}</p>
+                    <p className="support-copy">Единична цена: {formatCurrency(item.product.priceEur || parsePrice(item.product.price || '0'))}</p>
+                    <p className="cart-line-total">Общо за реда: {formatCurrency(item.lineTotal)}</p>
                   </div>
                 </div>
 
@@ -118,24 +118,24 @@ function CartDrawer({
                   <span className="qty-value">{item.quantity}</span>
                   <button type="button" className="qty-btn" onClick={() => onIncrement(item.sku)}>+</button>
                   <button type="button" className="button button-secondary cart-remove-btn" onClick={() => onRemove(item.sku)}>
-                    Remove
+                    Премахни
                   </button>
                 </div>
               </article>
             ))
           ) : (
-            <p className="support-copy">Your cart is empty. Add products from the catalog.</p>
+            <p className="support-copy">Количката е празна. Добавете продукти от каталога.</p>
           )}
         </div>
 
         <div className="cart-total">
-          <strong>Total</strong>
+          <strong>Общо</strong>
           <strong>{formatCurrency(totalPrice)}</strong>
         </div>
 
         <div className="cart-drawer-footer">
           <Link className="button button-primary" to={totalItems > 0 ? '/checkout' : '/'} onClick={() => setIsOpen(false)}>
-            {totalItems > 0 ? 'Proceed to checkout' : 'Back to store'}
+            {totalItems > 0 ? 'Към поръчката' : 'Към магазина'}
           </Link>
           {status ? <p className="form-status">{status}</p> : null}
         </div>

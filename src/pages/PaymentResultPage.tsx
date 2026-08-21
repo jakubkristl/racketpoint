@@ -103,10 +103,10 @@ function PaymentResultPage({ onBoricaApproved }: PaymentResultPageProps) {
     <div className="page-shell">
       <main>
         <section className="section category-mood-banner static-banner">
-          <img src="https://images.pexels.com/photos/7648078/pexels-photo-7648078.jpeg?auto=compress&cs=tinysrgb&w=1800" alt="Payment status banner" loading="lazy" />
+          <img src="https://images.pexels.com/photos/7648078/pexels-photo-7648078.jpeg?auto=compress&cs=tinysrgb&w=1800" alt="Банер за статус на плащане" loading="lazy" />
           <div className="category-mood-overlay">
-            <p className="eyebrow">Payment status</p>
-            <h2>Tracking your BORICA transaction and order confirmation.</h2>
+            <p className="eyebrow">Статус на плащане</p>
+            <h2>Проследяване на BORICA транзакцията и потвърждението на поръчката.</h2>
           </div>
         </section>
 
@@ -116,11 +116,11 @@ function PaymentResultPage({ onBoricaApproved }: PaymentResultPageProps) {
           <p className="intro">{message}</p>
 
         <div className="payment-result-meta">
-          <span>Order: {result.order || 'n/a'}</span>
+          <span>Поръчка: {result.order || 'n/a'}</span>
           <span>RC: {result.rc || 'n/a'}</span>
           <span>ACTION: {result.action || 'n/a'}</span>
-          <span>Signature: {result.signatureValid ? 'Valid' : 'Invalid'}</span>
-          {localReference ? <span>Local ref: {localReference}</span> : null}
+          <span>Подпис: {result.signatureValid ? 'Валиден' : 'Невалиден'}</span>
+          {localReference ? <span>Локален референтен номер: {localReference}</span> : null}
         </div>
 
           <div className="hero-actions">

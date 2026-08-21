@@ -3,11 +3,22 @@ type BrandLogoProps = {
   compact?: boolean;
 };
 
-function BrandLogo({ subtitle = 'Racketpoint Premium Storefront', compact = false }: BrandLogoProps) {
+function BrandLogo({ subtitle = 'Премиум магазин за ракети', compact = false }: BrandLogoProps) {
   return (
     <div className={compact ? 'brand-lockup compact' : 'brand-lockup'}>
       <div className="brand-wording brand-logo-frame">
-        <img className="brand-logo-image" src="/branding/logo-transparent.svg" alt="Racketpoint.bg Everything for Racket Sports" />
+        <img
+          className="brand-logo-image"
+          src="/branding/logo-transparent.svg"
+          alt="Racketpoint.bg Everything for Racket Sports"
+          onError={(event) => {
+            const target = event.currentTarget;
+            if (target.src.endsWith('/branding/logo.webp')) {
+              return;
+            }
+            target.src = '/branding/logo.webp';
+          }}
+        />
         <p className="brand-subtitle">{subtitle}</p>
       </div>
     </div>

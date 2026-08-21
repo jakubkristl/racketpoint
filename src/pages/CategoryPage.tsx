@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { createSportArtwork, type BalanceProfile, type Brand, type Category, type Product } from '../data/catalog';
+import { type BalanceProfile, type Brand, type Category, type Product } from '../data/catalog';
 import { getFavoriteSkus, isFavoriteSku, toggleFavoriteSku } from '../data/favorites';
+import { getSubcategoriesForProducts, getSubcategoryByParam, shopSubcategories } from '../data/subcategories';
 
 type CategoryPageProps = {
   category: Category;
@@ -10,57 +11,41 @@ type CategoryPageProps = {
   onAddToCart: (sku: string) => void;
 };
 
-const productTypeLabels: Record<string, string> = {
-  Racket: 'Rackets',
-  Balls: 'Balls',
-  Wear: 'Apparel',
-  Shoe: 'Footwear',
-  Bag: 'Bags',
-  Accessory: 'Accessories',
-  String: 'Rackets',
-  Grip: 'Grips',
+const categoryLabelBySlug: Record<string, string> = {
+  squash: 'Скуош',
+  badminton: 'Бадминтон',
+  padel: 'Падел',
+  tennis: 'Тенис',
+  'table-tennis': 'Тенис на маса',
 };
 
-const subcategoryOptions = ['Rackets', 'Balls', 'Apparel', 'Grips', 'Footwear', 'Bags', 'Accessories'];
 const sizeOptions = ['S', 'M', 'L', 'XL', '39', '40', '41', '42', '43', '44'];
 
-const subcategoryStockImages: Record<string, string> = {
-  Rackets: createSportArtwork('Rackets', 'Selected frames', '#0d4e8f'),
-  Balls: createSportArtwork('Balls', 'Match essentials', '#e56717'),
-  Apparel: createSportArtwork('Apparel', 'Court-ready layers', '#1b7bd1'),
-  Grips: createSportArtwork('Grips', 'Touch and control', '#1f6b3a'),
-  Footwear: createSportArtwork('Footwear', 'Fast support', '#4d6f8f'),
-  Bags: createSportArtwork('Bags', 'Travel ready', '#8c5bbf'),
-  Accessories: createSportArtwork('Accessories', 'Daily add-ons', '#c24c6b'),
-};
-
-const categoryMoodBySlug: Record<string, { imageUrl: string; title: string; copy: string }> = {
+const categoryMoodBySlug: Record<string, { primary: string; fallback: string }> = {
   squash: {
-    imageUrl: createSportArtwork('Squash', 'Performance edit', '#0d4e8f'),
-    title: 'Squash performance edit',
-    copy: 'Built for speed, control and hard match tempo.',
+    primary: '/branding/category/mood/squash-equipment.webp',
+    fallback: 'https://images.pexels.com/photos/7648269/pexels-photo-7648269.jpeg?auto=compress&cs=tinysrgb&w=1800',
   },
   tennis: {
-    imageUrl: createSportArtwork('Tennis', 'Precision edit', '#1f6b3a'),
-    title: 'Tennis precision edit',
-    copy: 'Court-ready setups for club and tournament play.',
+    primary: '/branding/category/mood/tennis-equipment.webp',
+    fallback: 'https://images.pexels.com/photos/209977/pexels-photo-209977.jpeg?auto=compress&cs=tinysrgb&w=1800',
   },
   badminton: {
-    imageUrl: createSportArtwork('Badminton', 'Speed edit', '#1b7bd1'),
-    title: 'Badminton speed edit',
-    copy: 'Lightweight gear for acceleration and quick recovery.',
+    primary: '/branding/category/mood/badminton-equipment.webp',
+    fallback: 'https://images.pexels.com/photos/2202685/pexels-photo-2202685.jpeg?auto=compress&cs=tinysrgb&w=1800',
   },
   padel: {
-    imageUrl: createSportArtwork('Padel', 'Momentum edit', '#e56717'),
-    title: 'Padel momentum edit',
-    copy: 'Modern glass-court focus with power and touch balance.',
+    primary: '/branding/category/mood/padel-equipment.webp',
+    fallback: 'https://images.pexels.com/photos/35248332/pexels-photo-35248332.jpeg?auto=compress&cs=tinysrgb&w=1800',
   },
   'table-tennis': {
-    imageUrl: createSportArtwork('Table Tennis', 'Control edit', '#4d6f8f'),
-    title: 'Table tennis control edit',
-    copy: 'Spin-ready setups for compact and technical play.',
+    primary: '/branding/category/mood/table-tennis-equipment.webp',
+    fallback: 'https://images.pexels.com/photos/709134/pexels-photo-709134.jpeg?auto=compress&cs=tinysrgb&w=1800',
   },
 };
+
+const categoryMoodDefaultPrimary = '/branding/category/mood/top-strip.webp';
+const categoryMoodDefaultFallback = 'https://images.pexels.com/photos/274422/pexels-photo-274422.jpeg?auto=compress&cs=tinysrgb&w=1800';
 
 function getPriceValue(product: Product) {
   if (typeof product.priceEur === 'number') {
@@ -77,18 +62,18 @@ function getPriceValue(product: Product) {
 
 function getStockLabel(product: Product) {
   if (typeof product.stock !== 'number') {
-    return 'Limited';
+    return 'Ограничено количество';
   }
 
   if (product.stock <= 0) {
-    return 'Out of stock';
+    return 'Изчерпано';
   }
 
   if (product.stock < 5) {
-    return 'Low stock';
+    return 'Ограничени бройки';
   }
 
-  return 'In stock';
+  return 'Налично';
 }
 
 function isOutOfStock(product: Product) {
@@ -189,6 +174,7 @@ function CategoryPage({ category, products, brands, onAddToCart }: CategoryPageP
   const requestedBalance = searchParams.get('balance') ?? '';
   const requestedStock = searchParams.get('stock') ?? 'all';
   const requestedQuery = searchParams.get('q') ?? '';
+  const selectedSubcategory = requestedSub === 'all' ? undefined : getSubcategoryByParam(requestedSub);
 
   const availableBalances = useMemo(
     () => Array.from(new Set(products.map((item) => item.balance).filter((item): item is BalanceProfile => Boolean(item)))),
@@ -201,20 +187,16 @@ function CategoryPage({ category, products, brands, onAddToCart }: CategoryPageP
   );
 
   const subcategoryBlocks = useMemo(
-    () => subcategoryOptions.map((subCategory) => ({
-      label: subCategory,
-      count: products.filter((product) => (productTypeLabels[product.type] ?? product.type) === subCategory).length,
-    })),
+    () => getSubcategoriesForProducts(products),
     [products],
   );
 
   const filteredProducts = useMemo(() => {
     return products.filter((product) => {
-      const mappedSub = productTypeLabels[product.type] ?? product.type;
       const productPrice = getPriceValue(product);
       const queryText = `${product.name} ${product.details} ${product.brand}`.toLowerCase();
 
-      if (requestedSub !== 'all' && mappedSub !== requestedSub) {
+      if (selectedSubcategory && !selectedSubcategory.productTypes.includes(product.type)) {
         return false;
       }
 
@@ -264,7 +246,7 @@ function CategoryPage({ category, products, brands, onAddToCart }: CategoryPageP
     });
   }, [
     products,
-    requestedSub,
+    selectedSubcategory,
     requestedBrand,
     requestedMinPrice,
     requestedMaxPrice,
@@ -275,9 +257,8 @@ function CategoryPage({ category, products, brands, onAddToCart }: CategoryPageP
     requestedQuery,
   ]);
   const categoryMood = categoryMoodBySlug[category.slug] ?? {
-    imageUrl: 'https://images.pexels.com/photos/274422/pexels-photo-274422.jpeg?auto=compress&cs=tinysrgb&w=1800',
-    title: `${category.name} visual edit`,
-    copy: category.description,
+    primary: categoryMoodDefaultPrimary,
+    fallback: categoryMoodDefaultFallback,
   };
 
   function setParam(key: string, value: string) {
@@ -312,45 +293,66 @@ function CategoryPage({ category, products, brands, onAddToCart }: CategoryPageP
     <div className="page-shell">
       <main>
         <section className="section compact-page-intro">
-          <p className="eyebrow">Category</p>
-          <h1>{category.name}</h1>
-          <p className="intro">{category.heroCopy}</p>
+          <p className="eyebrow">Категория</p>
+          <h1>{categoryLabelBySlug[category.slug] ?? category.name}</h1>
         </section>
 
         <section className="section category-mood-banner">
           <img
-            src={categoryMood.imageUrl}
+            src={categoryMood.primary}
             alt={`${category.name} banner`}
             loading="lazy"
+            onError={(event) => {
+              const target = event.currentTarget;
+              if (target.src.endsWith('/branding/logo-fallback.png')) {
+                return;
+              }
+              if (target.src.endsWith(categoryMoodDefaultPrimary)) {
+                target.src = categoryMoodDefaultFallback;
+                return;
+              }
+              if (target.src === categoryMood.fallback) {
+                target.src = categoryMoodDefaultPrimary;
+                return;
+              }
+              target.src = categoryMood.fallback;
+            }}
           />
-          <div className="category-mood-overlay">
-            <p className="eyebrow">{categoryMood.title}</p>
-            <h2>{categoryMood.copy}</h2>
-          </div>
         </section>
 
         <section className="section" id="products">
           <div className="catalog-top-row">
             <div className="subcategory-block-grid">
               {subcategoryBlocks.map((subCategory) => {
-                const imageUrl = subcategoryStockImages[subCategory.label] ?? 'https://images.pexels.com/photos/274422/pexels-photo-274422.jpeg?auto=compress&cs=tinysrgb&w=1200';
+                const isSelected = requestedSub === subCategory.slug || requestedSub === subCategory.label;
 
                 return (
                   <button
-                    key={subCategory.label}
+                    key={subCategory.slug}
                     type="button"
-                    className={requestedSub === subCategory.label ? 'subcategory-block active' : 'subcategory-block'}
-                    onClick={() => selectSubCategory(subCategory.label)}
+                    className={isSelected ? 'subcategory-block active' : 'subcategory-block'}
+                    onClick={() => selectSubCategory(subCategory.slug)}
                   >
                     <img
                       className="subcategory-block-media"
-                      src={imageUrl}
+                      src={subCategory.imageUrl}
                       alt={`${subCategory.label} stock visual`}
                       loading="lazy"
+                      onError={(event) => {
+                        const target = event.currentTarget;
+                        if (target.src.endsWith('/branding/logo-fallback.png')) {
+                          return;
+                        }
+                        if (target.src === subCategory.fallbackImageUrl) {
+                          target.src = '/branding/logo-fallback.png';
+                          return;
+                        }
+                        target.src = subCategory.fallbackImageUrl;
+                      }}
                     />
                     <div className="subcategory-block-copy">
                       <span>{subCategory.label}</span>
-                      <strong>{subCategory.count} items</strong>
+                      <strong>{subCategory.count} артикула</strong>
                     </div>
                   </button>
                 );
@@ -366,15 +368,15 @@ function CategoryPage({ category, products, brands, onAddToCart }: CategoryPageP
               <div className="filter-block">
                 <h3>Sub-category</h3>
                 <select value={requestedSub} onChange={(event) => setParam('sub', event.target.value)}>
-                  <option value="all">All</option>
-                  {subcategoryOptions.map((item) => <option key={item} value={item}>{item}</option>)}
+                  <option value="all">Всички</option>
+                  {shopSubcategories.map((item) => <option key={item.slug} value={item.slug}>{item.label}</option>)}
                 </select>
               </div>
 
               <div className="filter-block">
                 <h3>Brand</h3>
                 <select value={requestedBrand} onChange={(event) => setParam('brand', event.target.value)}>
-                  <option value="all">All brands</option>
+                  <option value="all">Всички марки</option>
                   {availableBrands.map((brand) => <option key={brand} value={brand}>{brand}</option>)}
                 </select>
               </div>
@@ -401,31 +403,31 @@ function CategoryPage({ category, products, brands, onAddToCart }: CategoryPageP
               <div className="filter-block">
                 <h3>Weight</h3>
                 <select value={requestedWeight} onChange={(event) => setParam('weight', event.target.value)}>
-                  <option value="">All weights</option>
-                  <option value="lte120">Up to 120g</option>
+                  <option value="">Всички тегла</option>
+                  <option value="lte120">До 120 г</option>
                   <option value="121to130">121g - 130g</option>
                   <option value="gte131">131g+</option>
                 </select>
               </div>
 
               <div className="filter-block">
-                <h3>Balance</h3>
+                <h3>Баланс</h3>
                 <select value={requestedBalance} onChange={(event) => setParam('balance', event.target.value)}>
-                  <option value="">All balances</option>
+                  <option value="">Всички баланси</option>
                   {availableBalances.map((balance) => <option key={balance} value={balance}>{balance}</option>)}
                 </select>
               </div>
 
               <div className="filter-block">
-                <h3>Stock</h3>
+                <h3>Наличност</h3>
                 <select value={requestedStock} onChange={(event) => setParam('stock', event.target.value)}>
-                  <option value="all">All</option>
-                  <option value="in-stock">In stock</option>
-                  <option value="out-of-stock">Out of stock</option>
+                  <option value="all">Всички</option>
+                  <option value="in-stock">Налично</option>
+                  <option value="out-of-stock">Изчерпано</option>
                 </select>
               </div>
 
-              <button className="button button-secondary" type="button" onClick={clearAllFilters}>Clear filters</button>
+              <button className="button button-secondary" type="button" onClick={clearAllFilters}>Изчисти филтрите</button>
             </aside>
 
             <div className="product-grid">
@@ -453,7 +455,7 @@ function CategoryPage({ category, products, brands, onAddToCart }: CategoryPageP
                           <h3 className={getProductTitleClass(product.name)}>{product.name}</h3>
 
                           <p className="product-availability">{getStockLabel(product)}</p>
-                          {isOutOfStock(product) ? <p className="delivery-note">Delivery 7-14 days</p> : null}
+                          {isOutOfStock(product) ? <p className="delivery-note">Доставка 7-14 дни</p> : null}
 
                           <div className="product-footer">
                             <div className="price-stack">
@@ -465,7 +467,7 @@ function CategoryPage({ category, products, brands, onAddToCart }: CategoryPageP
                                       <p className="price-original">{pricing.original}</p>
                                     ) : null}
                                     <strong className={pricing.isOnSale ? 'price-sale' : ''}>{pricing.sale}</strong>
-                                    <p className="price-tax-note">VAT included</p>
+                                    <p className="price-tax-note">ДДС включено</p>
                                   </>
                                 );
                               })()}
@@ -474,8 +476,8 @@ function CategoryPage({ category, products, brands, onAddToCart }: CategoryPageP
                               <button
                                 type="button"
                                 className={isFavorite ? 'retail-icon-btn favorite-toggle-btn active' : 'retail-icon-btn favorite-toggle-btn'}
-                                aria-label={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
-                                title={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+                                aria-label={isFavorite ? 'Премахни от любими' : 'Добави в любими'}
+                                title={isFavorite ? 'Премахни от любими' : 'Добави в любими'}
                                 onClick={(event) => {
                                   event.stopPropagation();
                                   toggleFavoriteSku(product.sku);
@@ -495,7 +497,7 @@ function CategoryPage({ category, products, brands, onAddToCart }: CategoryPageP
                                   onAddToCart(product.sku);
                                 }}
                               >
-                                Add to Cart
+                                Добави в количката
                               </button>
                             </div>
                           </div>

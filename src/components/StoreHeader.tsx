@@ -2,6 +2,7 @@ import { type FormEvent, type ReactNode, useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import BrandLogo from './BrandLogo';
 import { getFavoriteSkus } from '../data/favorites';
+import { shopSubcategories } from '../data/subcategories';
 
 type StoreHeaderProps = {
   activeSportSlug?: string;
@@ -11,78 +12,20 @@ type NavItem = {
   key: string;
   label: string;
   to: string;
-  hover: string;
+  iconPath?: string;
 };
 
 const navOrder: NavItem[] = [
-  { key: 'squash', label: 'Squash', to: '/category/squash', hover: 'Rackets, grips, shoes and accessories for squash.' },
-  { key: 'badminton', label: 'Badminton', to: '/category/badminton', hover: 'Rackets, shuttlecocks, apparel and bags.' },
-  { key: 'padel', label: 'Padel', to: '/category/padel', hover: 'Control and power padel range for all levels.' },
-  { key: 'table-tennis', label: 'Table Tennis', to: '/category/table-tennis', hover: 'Bats, rubbers, balls and table-tennis gear.' },
-  { key: 'tennis', label: 'Tennis', to: '/category/tennis', hover: 'Tennis rackets, strings, shoes and bags.' },
-  { key: 'contact', label: 'Contact', to: '/contact', hover: 'Customer care, delivery and company details.' },
+  { key: 'squash', label: 'Скуош', to: '/category/squash', iconPath: '/branding/navigation/thumbnails/squash.png' },
+  { key: 'badminton', label: 'Бадминтон', to: '/category/badminton', iconPath: '/branding/navigation/thumbnails/badminton.png' },
+  { key: 'padel', label: 'Падел', to: '/category/padel', iconPath: '/branding/navigation/thumbnails/padel.png' },
+  { key: 'table-tennis', label: 'Тенис на маса', to: '/category/table-tennis', iconPath: '/branding/navigation/thumbnails/table-tennis.png' },
+  { key: 'tennis', label: 'Тенис', to: '/category/tennis', iconPath: '/branding/navigation/thumbnails/tennis.png' },
+  { key: 'contact', label: 'Контакт', to: '/contact' },
 ];
 
 function HeaderIcon({ children }: { children: ReactNode }) {
   return <span className="retail-icon-svg" aria-hidden="true">{children}</span>;
-}
-
-function CategoryPictogram({ category }: { category: string }) {
-  if (category === 'squash') {
-    return (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-        <ellipse cx="9" cy="8" rx="4" ry="5" />
-        <path d="M12 12l5 5" />
-      </svg>
-    );
-  }
-
-  if (category === 'badminton') {
-    return (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M7 4l10 10" />
-        <path d="M6 5l4-2" />
-        <path d="M10 9l2-4" />
-        <path d="M15 14l4-2" />
-      </svg>
-    );
-  }
-
-  if (category === 'padel') {
-    return (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-        <rect x="5" y="3" width="10" height="12" rx="3" />
-        <path d="M10 15v6" />
-      </svg>
-    );
-  }
-
-  if (category === 'table-tennis') {
-    return (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-        <rect x="4" y="5" width="12" height="8" rx="2" />
-        <path d="M10 13v5" />
-        <circle cx="19" cy="9" r="2" />
-      </svg>
-    );
-  }
-
-  if (category === 'tennis') {
-    return (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-        <circle cx="10" cy="10" r="6" />
-        <path d="M14 14l6 6" />
-      </svg>
-    );
-  }
-
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M4 6h16" />
-      <path d="M4 12h16" />
-      <path d="M4 18h12" />
-    </svg>
-  );
 }
 
 function StoreHeader({ activeSportSlug }: StoreHeaderProps) {
@@ -124,23 +67,65 @@ function StoreHeader({ activeSportSlug }: StoreHeaderProps) {
   return (
     <div className="store-header-shell retail-shell">
       <div className="retail-mainnav">
-        <Link className="retail-logo-link" to="/" aria-label="Go to homepage">
+        <Link className="retail-logo-link" to="/" aria-label="Към началната страница">
           <BrandLogo compact subtitle="" />
         </Link>
 
-        <nav className="retail-links" aria-label="Main store navigation">
-          {navOrder.map((item) => (
-            <Link
-              key={item.key}
-              className={item.key === activeSportSlug || (item.key === 'contact' && location.pathname === '/contact') ? 'retail-link active' : 'retail-link'}
-              to={item.to}
-              title={item.hover}
-            >
-              <span className="retail-link-icon" aria-hidden="true"><CategoryPictogram category={item.key} /></span>
-              <span>{item.label}</span>
-              <span className="retail-link-hover">{item.hover}</span>
-            </Link>
-          ))}
+        <nav className="retail-links" aria-label="Основна навигация">
+          {navOrder.map((item) => {
+            const isActive = item.key === activeSportSlug || (item.key === 'contact' && location.pathname === '/contact');
+            const hasSubcategories = item.key !== 'contact';
+
+            return (
+              <div className="retail-nav-item" key={item.key}>
+                <Link
+                  className={isActive ? 'retail-link active' : 'retail-link'}
+                  to={item.to}
+                >
+                  {item.iconPath ? (
+                    <img
+                      className="retail-link-thumb"
+                      src={item.iconPath}
+                      alt=""
+                      aria-hidden="true"
+                      loading="lazy"
+                      onError={(event) => {
+                        event.currentTarget.style.display = 'none';
+                      }}
+                    />
+                  ) : null}
+                  <span>{item.label}</span>
+                </Link>
+
+                {hasSubcategories ? (
+                  <div className="retail-mega-menu" aria-label={`${item.label} подкатегории`}>
+                    {shopSubcategories.map((subcategory) => (
+                      <Link
+                        className="retail-mega-link"
+                        key={`${item.key}-${subcategory.slug}`}
+                        to={`${item.to}?sub=${encodeURIComponent(subcategory.slug)}`}
+                      >
+                        <img
+                          src={subcategory.imageUrl}
+                          alt=""
+                          aria-hidden="true"
+                          loading="lazy"
+                          onError={(event) => {
+                            const target = event.currentTarget;
+                            if (target.src === subcategory.fallbackImageUrl) {
+                              return;
+                            }
+                            target.src = subcategory.fallbackImageUrl;
+                          }}
+                        />
+                        <span>{subcategory.label}</span>
+                      </Link>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            );
+          })}
         </nav>
 
         <form className="store-search" onSubmit={handleSearchSubmit}>
@@ -148,11 +133,11 @@ function StoreHeader({ activeSportSlug }: StoreHeaderProps) {
             type="search"
             value={searchValue}
             onChange={(event) => setSearchValue(event.target.value)}
-            placeholder="Search..."
-            aria-label="Search products"
+            placeholder="Търсене..."
+            aria-label="Търсене на продукти"
           />
-          <button className="header-icon-btn" type="submit" title="Search products">
-            Search
+          <button className="header-icon-btn" type="submit" title="Търсене на продукти">
+            Търси
           </button>
         </form>
 
@@ -161,8 +146,8 @@ function StoreHeader({ activeSportSlug }: StoreHeaderProps) {
           <Link
             className={location.pathname.startsWith('/favorites') ? 'retail-icon-btn active' : 'retail-icon-btn'}
             to="/favorites"
-            aria-label="Open favorites page"
-            title="Favorites"
+            aria-label="Отвори любими"
+            title="Любими"
           >
             <HeaderIcon>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -172,7 +157,7 @@ function StoreHeader({ activeSportSlug }: StoreHeaderProps) {
             {favoriteCount > 0 ? <span className="retail-icon-badge">{favoriteCount > 99 ? '99+' : favoriteCount}</span> : null}
           </Link>
 
-          <Link className="retail-icon-btn" to="/account" aria-label="User account" title="Profile">
+          <Link className="retail-icon-btn" to="/account" aria-label="Потребителски профил" title="Профил">
             <HeaderIcon>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M20 21a8 8 0 1 0-16 0" />
@@ -181,7 +166,7 @@ function StoreHeader({ activeSportSlug }: StoreHeaderProps) {
             </HeaderIcon>
           </Link>
 
-          <button className="retail-cart-btn" type="button" onClick={handleOpenCart} aria-label="Open cart drawer" title="Cart">
+          <button className="retail-cart-btn" type="button" onClick={handleOpenCart} aria-label="Отвори количката" title="Количка">
             <HeaderIcon>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M6 2l1.5 4H20a1 1 0 0 1 1 1l-1.5 8a1 1 0 0 1-1 .8H9a1 1 0 0 1-1-.8L6 2z" />

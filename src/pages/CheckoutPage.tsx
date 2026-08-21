@@ -19,15 +19,15 @@ type CheckoutPageProps = {
 };
 
 const deliveryChoices = [
-  { value: 'econt', title: 'Econt', badge: 'EC', note: 'Courier delivery. Integration comes next.' },
-  { value: 'speedy', title: 'Speedy', badge: 'SP', note: 'Courier delivery. Integration comes next.' },
-  { value: 'pickup', title: 'Pickup', badge: 'PU', note: 'Pick up from store location.' },
+  { value: 'econt', title: 'Еконт', badge: 'EC', note: 'Куриерска доставка. Интеграцията предстои.' },
+  { value: 'speedy', title: 'Спиди', badge: 'SP', note: 'Куриерска доставка. Интеграцията предстои.' },
+  { value: 'pickup', title: 'Вземане от магазин', badge: 'PU', note: 'Вземане от физически обект.' },
 ] as const;
 
 const paymentChoices = [
-  { value: 'card', title: 'Card', badge: 'V/MC', note: 'Secure online card payment.' },
-  { value: 'google_pay', title: 'Google Pay', badge: 'GPay', note: 'Wallet flow to be embedded next.' },
-  { value: 'cash_on_delivery', title: 'Cash on Delivery', badge: 'COD', note: 'Pay when receiving the order.' },
+  { value: 'card', title: 'Карта', badge: 'V/MC', note: 'Сигурно онлайн картово плащане.' },
+  { value: 'google_pay', title: 'Google Pay', badge: 'GPay', note: 'Следва вграждане на портфейлния поток.' },
+  { value: 'cash_on_delivery', title: 'Наложен платеж', badge: 'COD', note: 'Плащане при получаване на поръчката.' },
 ] as const;
 
 function parsePrice(price: string) {
@@ -98,7 +98,7 @@ function CheckoutPage({ products, lines, onIncrement, onDecrement, onRemove, onC
 
   useEffect(() => {
     if (location.search.includes('checkout=retry')) {
-      setStatus('Payment was not completed. Review your order and try again.');
+      setStatus('Плащането не беше завършено. Прегледайте поръчката и опитайте отново.');
     }
   }, [location.search]);
 
@@ -106,31 +106,31 @@ function CheckoutPage({ products, lines, onIncrement, onDecrement, onRemove, onC
     event.preventDefault();
 
     if (cartItems.length === 0) {
-      setStatus('Add at least one product before placing an order.');
+      setStatus('Добавете поне един продукт, преди да направите поръчка.');
       return;
     }
 
     const deliveryLabel = deliveryOption === 'econt'
-      ? 'Econt'
+      ? 'Еконт'
       : deliveryOption === 'speedy'
-        ? 'Speedy'
-        : 'Store pickup';
+        ? 'Спиди'
+        : 'Вземане от магазин';
 
     const paymentLabel = paymentOption === 'google_pay'
       ? 'Google Pay'
       : paymentOption === 'cash_on_delivery'
-        ? 'Cash on delivery'
-        : 'Card payment';
+        ? 'Наложен платеж'
+        : 'Картово плащане';
 
     const paymentMethod: 'card' | 'cash_on_delivery' = paymentOption === 'cash_on_delivery' ? 'cash_on_delivery' : 'card';
 
     const orderNotes = [
-      `Phone: ${phone}`,
-      `City: ${city}`,
-      `Address: ${address}`,
-      `Delivery option: ${deliveryLabel}`,
-      `Payment option: ${paymentLabel}`,
-      notes ? `Notes: ${notes}` : '',
+      `Телефон: ${phone}`,
+      `Град: ${city}`,
+      `Адрес: ${address}`,
+      `Опция за доставка: ${deliveryLabel}`,
+      `Опция за плащане: ${paymentLabel}`,
+      notes ? `Бележки: ${notes}` : '',
     ]
       .filter(Boolean)
       .join('\n');
@@ -155,7 +155,7 @@ function CheckoutPage({ products, lines, onIncrement, onDecrement, onRemove, onC
           status: 'cash_on_delivery',
         },
       });
-      setStatus(`Order created successfully: ${result.reference}.`);
+      setStatus(`Поръчката е създадена успешно: ${result.reference}.`);
       setFullName('');
       setEmail('');
       setPhone('');
@@ -169,7 +169,7 @@ function CheckoutPage({ products, lines, onIncrement, onDecrement, onRemove, onC
     }
 
     try {
-      setStatus('Redirecting to secure payment...');
+      setStatus('Пренасочване към сигурно плащане...');
 
       const response = await fetch('/api/payments/borica/init', {
         method: 'POST',
@@ -184,7 +184,7 @@ function CheckoutPage({ products, lines, onIncrement, onDecrement, onRemove, onC
           phone,
           city,
           address,
-          orderDescription: `Racketpoint order - ${cartItems.length} item(s)`,
+          orderDescription: `Поръчка от Racketpoint - ${cartItems.length} артикула`,
         }),
       });
 
@@ -196,13 +196,13 @@ function CheckoutPage({ products, lines, onIncrement, onDecrement, onRemove, onC
       };
 
       if (!response.ok || !payload.actionUrl || !payload.fields || !payload.order) {
-        throw new Error(payload.error || 'Unable to start payment.');
+        throw new Error(payload.error || 'Неуспешно стартиране на плащането.');
       }
 
       savePendingBoricaOrder(payload.order, totalPrice, orderRequest);
       postToGateway(payload.actionUrl, payload.fields);
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unable to start payment.';
+      const message = error instanceof Error ? error.message : 'Неуспешно стартиране на плащането.';
       setStatus(message);
     }
   }
@@ -213,8 +213,8 @@ function CheckoutPage({ products, lines, onIncrement, onDecrement, onRemove, onC
         <section className="section category-mood-banner static-banner">
           <img src="https://images.pexels.com/photos/863988/pexels-photo-863988.jpeg?auto=compress&cs=tinysrgb&w=1800" alt="Checkout sports atmosphere" loading="lazy" />
           <div className="category-mood-overlay">
-            <p className="eyebrow">Secure checkout</p>
-            <h2>Final step before your next training session.</h2>
+            <p className="eyebrow">Сигурно плащане</p>
+            <h2>Последна стъпка преди следващата ти тренировка.</h2>
           </div>
         </section>
 
@@ -222,10 +222,10 @@ function CheckoutPage({ products, lines, onIncrement, onDecrement, onRemove, onC
         <section className="checkout-items-panel">
           <div className="section-heading split">
             <div>
-              <p className="eyebrow">Line items</p>
-              <h2>Your cart</h2>
+              <p className="eyebrow">Артикули</p>
+              <h2>Твоята количка</h2>
             </div>
-            <p className="support-copy">{totalItems} item{totalItems === 1 ? '' : 's'}</p>
+            <p className="support-copy">{totalItems} артикул{totalItems === 1 ? '' : 'а'}</p>
           </div>
 
           <div className="checkout-lines-list">
@@ -245,50 +245,50 @@ function CheckoutPage({ products, lines, onIncrement, onDecrement, onRemove, onC
                   <button type="button" className="qty-btn" onClick={() => onIncrement(item.sku)}>+</button>
                 </div>
                 <strong className="checkout-line-price">{formatCurrency(item.lineTotal)}</strong>
-                <button type="button" className="button button-secondary cart-remove-btn" onClick={() => onRemove(item.sku)}>
-                  Remove
+                  <button type="button" className="button button-secondary cart-remove-btn" onClick={() => onRemove(item.sku)}>
+                  Премахни
                 </button>
               </article>
             )) : (
               <article className="empty-state">
-                <h3>Your cart is empty.</h3>
-                <p>Add products and return to checkout.</p>
-                <Link className="button button-primary" to="/">Back to store</Link>
+                <h3>Количката е празна.</h3>
+                <p>Добавете продукти и се върнете към поръчката.</p>
+                <Link className="button button-primary" to="/">Към магазина</Link>
               </article>
             )}
           </div>
 
           <div className="cart-total checkout-total-box">
-            <strong>Total</strong>
+            <strong>Общо</strong>
             <strong>{formatCurrency(totalPrice)}</strong>
           </div>
         </section>
 
         <section className="checkout-form-panel">
           <form className="checkout-form" onSubmit={handleCheckoutSubmit}>
-            <p className="eyebrow">Checkout request</p>
+            <p className="eyebrow">Заявка за поръчка</p>
             <label>
-              Full name
+              Пълно име
               <input value={fullName} onChange={(event) => setFullName(event.target.value)} required />
             </label>
             <label>
-              Email
+              Имейл
               <input type="email" value={email} onChange={(event) => setEmail(event.target.value)} required />
             </label>
             <label>
-              Phone
+              Телефон
               <input value={phone} onChange={(event) => setPhone(event.target.value)} required />
             </label>
             <label>
-              City
+              Град
               <input value={city} onChange={(event) => setCity(event.target.value)} required />
             </label>
             <label>
-              Address
+              Адрес
               <textarea value={address} onChange={(event) => setAddress(event.target.value)} rows={2} required />
             </label>
             <fieldset className="checkout-choice-group">
-              <legend>Delivery option</legend>
+              <legend>Опция за доставка</legend>
               <div className="checkout-choice-grid">
                 {deliveryChoices.map((choice) => (
                   <label key={choice.value} className={deliveryOption === choice.value ? 'checkout-choice-card active' : 'checkout-choice-card'}>
@@ -309,7 +309,7 @@ function CheckoutPage({ products, lines, onIncrement, onDecrement, onRemove, onC
               </div>
             </fieldset>
             <fieldset className="checkout-choice-group">
-              <legend>Payment option</legend>
+              <legend>Опция за плащане</legend>
               <div className="checkout-choice-grid">
                 {paymentChoices.map((choice) => (
                   <label key={choice.value} className={paymentOption === choice.value ? 'checkout-choice-card active' : 'checkout-choice-card'}>
@@ -330,11 +330,11 @@ function CheckoutPage({ products, lines, onIncrement, onDecrement, onRemove, onC
               </div>
             </fieldset>
             <label>
-              Notes
+              Бележки
               <textarea value={notes} onChange={(event) => setNotes(event.target.value)} rows={2} />
             </label>
             <button className="button button-primary" type="submit" disabled={cartItems.length === 0}>
-              Send order
+              Изпрати поръчка
             </button>
             {status ? <p className="form-status">{status}</p> : null}
           </form>

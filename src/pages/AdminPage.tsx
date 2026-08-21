@@ -476,7 +476,7 @@ function AdminPage({ snapshot, onSnapshotChange, isAuthenticated, onAuthChange }
 
   async function handleQuickCreateProduct() {
     if (!quickName.trim()) {
-      setMessage('Въведи име на продукта за quick add.');
+      setMessage('Въведи име на продукта за бързо добавяне.');
       return;
     }
 
@@ -515,7 +515,7 @@ function AdminPage({ snapshot, onSnapshotChange, isAuthenticated, onAuthChange }
       setMessage(`Добавен е продукт: ${quickName.trim()}.`);
       setQuickName('');
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'Quick add не успя.');
+      setMessage(error instanceof Error ? error.message : 'Бързото добавяне не успя.');
     }
   }
 
@@ -1033,7 +1033,7 @@ function AdminPage({ snapshot, onSnapshotChange, isAuthenticated, onAuthChange }
           </article>
 
           <article className="admin-panel">
-            <p className="eyebrow">Quick add (tick-box)</p>
+            <p className="eyebrow">Бързо добавяне (чекбокс)</p>
             <div className="admin-form-grid">
               <label className="full-width">
                 Product name

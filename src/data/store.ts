@@ -69,7 +69,8 @@ export type CatalogSyncResult = {
 
 export type CmsCollection = 'categories' | 'brands' | 'products';
 
-const storageKey = 'racketpoint-cms-state-v5';
+const storageKey = 'racketpoint-cms-state-v6';
+const previousStorageKey = 'racketpoint-cms-state-v5';
 const orderStorageKey = 'racketpoint-order-inbox-v4';
 const legacyStorageKey = 'racketshop-cms-state-v3';
 const legacyOrderStorageKey = 'racketshop-order-inbox-v3';
@@ -305,8 +306,14 @@ function hydrateProductImages(products: Product[], references: Product[]) {
 }
 
 function normalizeCmsState(snapshot: CmsState): CmsState {
+  const normalizedCategories = snapshot.categories.map((category) => ({
+    ...category,
+    // Force-remove legacy marketing filler from previously cached category entries.
+    heroCopy: '',
+  }));
+
   return {
-    categories: snapshot.categories,
+    categories: normalizedCategories,
     brands: snapshot.brands,
     products: normalizeProductList(snapshot.products),
   };
@@ -352,8 +359,17 @@ function writeJson(key: string, value: unknown) {
 }
 
 function loadSnapshot(): CmsState {
-  const raw = readJson<CmsState>(storageKey) ?? readJson<CmsState>(legacyStorageKey) ?? defaultSnapshot;
-  return normalizeCmsState(raw);
+  const raw = readJson<CmsState>(storageKey)
+    ?? readJson<CmsState>(previousStorageKey)
+    ?? readJson<CmsState>(legacyStorageKey)
+    ?? defaultSnapshot;
+  const normalized = normalizeCmsState(raw);
+
+  if (hasWindow()) {
+    writeJson(storageKey, normalized);
+  }
+
+  return normalized;
 }
 
 function loadOrders(): OrderRecord[] {

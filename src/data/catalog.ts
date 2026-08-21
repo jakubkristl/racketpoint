@@ -164,7 +164,7 @@ export function createEditorialArtwork(title: string, subtitle: string, accent: 
   return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
 }
 
-export function createSportArtwork(sport: string, subtitle: string, accent: string) {
+export function createSportArtwork(sport: string, _subtitle: string, accent: string) {
   const sportKey = sport.toLowerCase();
   const motif = (() => {
     if (sportKey === 'squash') {
@@ -270,15 +270,12 @@ export function createSportArtwork(sport: string, subtitle: string, accent: stri
       ${motif}
       <g transform="translate(870 140)">
         <rect x="0" y="0" width="320" height="460" rx="34" fill="#ffffff" fill-opacity="0.86" stroke="#d7e1ea" stroke-width="4"/>
-        <text x="32" y="84" fill="#17324b" font-family="Arial, Helvetica, sans-serif" font-size="28" font-weight="700">${sport}</text>
-        <text x="32" y="130" fill="#4d6279" font-family="Arial, Helvetica, sans-serif" font-size="20">${subtitle}</text>
         <rect x="32" y="180" width="256" height="20" rx="10" fill="${accent}" fill-opacity="0.16"/>
         <rect x="32" y="216" width="224" height="20" rx="10" fill="#123e68" fill-opacity="0.12"/>
         <rect x="32" y="252" width="198" height="20" rx="10" fill="#123e68" fill-opacity="0.12"/>
         <rect x="32" y="288" width="168" height="20" rx="10" fill="#123e68" fill-opacity="0.12"/>
         <rect x="32" y="324" width="246" height="20" rx="10" fill="#123e68" fill-opacity="0.12"/>
       </g>
-      <text x="124" y="790" fill="#17324b" font-family="Arial, Helvetica, sans-serif" font-size="36" font-weight="700">${subtitle}</text>
     </svg>
   `;
 
@@ -291,7 +288,7 @@ export const categories: Category[] = [
     name: 'Squash',
     description: 'Rackets, grips, strings, bags and apparel for squash players.',
     heroTitle: 'Squash selection for club and tournament players.',
-    heroCopy: 'Core assortment built around Unsquashable and Karakal with room for fast expansion.',
+    heroCopy: '',
     accent: 'Main launch vertical',
     focus: ['Rackets', 'Grips', 'Strings', 'Apparel', 'Bags'],
   },
@@ -300,7 +297,7 @@ export const categories: Category[] = [
     name: 'Tennis',
     description: 'Tennis rackets, grips, bags, balls and essentials.',
     heroTitle: 'Tennis category foundation for performance and club play.',
-    heroCopy: 'Structured as a full category tree and ready for population with additional SKUs.',
+    heroCopy: '',
     accent: 'Growth category',
     focus: ['Rackets', 'Grips', 'Bags', 'Balls', 'Accessories'],
   },
@@ -309,7 +306,7 @@ export const categories: Category[] = [
     name: 'Table Tennis',
     description: 'Bats, rubbers, balls, covers and accessories.',
     heroTitle: 'Table tennis layout with clear subcategory navigation.',
-    heroCopy: 'Designed for quick expansion from starter sets to club-level products.',
+    heroCopy: '',
     accent: 'Structured rollout',
     focus: ['Bats', 'Balls', 'Bags', 'Grips', 'Accessories'],
   },
@@ -318,7 +315,7 @@ export const categories: Category[] = [
     name: 'Badminton',
     description: 'Badminton rackets, shuttlecocks, grips, apparel and bags.',
     heroTitle: 'Badminton setup for recreational and competitive players.',
-    heroCopy: 'Subcategory-first architecture keeps collection growth clean and easy to manage.',
+    heroCopy: '',
     accent: 'Category expansion',
     focus: ['Rackets', 'Shuttlecocks', 'Grips', 'Bags', 'Apparel'],
   },
@@ -327,7 +324,7 @@ export const categories: Category[] = [
     name: 'Padel',
     description: 'Padel rackets, overgrips, bags and match accessories.',
     heroTitle: 'Padel category prepared for retail conversion and merchandising.',
-    heroCopy: 'Built as a dedicated vertical, not as a filter under tennis.',
+    heroCopy: '',
     accent: 'Fast-moving category',
     focus: ['Rackets', 'Overgrips', 'Bags', 'Balls', 'Accessories'],
   },

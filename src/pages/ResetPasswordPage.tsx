@@ -20,27 +20,27 @@ function ResetPasswordPage() {
     setStatus(null);
 
     if (!token) {
-      setStatus('Reset token is missing. Open the link from your email again.');
+      setStatus('Липсва токен за нулиране. Отворете отново връзката от имейла си.');
       return;
     }
 
     if (password.length < 8) {
-      setStatus('Password must be at least 8 characters.');
+      setStatus('Паролата трябва да е поне 8 знака.');
       return;
     }
 
     if (password !== confirmPassword) {
-      setStatus('Passwords do not match.');
+      setStatus('Паролите не съвпадат.');
       return;
     }
 
     setLoading(true);
     try {
       const result = await resetPassword(token, password);
-      setStatus(result.message || 'Password has been reset. Redirecting to account...');
+      setStatus(result.message || 'Паролата е нулирана. Пренасочване към профила...');
       setTimeout(() => navigate('/account'), 1200);
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : 'Password reset failed.');
+      setStatus(error instanceof Error ? error.message : 'Неуспешно нулиране на паролата.');
     } finally {
       setLoading(false);
     }
@@ -52,23 +52,23 @@ function ResetPasswordPage() {
         <section className="section category-mood-banner static-banner">
           <img src="https://images.pexels.com/photos/7648080/pexels-photo-7648080.jpeg?auto=compress&cs=tinysrgb&w=1800" alt="Reset password banner" loading="lazy" />
           <div className="category-mood-overlay">
-            <p className="eyebrow">Set new password</p>
-            <h2>Keep your account protected with a strong new password.</h2>
+            <p className="eyebrow">Нова парола</p>
+            <h2>Пазете акаунта си с нова и силна парола.</h2>
           </div>
         </section>
 
         <div className="account-toolbar">
-          <Link className="button button-secondary" to="/account">Back to account</Link>
+          <Link className="button button-secondary" to="/account">Към профила</Link>
         </div>
 
         <section className="account-stack">
           <form className="order-form" onSubmit={handleSubmit}>
-            <p className="eyebrow">Password reset</p>
-            <h2>Set a new password</h2>
-            <p className="support-copy">Create a strong password for your Racketpoint account.</p>
+            <p className="eyebrow">Нулиране на парола</p>
+            <h2>Задайте нова парола</h2>
+            <p className="support-copy">Създайте силна парола за своя акаунт в Racketpoint.</p>
 
             <label>
-              New password
+              Нова парола
               <input
                 type="password"
                 value={password}
@@ -79,7 +79,7 @@ function ResetPasswordPage() {
             </label>
 
             <label>
-              Confirm new password
+              Потвърдете новата парола
               <input
                 type="password"
                 value={confirmPassword}
@@ -90,7 +90,7 @@ function ResetPasswordPage() {
             </label>
 
             <button className="button button-primary" type="submit" disabled={loading}>
-              {loading ? 'Saving...' : 'Reset password'}
+              {loading ? 'Запазване...' : 'Нулирай паролата'}
             </button>
 
             {status ? <p className="form-status">{status}</p> : null}

@@ -34,18 +34,18 @@ function getPricePresentation(product: Product) {
 
 function getStockLabel(product: Product) {
   if (typeof product.stock !== 'number') {
-    return 'Limited';
+    return 'Ограничено количество';
   }
 
   if (product.stock <= 0) {
-    return 'Out of stock';
+    return 'Изчерпано';
   }
 
   if (product.stock < 5) {
-    return 'Low stock';
+    return 'Ограничени бройки';
   }
 
-  return 'In stock';
+  return 'Налично';
 }
 
 function isOutOfStock(product: Product) {
@@ -88,17 +88,17 @@ function FavoritesPage({ products, onAddToCart }: FavoritesPageProps) {
         <section className="section category-mood-banner static-banner">
           <img src="https://images.pexels.com/photos/1263349/pexels-photo-1263349.jpeg?auto=compress&cs=tinysrgb&w=1800" alt="Favorites sports atmosphere" loading="lazy" />
           <div className="category-mood-overlay">
-            <p className="eyebrow">Favorites atmosphere</p>
-            <h2>Your saved gear lineup, ready for match day.</h2>
+            <p className="eyebrow">Любими продукти</p>
+            <h2>Запазената ти екипировка е готова за мачовия ден.</h2>
           </div>
         </section>
 
         <div className="section-heading split">
           <div>
-            <p className="eyebrow">Favorites</p>
-            <h2>Saved products</h2>
+            <p className="eyebrow">Любими</p>
+            <h2>Запазени продукти</h2>
           </div>
-          <p className="support-copy">{favoriteProducts.length} product{favoriteProducts.length === 1 ? '' : 's'} in your favorites.</p>
+          <p className="support-copy">{favoriteProducts.length} продукт{favoriteProducts.length === 1 ? '' : 'а'} в любимите ти.</p>
         </div>
 
         <div className="product-grid">
@@ -122,19 +122,19 @@ function FavoritesPage({ products, onAddToCart }: FavoritesPageProps) {
                 <div className="product-body">
                   <h3 className={getProductTitleClass(product.name)}>{product.name}</h3>
                   <p className="product-availability">{getStockLabel(product)}</p>
-                  {isOutOfStock(product) ? <p className="delivery-note">Delivery 7-14 days</p> : null}
+                  {isOutOfStock(product) ? <p className="delivery-note">Доставка 7-14 дни</p> : null}
                   <div className="product-footer">
                     <div className="price-stack">
                       {pricing.isOnSale && pricing.original ? <p className="price-original">{pricing.original}</p> : null}
                       <strong className={pricing.isOnSale ? 'price-sale' : ''}>{pricing.sale}</strong>
-                      <p className="price-tax-note">VAT included</p>
+                      <p className="price-tax-note">ДДС включено</p>
                     </div>
                     <div className="product-action-stack">
                       <button
                         type="button"
                         className="retail-icon-btn favorite-toggle-btn active"
-                        aria-label="Remove from favorites"
-                        title="Remove from favorites"
+                        aria-label="Премахни от любими"
+                        title="Премахни от любими"
                         onClick={(event) => {
                           event.stopPropagation();
                           toggleFavoriteSku(product.sku);
@@ -154,7 +154,7 @@ function FavoritesPage({ products, onAddToCart }: FavoritesPageProps) {
                           onAddToCart(product.sku);
                         }}
                       >
-                        Add to Cart
+                        Добави в количката
                       </button>
                     </div>
                   </div>
@@ -163,8 +163,8 @@ function FavoritesPage({ products, onAddToCart }: FavoritesPageProps) {
             );
           }) : (
             <article className="empty-state">
-              <h3>No favorites yet.</h3>
-              <p>Use Add to Favorites on category and product pages to save items here.</p>
+              <h3>Все още няма любими продукти.</h3>
+              <p>Използвайте „Добави в любими“ от страниците на категории и продукти, за да ги запазите тук.</p>
             </article>
           )}
         </div>

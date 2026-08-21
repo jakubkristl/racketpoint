@@ -241,12 +241,12 @@ function App() {
 
     const paymentNotes = [
       pending.request.notes ?? '',
-      'Payment method: Online card payment (BORICA)',
+      'Начин на плащане: Онлайн картово плащане (BORICA)',
       `BORICA ORDER: ${params.order}`,
       params.rrn ? `BORICA RRN: ${params.rrn}` : '',
       params.intRef ? `BORICA INT_REF: ${params.intRef}` : '',
       params.amount && params.currency ? `BORICA AMOUNT: ${params.amount} ${params.currency}` : '',
-      'Payment status: APPROVED',
+      'Статус на плащане: ОДОБРЕНО',
     ]
       .filter(Boolean)
       .join('\n');
