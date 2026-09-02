@@ -10,7 +10,7 @@ type HomePageProps = {
   onAddToCart: (sku: string) => void;
 };
 
-const heroVideoPath = '/branding/homepage/hero/launch-loop.mp4';
+const heroVideoPath = '/branding/homepage/hero/FB%20Final.mp4';
 
 function createHomeHeroArtwork() {
   return createSportArtwork('Hero', 'Racketpoint editorial storefront', '#0d4e8f');
@@ -187,10 +187,6 @@ function HomePage({ categories, products, onAddToCart }: HomePageProps) {
             <video className="home-editorial-video" autoPlay muted loop playsInline poster={heroPosterPath}>
               <source src={heroVideoPath} type="video/mp4" />
             </video>
-            <div className="home-editorial-media-overlay">
-              <strong>Поставете анимационния файл тук:</strong>
-              <span>/public/branding/homepage/hero/launch-loop.mp4</span>
-            </div>
           </article>
         </section>
 
@@ -248,7 +244,7 @@ function HomePage({ categories, products, onAddToCart }: HomePageProps) {
                   <div>
                     <p className="product-category">{product.brand}</p>
                     <h3 className={getProductTitleClass(product.name)}>{product.name}</h3>
-                    <p>{getPublicShortDetails(product)}</p>
+                    <p className="product-description">{getPublicShortDetails(product)}</p>
                   </div>
                   <div className="product-badges">
                     <span className="stock-pill">{getInventoryBadge(product)}</span>

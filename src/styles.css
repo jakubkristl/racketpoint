@@ -289,7 +289,7 @@ button {
 
 .retail-mainnav {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) minmax(170px, 20vw) auto;
+  grid-template-columns: auto minmax(0, 1fr) minmax(185px, 220px) auto;
   align-items: center;
   gap: 8px;
   min-height: 94px;
@@ -318,7 +318,7 @@ button {
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  gap: 18px;
+  gap: 14px;
   flex-wrap: nowrap;
   min-width: 0;
   overflow-x: auto;
@@ -340,21 +340,12 @@ button {
   position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 0;
   color: #f4f6f8;
-  font-size: 1rem;
+  font-size: 0.92rem;
   font-weight: 700;
   letter-spacing: 0;
   white-space: nowrap;
-}
-
-.retail-link-thumb {
-  width: 18px;
-  height: 18px;
-  object-fit: contain;
-  filter: brightness(1.08) saturate(1.04);
-  opacity: 0.96;
-  flex: 0 0 18px;
 }
 
 .retail-link:hover,
@@ -395,8 +386,7 @@ button {
   transform: rotate(45deg);
 }
 
-.retail-nav-item:hover .retail-mega-menu,
-.retail-nav-item:focus-within .retail-mega-menu {
+.retail-mega-menu {
   opacity: 1;
   pointer-events: auto;
   transform: translateY(0);
@@ -1402,7 +1392,7 @@ button {
   display: block;
   width: 100%;
   object-fit: contain;
-  aspect-ratio: 16 / 9;
+  aspect-ratio: 4 / 3;
   background: #fff;
   padding: 8px;
   transition: transform 240ms ease;
@@ -1414,8 +1404,17 @@ button {
 
 .product-body {
   display: grid;
-  gap: 8px;
-  padding: 10px 12px 12px;
+  gap: 6px;
+  padding: 8px 10px 10px;
+}
+
+.product-description {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
 }
 
 .product-body h3 {
@@ -2579,12 +2578,6 @@ button {
 
   .retail-link {
     font-size: 0.92rem;
-  }
-
-  .retail-link-thumb {
-    width: 16px;
-    height: 16px;
-    flex-basis: 16px;
   }
 
   .retail-nav-item {

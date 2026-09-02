@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { type BalanceProfile, type Brand, type Category, type Product } from '../data/catalog';
 import { getFavoriteSkus, isFavoriteSku, toggleFavoriteSku } from '../data/favorites';
-import { getSubcategoriesForProducts, getSubcategoryByParam, shopSubcategories } from '../data/subcategories';
+import { getSubcategoriesForProducts, getSubcategoryByParam, getSubcategoriesForSport } from '../data/subcategories';
 
 type CategoryPageProps = {
   category: Category;
@@ -187,8 +187,8 @@ function CategoryPage({ category, products, brands, onAddToCart }: CategoryPageP
   );
 
   const subcategoryBlocks = useMemo(
-    () => getSubcategoriesForProducts(products),
-    [products],
+    () => getSubcategoriesForProducts(products, category.slug),
+    [products, category.slug],
   );
 
   const filteredProducts = useMemo(() => {
@@ -369,7 +369,7 @@ function CategoryPage({ category, products, brands, onAddToCart }: CategoryPageP
                 <h3>Sub-category</h3>
                 <select value={requestedSub} onChange={(event) => setParam('sub', event.target.value)}>
                   <option value="all">Всички</option>
-                  {shopSubcategories.map((item) => <option key={item.slug} value={item.slug}>{item.label}</option>)}
+                  {getSubcategoriesForSport(category.slug).map((item) => <option key={item.slug} value={item.slug}>{item.label}</option>)}
                 </select>
               </div>
 

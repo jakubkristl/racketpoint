@@ -68,6 +68,20 @@ export const shopSubcategories: ShopSubcategory[] = [
   },
 ];
 
+const subcategorySlugsBySport: Record<string, string[]> = {
+  squash: ['rackets', 'balls', 'grips', 'strings', 'bags', 'accessories', 'shoes'],
+  badminton: ['rackets', 'balls', 'grips', 'bags', 'accessories', 'shoes'],
+  padel: ['rackets', 'balls', 'grips', 'bags', 'accessories', 'shoes'],
+  tennis: ['rackets', 'balls', 'grips', 'strings', 'bags', 'accessories', 'shoes'],
+  'table-tennis': ['rackets', 'balls', 'bags', 'accessories'],
+};
+
+const sportSpecificLabels: Record<string, Record<string, string>> = {
+  badminton: { balls: 'Пера' },
+  padel: { rackets: 'Падел ракети' },
+  'table-tennis': { rackets: 'Хилки', balls: 'Топчета' },
+};
+
 const subcategoriesBySlug = new Map(shopSubcategories.map((subcategory) => [subcategory.slug, subcategory]));
 const subcategoriesByLabel = new Map(shopSubcategories.map((subcategory) => [subcategory.label, subcategory]));
 
@@ -75,8 +89,20 @@ export function getSubcategoryByParam(value: string) {
   return subcategoriesBySlug.get(value) ?? subcategoriesByLabel.get(value);
 }
 
-export function getSubcategoriesForProducts(products: Product[]) {
-  return shopSubcategories.map((subcategory) => ({
+export function getSubcategoriesForSport(sportSlug: string) {
+  const labels = sportSpecificLabels[sportSlug] ?? {};
+  const slugs = subcategorySlugsBySport[sportSlug] ?? shopSubcategories.map((subcategory) => subcategory.slug);
+
+  return slugs.flatMap((slug) => {
+    const subcategory = subcategoriesBySlug.get(slug);
+    return subcategory ? [{ ...subcategory, label: labels[slug] ?? subcategory.label }] : [];
+  });
+}
+
+export function getSubcategoriesForProducts(products: Product[], sportSlug?: string) {
+  const subcategories = sportSlug ? getSubcategoriesForSport(sportSlug) : shopSubcategories;
+
+  return subcategories.map((subcategory) => ({
     ...subcategory,
     count: products.filter((product) => subcategory.productTypes.includes(product.type)).length,
   }));
