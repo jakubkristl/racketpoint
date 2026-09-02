@@ -56,6 +56,7 @@ type StockMovementRecord = {
 
 const productTypes: ProductType[] = ['Racket', 'Balls', 'Wear', 'Bag', 'Accessory', 'String', 'Grip', 'Shoe'];
 const quickAddProductTypes: ProductType[] = ['Racket', 'Shoe', 'Grip', 'Wear', 'Bag', 'Balls', 'Accessory', 'String'];
+const merchandisingTags = ['HOT', 'SALE', 'BUNDLE', 'NEW'] as const;
 const mainSportOptions = [
   { slug: 'squash', label: 'Squash' },
   { slug: 'tennis', label: 'Tennis' },
@@ -270,6 +271,7 @@ function AdminPage({ snapshot, onSnapshotChange, isAuthenticated, onAuthChange }
   const [promotionSkuSet, setPromotionSkuSet] = useState<string[]>([]);
   const [stockAdjustment, setStockAdjustment] = useState('');
   const [stockAdjustmentReason, setStockAdjustmentReason] = useState('Warehouse count');
+  const [isProductEditorOpen, setIsProductEditorOpen] = useState(false);
 
   const productTypesWithShoe: ProductType[] = [...productTypes];
 
@@ -417,11 +419,24 @@ function AdminPage({ snapshot, onSnapshotChange, isAuthenticated, onAuthChange }
                 : field === 'stock'
                   ? (Number.isFinite(Number.parseInt(value, 10)) ? Number.parseInt(value, 10) : undefined)
                   : value || undefined,
+            ...(field === 'priceEur' && Number.isFinite(Number.parseFloat(value))
+              ? { price: `EUR ${Number.parseFloat(value).toFixed(2)}` }
+              : {}),
           }
         : product,
     );
 
     persistAndSelect({ ...snapshot, products: updatedProducts }, 'Продуктът е записан.');
+  }
+
+  function toggleProductTag(tag: typeof merchandisingTags[number]) {
+    if (!selectedProduct) {
+      return;
+    }
+
+    const existingTags = selectedProduct.badges.filter((badge) => !merchandisingTags.includes(badge.trim().toUpperCase() as typeof merchandisingTags[number]));
+    const hasTag = selectedProduct.badges.some((badge) => badge.trim().toUpperCase() === tag);
+    updateProductField('badges', [...existingTags, ...(hasTag ? [] : [tag])].join(', '));
   }
 
   function updateCategoryField(field: keyof Category, value: string) {
@@ -633,6 +648,7 @@ function AdminPage({ snapshot, onSnapshotChange, isAuthenticated, onAuthChange }
       const nextSnapshot = await updateProductApi(selectedProduct.sku, selectedProduct);
       onSnapshotChange(nextSnapshot);
       setMessage('Продуктът е обновен.');
+      setIsProductEditorOpen(false);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Записът не успя.');
     }
@@ -837,7 +853,10 @@ function AdminPage({ snapshot, onSnapshotChange, isAuthenticated, onAuthChange }
                 key={product.sku}
                 className={product.sku === selectedProductSku ? 'admin-list-item active' : 'admin-list-item'}
                 type="button"
-                onClick={() => setSelectedProductSku(product.sku)}
+                onClick={() => {
+                  setSelectedProductSku(product.sku);
+                  setIsProductEditorOpen(true);
+                }}
               >
                 <strong>{product.name}</strong>
                 <span>{product.categorySlug}</span>
@@ -916,8 +935,21 @@ function AdminPage({ snapshot, onSnapshotChange, isAuthenticated, onAuthChange }
         </aside>
 
         <section className="admin-editor">
-          <article className="admin-panel">
-            <p className="eyebrow">Редакция на продукт</p>
+          {isProductEditorOpen ? (
+            <div className="admin-editor-overlay" role="presentation" onMouseDown={() => setIsProductEditorOpen(false)}>
+              <article
+                className="admin-panel admin-product-editor admin-product-editor-modal"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="admin-product-editor-title"
+                onMouseDown={(event) => event.stopPropagation()}
+              >
+                <div className="admin-editor-modal-header">
+                  <p className="eyebrow" id="admin-product-editor-title">Редакция на продукт</p>
+                  <button className="retail-icon-btn" type="button" onClick={() => setIsProductEditorOpen(false)} aria-label="Затвори редакцията" title="Затвори">
+                    x
+                  </button>
+                </div>
             {selectedProduct ? (
               <div className="admin-form-grid">
                 <label>
@@ -949,11 +981,7 @@ function AdminPage({ snapshot, onSnapshotChange, isAuthenticated, onAuthChange }
                   <input value={selectedProduct.brand} onChange={(event) => updateProductField('brand', event.target.value)} />
                 </label>
                 <label>
-                  Цена
-                  <input value={selectedProduct.price} onChange={(event) => updateProductField('price', event.target.value)} />
-                </label>
-                <label>
-                  Цена (EUR число)
+                  Цена (EUR)
                   <input value={selectedProduct.priceEur?.toString() ?? ''} onChange={(event) => updateProductField('priceEur', event.target.value)} />
                 </label>
                 <label>
@@ -1002,10 +1030,19 @@ function AdminPage({ snapshot, onSnapshotChange, isAuthenticated, onAuthChange }
                   Детайли
                   <textarea rows={4} value={selectedProduct.details} onChange={(event) => updateProductField('details', event.target.value)} />
                 </label>
-                <label className="full-width">
-                  Етикети, разделени със запетая
-                  <input value={selectedProduct.badges.join(', ')} onChange={(event) => updateProductField('badges', event.target.value)} />
-                </label>
+                <div className="full-width admin-product-tags">
+                  <strong>Етикети за продуктова карта</strong>
+                  {merchandisingTags.map((tag) => (
+                    <label key={tag} className={`product-tag product-tag-${tag.toLowerCase()}`}>
+                      <input
+                        type="checkbox"
+                        checked={selectedProduct.badges.some((badge) => badge.trim().toUpperCase() === tag)}
+                        onChange={() => toggleProductTag(tag)}
+                      />
+                      {tag}
+                    </label>
+                  ))}
+                </div>
                 <label className="full-width">
                   Image URL
                   <input value={selectedProduct.imageUrl} onChange={(event) => updateProductField('imageUrl', event.target.value)} />
@@ -1018,7 +1055,9 @@ function AdminPage({ snapshot, onSnapshotChange, isAuthenticated, onAuthChange }
             ) : (
               <p className="admin-empty">Избери продукт.</p>
             )}
-          </article>
+              </article>
+            </div>
+          ) : null}
 
           <article className="admin-panel">
             <p className="eyebrow">Складова операция</p>

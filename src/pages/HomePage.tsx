@@ -3,6 +3,7 @@ import type { Category, Product } from '../data/catalog';
 import { createSportArtwork } from '../data/catalog';
 import { getPublicShortDetails } from '../data/publicCatalog';
 import { shopSubcategories } from '../data/subcategories';
+import ProductTags from '../components/ProductTags';
 
 type HomePageProps = {
   categories: Category[];
@@ -125,31 +126,6 @@ function hasHomepageFeatureTag(product: Product) {
       && product.salePriceEur < product.originalPriceEur);
 }
 
-function getHomepageFeatureBadges(product: Product) {
-  const badgeText = product.badges.join(' ').toLowerCase();
-  const badges: string[] = [];
-
-  if (badgeText.includes('hot') || badgeText.includes('хит')) {
-    badges.push('HOT');
-  }
-
-  if (badgeText.includes('new') || badgeText.includes('нов')) {
-    badges.push('NEW');
-  }
-
-  if (badgeText.includes('sale')
-    || badgeText.includes('akcia')
-    || badgeText.includes('акция')
-    || badgeText.includes('%')
-    || (typeof product.originalPriceEur === 'number'
-      && typeof product.salePriceEur === 'number'
-      && product.salePriceEur < product.originalPriceEur)) {
-    badges.push('SALE');
-  }
-
-  return badges;
-}
-
 function HomePage({ categories, products, onAddToCart }: HomePageProps) {
   const featuredProducts = products.filter(hasHomepageFeatureTag).slice(0, 8);
   const homeCategoryOrder = ['squash', 'badminton', 'padel', 'table-tennis', 'tennis'];
@@ -177,7 +153,13 @@ function HomePage({ categories, products, onAddToCart }: HomePageProps) {
             </div>
           </article>
 
-          <article className="home-editorial-media" aria-label="Hero animation area">
+          <a
+            className="home-editorial-media"
+            href="https://www.doubleyellowsquash.com/"
+            target="_blank"
+            rel="noreferrer"
+            aria-label="Посети Double Yellow Squash"
+          >
             <img
               src={heroPosterPath}
               alt="Racketpoint hero"
@@ -187,7 +169,7 @@ function HomePage({ categories, products, onAddToCart }: HomePageProps) {
             <video className="home-editorial-video" autoPlay muted loop playsInline poster={heroPosterPath}>
               <source src={heroVideoPath} type="video/mp4" />
             </video>
-          </article>
+          </a>
         </section>
 
         <section className="section" id="shop-categories">
@@ -248,7 +230,7 @@ function HomePage({ categories, products, onAddToCart }: HomePageProps) {
                   </div>
                   <div className="product-badges">
                     <span className="stock-pill">{getInventoryBadge(product)}</span>
-                    {getHomepageFeatureBadges(product).map((badge) => <span key={badge}>{badge}</span>)}
+                    <ProductTags product={product} />
                   </div>
                   {isOutOfStock(product) ? <p className="delivery-note">Доставка 7-14 дни</p> : null}
                   <div className="product-footer">

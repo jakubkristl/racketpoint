@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { Product } from '../data/catalog';
 import { getFavoriteSkus, toggleFavoriteSku } from '../data/favorites';
+import ProductTags from '../components/ProductTags';
 
 type FavoritesPageProps = {
   products: Product[];
@@ -121,6 +122,7 @@ function FavoritesPage({ products, onAddToCart }: FavoritesPageProps) {
                 <img className="product-image" src={product.imageUrl} alt={product.name} loading="lazy" />
                 <div className="product-body">
                   <h3 className={getProductTitleClass(product.name)}>{product.name}</h3>
+                  <ProductTags product={product} />
                   <p className="product-availability">{getStockLabel(product)}</p>
                   {isOutOfStock(product) ? <p className="delivery-note">Доставка 7-14 дни</p> : null}
                   <div className="product-footer">

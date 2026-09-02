@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { type BalanceProfile, type Brand, type Category, type Product } from '../data/catalog';
 import { getFavoriteSkus, isFavoriteSku, toggleFavoriteSku } from '../data/favorites';
 import { getSubcategoriesForProducts, getSubcategoryByParam, getSubcategoriesForSport } from '../data/subcategories';
+import ProductTags from '../components/ProductTags';
 
 type CategoryPageProps = {
   category: Category;
@@ -453,6 +454,7 @@ function CategoryPage({ category, products, brands, onAddToCart }: CategoryPageP
                         <img className="product-image" src={product.imageUrl} alt={product.name} loading="lazy" />
                         <div className="product-body">
                           <h3 className={getProductTitleClass(product.name)}>{product.name}</h3>
+                          <ProductTags product={product} />
 
                           <p className="product-availability">{getStockLabel(product)}</p>
                           {isOutOfStock(product) ? <p className="delivery-note">Доставка 7-14 дни</p> : null}

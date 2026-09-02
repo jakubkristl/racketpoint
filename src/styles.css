@@ -956,6 +956,66 @@ button {
   font: inherit;
 }
 
+.admin-product-editor {
+  padding: 12px;
+}
+
+.admin-product-editor .admin-form-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px 10px;
+}
+
+.admin-product-editor .admin-form-grid label {
+  gap: 4px;
+  font-size: 0.82rem;
+}
+
+.admin-product-editor .admin-form-grid input,
+.admin-product-editor .admin-form-grid select,
+.admin-product-editor .admin-form-grid textarea {
+  min-height: 38px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  font-size: 0.92rem;
+}
+
+.admin-product-editor .admin-form-grid textarea {
+  min-height: 76px;
+}
+
+.admin-editor-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(11, 18, 24, 0.48);
+}
+
+.admin-product-editor-modal {
+  width: min(1120px, 100%);
+  max-height: min(880px, calc(100vh - 40px));
+  overflow-y: auto;
+  box-shadow: 0 24px 70px rgba(7, 13, 20, 0.36);
+}
+
+.admin-editor-modal-header {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 38px;
+  margin-bottom: 8px;
+  background: rgba(255, 255, 255, 0.96);
+}
+
+.admin-editor-modal-header .eyebrow {
+  margin: 0;
+}
+
 .admin-promotion-list {
   display: grid;
   max-height: 300px;
@@ -1488,6 +1548,49 @@ button {
 .stock-pill {
   background: rgba(22, 163, 74, 0.14) !important;
   color: #166534 !important;
+}
+
+.product-badges,
+.admin-product-tags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.product-tag {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.product-tag-hot { background: #fce7f3; color: #be185d; }
+.product-tag-sale { background: #fee2e2; color: #b91c1c; }
+.product-tag-bundle { background: #dbeafe; color: #1d4ed8; }
+.product-tag-new { background: #dcfce7; color: #15803d; }
+
+.admin-product-tags {
+  gap: 8px;
+}
+
+.admin-product-tags strong {
+  margin-right: 4px;
+  font-size: 0.82rem;
+}
+
+.admin-product-tags .product-tag {
+  cursor: pointer;
+}
+
+.admin-product-tags input {
+  width: 14px;
+  height: 14px;
+  margin: 0 5px 0 0;
 }
 
 .admin-cost-line {
