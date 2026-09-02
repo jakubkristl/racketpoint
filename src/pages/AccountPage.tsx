@@ -1,5 +1,4 @@
 import { FormEvent, useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { fetchOrders, type OrderRecord } from '../data/store';
 import {
   ensureSeededAdminUser,
@@ -7,7 +6,6 @@ import {
   login,
   logout,
   refreshProfile,
-  resendVerificationEmail,
   signup,
   type AccountAddress,
   type AccountUser,
@@ -36,7 +34,6 @@ function AccountPage() {
     zipCode: '',
     country: 'Bulgaria',
   });
-  const [resendLoading, setResendLoading] = useState(false);
 
   useEffect(() => {
     ensureSeededAdminUser();
@@ -171,23 +168,6 @@ function AccountPage() {
     }
   }
 
-  async function handleResendVerification() {
-    if (!email.trim()) {
-      setStatus('Въведете имейла си, след което поискайте ново потвърждение.');
-      return;
-    }
-
-    setResendLoading(true);
-    try {
-      const result = await resendVerificationEmail(email);
-      setStatus(result.message || 'При нужда е изпратен нов имейл за потвърждение.');
-    } catch (error) {
-      setStatus(error instanceof Error ? error.message : 'Неуспешно повторно изпращане на имейла за потвърждение.');
-    } finally {
-      setResendLoading(false);
-    }
-  }
-
   return (
     <div className="page-shell">
       <main className="account-page">
@@ -265,21 +245,6 @@ function AccountPage() {
               <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} required />
             </label>
             <button className="button button-primary" type="submit">{mode === 'login' ? 'Вход' : 'Създай акаунт'}</button>
-            {mode === 'login' ? (
-              <p className="support-copy">
-                Забравена парола? <Link to="/forgot-password">Нулирайте я тук</Link>.
-              </p>
-            ) : null}
-            {mode === 'login' ? (
-              <button
-                className="button button-secondary"
-                type="button"
-                onClick={handleResendVerification}
-                disabled={resendLoading}
-              >
-                {resendLoading ? 'Изпращане на потвърждение...' : 'Изпрати потвърждение отново'}
-              </button>
-            ) : null}
             {status ? <p className="form-status">{status}</p> : null}
           </form>
         </section>
