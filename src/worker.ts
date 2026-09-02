@@ -35,7 +35,12 @@ async function ensureDatabase(env: AppEnvironment) {
   const email = string(env.ADMIN_EMAIL, 254).toLowerCase(); const password = env.ADMIN_PASSWORD ?? '';
   if (!email || password.length < 12) return;
   const existing = await env.DB.prepare('SELECT id FROM users WHERE email = ?').bind(email).first();
-  if (!existing) await env.DB.prepare('INSERT INTO users (id, name, email, password_hash, role, addresses, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)').bind(`adm_${crypto.randomUUID()}`, 'Racketpoint Admin', email, await passwordHash(password), 'ADMIN', '[]', new Date().toISOString()).run();
+  const hash = await passwordHash(password);
+  if (!existing) {
+    await env.DB.prepare('INSERT INTO users (id, name, email, password_hash, role, addresses, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)').bind(`adm_${crypto.randomUUID()}`, 'Racketpoint Admin', email, hash, 'ADMIN', '[]', new Date().toISOString()).run();
+    return;
+  }
+  await env.DB.prepare("UPDATE users SET password_hash = ?, role = 'ADMIN' WHERE email = ?").bind(hash, email).run();
 }
 async function userFor(request: Request, env: AppEnvironment): Promise<SessionUser | null> {
   const token = request.headers.get('authorization')?.replace(/^Bearer\s+/i, '').trim(); if (!token) return null;
