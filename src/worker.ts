@@ -16,7 +16,7 @@ function asBase64(bytes: Uint8Array) { let binary = ''; for (const byte of bytes
 function bytes(value: string) { return Uint8Array.from(atob(value), (character) => character.charCodeAt(0)); }
 async function passwordHash(password: string, salt = crypto.getRandomValues(new Uint8Array(16))) {
   const key = await crypto.subtle.importKey('raw', encoder.encode(password), 'PBKDF2', false, ['deriveBits']);
-  const result = await crypto.subtle.deriveBits({ name: 'PBKDF2', salt, iterations: 210000, hash: 'SHA-256' }, key, 256);
+  const result = await crypto.subtle.deriveBits({ name: 'PBKDF2', salt, iterations: 100000, hash: 'SHA-256' }, key, 256);
   return `${asBase64(salt)}:${asBase64(new Uint8Array(result))}`;
 }
 async function verifyPassword(password: string, value: string) {

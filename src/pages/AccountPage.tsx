@@ -16,6 +16,7 @@ function AccountPage() {
   const [mode, setMode] = useState<'login' | 'signup'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [name, setName] = useState('');
   const [status, setStatus] = useState<string | null>(null);
   const [sessionUser, setSessionUser] = useState<AccountUser | null>(() => getSessionUser());
@@ -242,7 +243,11 @@ function AccountPage() {
             </label>
             <label>
               Парола
-              <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} required />
+              <input type={showPassword ? 'text' : 'password'} value={password} onChange={(event) => setPassword(event.target.value)} required />
+            </label>
+            <label className="account-password-toggle">
+              <input type="checkbox" checked={showPassword} onChange={(event) => setShowPassword(event.target.checked)} />
+              Покажи паролата
             </label>
             <button className="button button-primary" type="submit">{mode === 'login' ? 'Вход' : 'Създай акаунт'}</button>
             {status ? <p className="form-status">{status}</p> : null}
