@@ -1,5 +1,7 @@
 node_modules
 dist
+.wrangler
+src/worker-configuration.d.ts
 .DS_Store
 *.log
 vite.config.js.timestamp-*

@@ -139,6 +139,22 @@ function AccountPage() {
     }
   }
 
+  async function handleDeleteAddress(addressId: string) {
+    if (!sessionUser) {
+      return;
+    }
+
+    try {
+      const next = await updateProfile({
+        addresses: sessionUser.addresses.filter((address) => address.id !== addressId),
+      });
+      setSessionUser(next);
+      setStatus('Адресът е изтрит.');
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : 'Неуспешно изтриване на адреса.');
+    }
+  }
+
   async function handleNameSave(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!sessionUser) {
@@ -288,6 +304,9 @@ function AccountPage() {
                   <p>{address.street}</p>
                   <p>{address.city}, {address.zipCode}</p>
                   <p>{address.country}</p>
+                  <button className="button button-secondary" type="button" onClick={() => handleDeleteAddress(address.id)}>
+                    Изтрий адреса
+                  </button>
                 </article>
               )) : <article className="empty-state"><h3>Все още няма запазени адреси.</h3></article>}
             </div>
