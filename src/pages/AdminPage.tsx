@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   createProductApi,
+  adjustProductStockApi,
   deleteProductApi,
   exportStoreSnapshot,
   fetchOrders,
@@ -265,6 +266,10 @@ function AdminPage({ snapshot, onSnapshotChange, isAuthenticated, onAuthChange }
   const [adminStats, setAdminStats] = useState<AdminStats | null>(null);
   const [stockMovements, setStockMovements] = useState<StockMovementRecord[]>([]);
   const [isCatalogSyncing, setIsCatalogSyncing] = useState(false);
+  const [promotionPercent, setPromotionPercent] = useState('10');
+  const [promotionSkuSet, setPromotionSkuSet] = useState<string[]>([]);
+  const [stockAdjustment, setStockAdjustment] = useState('');
+  const [stockAdjustmentReason, setStockAdjustmentReason] = useState('Warehouse count');
 
   const productTypesWithShoe: ProductType[] = [...productTypes];
 
@@ -407,7 +412,7 @@ function AdminPage({ snapshot, onSnapshotChange, isAuthenticated, onAuthChange }
             ...product,
             [field]: field === 'badges'
               ? value.split(',').map((item) => item.trim()).filter(Boolean)
-              : field === 'priceEur' || field === 'costEur' || field === 'weightGrams'
+              : field === 'priceEur' || field === 'salePriceEur' || field === 'costEur' || field === 'weightGrams'
                 ? (Number.isFinite(Number.parseFloat(value)) ? Number.parseFloat(value) : undefined)
                 : field === 'stock'
                   ? (Number.isFinite(Number.parseInt(value, 10)) ? Number.parseInt(value, 10) : undefined)
@@ -630,6 +635,56 @@ function AdminPage({ snapshot, onSnapshotChange, isAuthenticated, onAuthChange }
       setMessage('Продуктът е обновен.');
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Записът не успя.');
+    }
+  }
+
+  function togglePromotionProduct(sku: string) {
+    setPromotionSkuSet((selectedSkus) => selectedSkus.includes(sku)
+      ? selectedSkus.filter((selectedSku) => selectedSku !== sku)
+      : [...selectedSkus, sku]);
+  }
+
+  async function handleApplyPromotion() {
+    const percentage = Number.parseFloat(promotionPercent);
+    const selectedProducts = snapshot.products.filter((product) => promotionSkuSet.includes(product.sku));
+    if (!Number.isFinite(percentage) || percentage <= 0 || percentage >= 100 || selectedProducts.length === 0) {
+      setMessage('Избери продукти и въведи отстъпка между 1% и 99%.');
+      return;
+    }
+
+    try {
+      await Promise.all(selectedProducts.map((product) => updateProductApi(product.sku, {
+        ...product,
+        originalPriceEur: product.priceEur,
+        salePriceEur: Number(((product.priceEur ?? 0) * (1 - percentage / 100)).toFixed(2)),
+      })));
+      onSnapshotChange(await loadStoreSnapshot());
+      setMessage(`Промоцията е приложена за ${selectedProducts.length} продукта.`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Промоцията не успя.');
+    }
+  }
+
+  async function handleStockAdjustment() {
+    if (!selectedProduct) {
+      return;
+    }
+
+    const deltaQuantity = Number.parseInt(stockAdjustment, 10);
+    if (!Number.isFinite(deltaQuantity) || deltaQuantity === 0 || !stockAdjustmentReason.trim()) {
+      setMessage('Въведи ненулева складова корекция и причина.');
+      return;
+    }
+
+    try {
+      const nextSnapshot = await adjustProductStockApi(selectedProduct.sku, deltaQuantity, stockAdjustmentReason.trim());
+      onSnapshotChange(nextSnapshot);
+      setStockAdjustment('');
+      setMessage('Складовата наличност е коригирана и записана в историята.');
+      const response = await fetch('/api/admin/stock-movements', { headers: getAuthHeaders() });
+      setStockMovements(await response.json() as StockMovementRecord[]);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Складовата корекция не успя.');
     }
   }
 
@@ -902,6 +957,10 @@ function AdminPage({ snapshot, onSnapshotChange, isAuthenticated, onAuthChange }
                   <input value={selectedProduct.priceEur?.toString() ?? ''} onChange={(event) => updateProductField('priceEur', event.target.value)} />
                 </label>
                 <label>
+                  Промо цена (EUR)
+                  <input value={selectedProduct.salePriceEur?.toString() ?? ''} onChange={(event) => updateProductField('salePriceEur', event.target.value)} placeholder="Празно = без промоция" />
+                </label>
+                <label>
                   Себестойност (EUR)
                   <input value={selectedProduct.costEur?.toString() ?? ''} onChange={(event) => updateProductField('costEur', event.target.value)} />
                 </label>
@@ -959,6 +1018,48 @@ function AdminPage({ snapshot, onSnapshotChange, isAuthenticated, onAuthChange }
             ) : (
               <p className="admin-empty">Избери продукт.</p>
             )}
+          </article>
+
+          <article className="admin-panel">
+            <p className="eyebrow">Складова операция</p>
+            {selectedProduct ? (
+              <div className="admin-form-grid">
+                <p className="full-width admin-empty">{selectedProduct.name}: наличност {selectedProduct.stock ?? 0} бр.</p>
+                <label>
+                  Корекция (+/- бр.)
+                  <input value={stockAdjustment} onChange={(event) => setStockAdjustment(event.target.value)} placeholder="Напр. 24 или -2" inputMode="numeric" />
+                </label>
+                <label>
+                  Причина
+                  <input value={stockAdjustmentReason} onChange={(event) => setStockAdjustmentReason(event.target.value)} />
+                </label>
+                <div className="full-width admin-inline-actions">
+                  <button className="button button-primary" type="button" onClick={handleStockAdjustment}>Запиши складова корекция</button>
+                </div>
+              </div>
+            ) : <p className="admin-empty">Избери продукт.</p>}
+          </article>
+
+          <article className="admin-panel">
+            <p className="eyebrow">Промоции и групови отстъпки</p>
+            <div className="admin-form-grid">
+              <label>
+                Отстъпка (%)
+                <input value={promotionPercent} onChange={(event) => setPromotionPercent(event.target.value)} inputMode="decimal" />
+              </label>
+              <div className="admin-inline-actions">
+                <button className="button button-primary" type="button" onClick={handleApplyPromotion}>Приложи за избраните</button>
+              </div>
+              <div className="full-width admin-promotion-list">
+                {snapshot.products.map((product) => (
+                  <label key={product.sku} className="admin-promotion-product">
+                    <input type="checkbox" checked={promotionSkuSet.includes(product.sku)} onChange={() => togglePromotionProduct(product.sku)} />
+                    <span>{product.name}</span>
+                    <strong>{formatEur(product.priceEur ?? parsePriceValue(product.price))}</strong>
+                  </label>
+                ))}
+              </div>
+            </div>
           </article>
 
           <article className="admin-panel">

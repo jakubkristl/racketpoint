@@ -956,6 +956,28 @@ button {
   font: inherit;
 }
 
+.admin-promotion-list {
+  display: grid;
+  max-height: 300px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.admin-promotion-product {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.admin-promotion-product:last-child {
+  border-bottom: 0;
+}
+
 .admin-order-detail {
   display: grid;
   gap: 10px;

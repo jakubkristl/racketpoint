@@ -59,14 +59,12 @@ This generates:
 
 Paste it into `/admin` -> Import JSON to apply all changes at once.
 
-## Deploy to Vercel
+## Deploy to Cloudflare Workers
 
-- Push this project to your GitHub repository.
-- In Vercel, click Add New Project and import the repository.
-- Keep defaults: Framework Preset = Vite, Build Command = npm run build, Output Directory = dist.
-- Deploy.
-
-The project includes `vercel.json` with SPA rewrites so routes like `/category/rackets` work on refresh.
+- The Worker configuration is in `wrangler.jsonc` and serves the built `dist/` assets with SPA route fallback.
+- It binds `DB` to the Cloudflare D1 database `racketpoint-db`.
+- Validate the Cloudflare deployment configuration with `npm run build` followed by `npm run check:worker`.
+- Push the repository to trigger the existing Cloudflare Git deployment.
 
 ## Connect the domain racketpoint.bg
 

@@ -1,0 +1,18 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "racketpoint",
+  "main": "src/worker.ts",
+  "compatibility_date": "2026-08-25",
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "racketpoint-db",
+      "database_id": "7a4e8be2-2ff4-4c51-a89b-c12190ab7ead"
+    }
+  ]
+}

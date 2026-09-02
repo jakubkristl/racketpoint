@@ -814,7 +814,7 @@ export async function createProductApi(product: Product) {
       subCategory: mapTypeToSubCategory(product.type),
       costPrice: product.costEur ?? 0,
       sellingPrice: product.priceEur ?? 0,
-      discountPrice: null,
+      discountPrice: product.salePriceEur ?? null,
       stock: product.stock ?? 0,
       imageArray: [product.imageUrl],
       attributes: {
@@ -847,6 +847,7 @@ export async function updateProductApi(productSku: string, nextProduct: Product)
       subCategory: mapTypeToSubCategory(nextProduct.type),
       costPrice: nextProduct.costEur ?? 0,
       sellingPrice: nextProduct.priceEur ?? 0,
+      discountPrice: nextProduct.salePriceEur ?? null,
       stock: nextProduct.stock ?? 0,
       imageArray: [nextProduct.imageUrl],
       weightGrams: nextProduct.weightGrams ?? null,
@@ -866,6 +867,20 @@ export async function deleteProductApi(productSku: string) {
   });
 
   await parseResponse<{ ok: boolean }>(response);
+  return loadStoreSnapshot();
+}
+
+export async function adjustProductStockApi(productSku: string, deltaQuantity: number, reason: string) {
+  const response = await fetch('/api/admin/stock-adjustments', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...getAuthHeaders(),
+    },
+    body: JSON.stringify({ sku: productSku, deltaQuantity, reason }),
+  });
+
+  await parseResponse<{ sku: string; stock: number }>(response);
   return loadStoreSnapshot();
 }
 
