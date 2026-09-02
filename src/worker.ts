@@ -16,7 +16,7 @@ function asBase64(bytes: Uint8Array) { let binary = ''; for (const byte of bytes
 function bytes(value: string) { return Uint8Array.from(atob(value), (character) => character.charCodeAt(0)); }
 async function passwordHash(password: string, salt = crypto.getRandomValues(new Uint8Array(16))) {
   const key = await crypto.subtle.importKey('raw', encoder.encode(password), 'PBKDF2', false, ['deriveBits']);
-  const result = await crypto.subtle.deriveBits({ name: 'PBKDF2', salt, iterations: 100000, hash: 'SHA-256' }, key, 256);
+  const result = await crypto.subtle.deriveBits({ name: 'PBKDF2', salt, iterations: 50000, hash: 'SHA-256' }, key, 256);
   return `${asBase64(salt)}:${asBase64(new Uint8Array(result))}`;
 }
 async function verifyPassword(password: string, value: string) {
@@ -32,6 +32,9 @@ async function readBody<T>(request: Request) { if (Number(request.headers.get('c
 
 async function ensureDatabase(env: AppEnvironment) {
   await env.DB.exec(schema);
+}
+
+async function syncAdminAccount(env: AppEnvironment) {
   const email = string(env.ADMIN_EMAIL, 254).toLowerCase(); const password = env.ADMIN_PASSWORD ?? '';
   if (!email || password.length < 12) return;
   const existing = await env.DB.prepare('SELECT id FROM users WHERE email = ?').bind(email).first();
@@ -52,6 +55,7 @@ async function adminFor(request: Request, env: AppEnvironment) { const user = aw
 async function auth(request: Request, env: AppEnvironment, registration: boolean) {
   const input = await readBody<{ name?: string; email?: string; password?: string }>(request); const email = string(input.email, 254).toLowerCase(); const password = input.password ?? '';
   if (!/^\S+@\S+\.\S+$/.test(email) || password.length < 8) return fail('Valid email and password of at least 8 characters are required.', 400);
+  if (!registration) await syncAdminAccount(env);
   let record = await env.DB.prepare('SELECT id, name, email, role, addresses, password_hash FROM users WHERE email=?').bind(email).first<{ id: string; name: string; email: string; role: 'USER' | 'ADMIN'; addresses: string; password_hash: string }>();
   if (registration) {
     const name = string(input.name, 80); if (!name) return fail('Name is required.', 400); if (record) return fail('Account already exists.', 409);
