@@ -95,6 +95,18 @@ function StoreHeader({ activeSportSlug }: StoreHeaderProps) {
                   className={isActive ? 'retail-link active' : 'retail-link'}
                   to={item.to}
                 >
+                  {item.iconPath ? (
+                    <img
+                      className="retail-link-thumb"
+                      src={item.iconPath}
+                      alt=""
+                      aria-hidden="true"
+                      loading="lazy"
+                      onError={(event) => {
+                        event.currentTarget.style.display = 'none';
+                      }}
+                    />
+                  ) : null}
                   <span>{item.label}</span>
                 </Link>
 

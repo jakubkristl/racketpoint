@@ -242,13 +242,15 @@ button {
 
 .brand-logo-image {
   display: block;
-  width: min(500px, 100%);
+  width: min(160px, 100%);
   max-width: 100%;
   height: auto;
+  aspect-ratio: 1;
+  object-fit: contain;
 }
 
 .brand-lockup.compact .brand-logo-image {
-  width: min(250px, 48vw);
+  width: min(72px, 20vw);
 }
 
 .brand-subtitle {
@@ -307,7 +309,7 @@ button {
 
 .retail-logo-link .brand-logo-image,
 .retail-logo-link .brand-lockup.compact .brand-logo-image {
-  width: min(190px, 28vw);
+  width: 58px;
 }
 
 .brand-subtitle:empty {
@@ -340,12 +342,27 @@ button {
   position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 0;
+  gap: 6px;
   color: #f4f6f8;
   font-size: 0.92rem;
   font-weight: 700;
   letter-spacing: 0;
   white-space: nowrap;
+}
+
+.retail-link-thumb {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 15px;
+  object-fit: contain;
+  opacity: 0.7;
+  filter: grayscale(1) brightness(2.4) contrast(0.75);
+}
+
+.retail-link.active .retail-link-thumb,
+.retail-link:hover .retail-link-thumb {
+  filter: none;
+  opacity: 0.95;
 }
 
 .retail-link:hover,

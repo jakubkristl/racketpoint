@@ -77,9 +77,53 @@ const subcategorySlugsBySport: Record<string, string[]> = {
 };
 
 const sportSpecificLabels: Record<string, Record<string, string>> = {
+  squash: { balls: 'Топки' },
   badminton: { balls: 'Пера' },
   padel: { rackets: 'Падел ракети' },
   'table-tennis': { rackets: 'Хилки', balls: 'Топчета' },
+};
+
+const subcategoryImagesBySport: Record<string, Partial<Record<string, { imageUrl: string; fallbackImageUrl: string }>>> = {
+  squash: {
+    rackets: { imageUrl: '/branding/category/subcategories/rackets.avif', fallbackImageUrl: 'https://images.pexels.com/photos/14629511/pexels-photo-14629511.jpeg?auto=compress&cs=tinysrgb&w=600' },
+    balls: { imageUrl: '/branding/category/subcategories/balls.avif', fallbackImageUrl: 'https://images.pexels.com/photos/7648078/pexels-photo-7648078.jpeg?auto=compress&cs=tinysrgb&w=600' },
+    grips: { imageUrl: '/branding/category/subcategories/grips.avif', fallbackImageUrl: 'https://images.pexels.com/photos/7648079/pexels-photo-7648079.jpeg?auto=compress&cs=tinysrgb&w=600' },
+    strings: { imageUrl: '/branding/category/subcategories/strings.avif', fallbackImageUrl: 'https://images.pexels.com/photos/7648084/pexels-photo-7648084.jpeg?auto=compress&cs=tinysrgb&w=600' },
+    bags: { imageUrl: '/branding/category/subcategories/bags.avif', fallbackImageUrl: 'https://images.pexels.com/photos/7648297/pexels-photo-7648297.jpeg?auto=compress&cs=tinysrgb&w=600' },
+    accessories: { imageUrl: '/branding/category/subcategories/accessories.avif', fallbackImageUrl: 'https://images.pexels.com/photos/7648080/pexels-photo-7648080.jpeg?auto=compress&cs=tinysrgb&w=600' },
+    shoes: { imageUrl: '/branding/category/subcategories/shoes.avif', fallbackImageUrl: 'https://images.pexels.com/photos/7648280/pexels-photo-7648280.jpeg?auto=compress&cs=tinysrgb&w=600' },
+  },
+  badminton: {
+    rackets: { imageUrl: 'https://images.pexels.com/photos/2202685/pexels-photo-2202685.jpeg?auto=compress&cs=tinysrgb&w=600', fallbackImageUrl: '/branding/category/subcategories/rackets.avif' },
+    balls: { imageUrl: 'https://images.pexels.com/photos/8007075/pexels-photo-8007075.jpeg?auto=compress&cs=tinysrgb&w=600', fallbackImageUrl: '/branding/category/subcategories/balls.avif' },
+    grips: { imageUrl: 'https://images.pexels.com/photos/6878017/pexels-photo-6878017.jpeg?auto=compress&cs=tinysrgb&w=600', fallbackImageUrl: '/branding/category/subcategories/grips.avif' },
+    bags: { imageUrl: 'https://images.pexels.com/photos/8007173/pexels-photo-8007173.jpeg?auto=compress&cs=tinysrgb&w=600', fallbackImageUrl: '/branding/category/subcategories/bags.avif' },
+    accessories: { imageUrl: 'https://images.pexels.com/photos/8007408/pexels-photo-8007408.jpeg?auto=compress&cs=tinysrgb&w=600', fallbackImageUrl: '/branding/category/subcategories/accessories.avif' },
+    shoes: { imageUrl: 'https://images.pexels.com/photos/8007094/pexels-photo-8007094.jpeg?auto=compress&cs=tinysrgb&w=600', fallbackImageUrl: '/branding/category/subcategories/shoes.avif' },
+  },
+  padel: {
+    rackets: { imageUrl: 'https://images.pexels.com/photos/35248374/pexels-photo-35248374.jpeg?auto=compress&cs=tinysrgb&w=600', fallbackImageUrl: '/branding/category/subcategories/rackets.avif' },
+    balls: { imageUrl: 'https://images.pexels.com/photos/35646550/pexels-photo-35646550.jpeg?auto=compress&cs=tinysrgb&w=600', fallbackImageUrl: '/branding/category/subcategories/balls.avif' },
+    grips: { imageUrl: 'https://images.pexels.com/photos/4536850/pexels-photo-4536850.jpeg?auto=compress&cs=tinysrgb&w=600', fallbackImageUrl: '/branding/category/subcategories/grips.avif' },
+    bags: { imageUrl: 'https://images.pexels.com/photos/32897038/pexels-photo-32897038.jpeg?auto=compress&cs=tinysrgb&w=600', fallbackImageUrl: '/branding/category/subcategories/bags.avif' },
+    accessories: { imageUrl: 'https://images.pexels.com/photos/35248259/pexels-photo-35248259.jpeg?auto=compress&cs=tinysrgb&w=600', fallbackImageUrl: '/branding/category/subcategories/accessories.avif' },
+    shoes: { imageUrl: 'https://images.pexels.com/photos/35248470/pexels-photo-35248470.jpeg?auto=compress&cs=tinysrgb&w=600', fallbackImageUrl: '/branding/category/subcategories/shoes.avif' },
+  },
+  tennis: {
+    rackets: { imageUrl: 'https://images.pexels.com/photos/209977/pexels-photo-209977.jpeg?auto=compress&cs=tinysrgb&w=600', fallbackImageUrl: '/branding/category/subcategories/rackets.avif' },
+    balls: { imageUrl: 'https://images.pexels.com/photos/5739115/pexels-photo-5739115.jpeg?auto=compress&cs=tinysrgb&w=600', fallbackImageUrl: '/branding/category/subcategories/balls.avif' },
+    grips: { imageUrl: 'https://images.pexels.com/photos/5739121/pexels-photo-5739121.jpeg?auto=compress&cs=tinysrgb&w=600', fallbackImageUrl: '/branding/category/subcategories/grips.avif' },
+    strings: { imageUrl: 'https://images.pexels.com/photos/5741292/pexels-photo-5741292.jpeg?auto=compress&cs=tinysrgb&w=600', fallbackImageUrl: '/branding/category/subcategories/strings.avif' },
+    bags: { imageUrl: 'https://images.pexels.com/photos/8223947/pexels-photo-8223947.jpeg?auto=compress&cs=tinysrgb&w=600', fallbackImageUrl: '/branding/category/subcategories/bags.avif' },
+    accessories: { imageUrl: 'https://images.pexels.com/photos/12645014/pexels-photo-12645014.jpeg?auto=compress&cs=tinysrgb&w=600', fallbackImageUrl: '/branding/category/subcategories/accessories.avif' },
+    shoes: { imageUrl: 'https://images.pexels.com/photos/8224433/pexels-photo-8224433.jpeg?auto=compress&cs=tinysrgb&w=600', fallbackImageUrl: '/branding/category/subcategories/shoes.avif' },
+  },
+  'table-tennis': {
+    rackets: { imageUrl: 'https://images.pexels.com/photos/709134/pexels-photo-709134.jpeg?auto=compress&cs=tinysrgb&w=600', fallbackImageUrl: '/branding/category/subcategories/rackets.avif' },
+    balls: { imageUrl: 'https://images.pexels.com/photos/4080060/pexels-photo-4080060.jpeg?auto=compress&cs=tinysrgb&w=600', fallbackImageUrl: '/branding/category/subcategories/balls.avif' },
+    bags: { imageUrl: 'https://images.pexels.com/photos/38446271/pexels-photo-38446271.jpeg?auto=compress&cs=tinysrgb&w=600', fallbackImageUrl: '/branding/category/subcategories/bags.avif' },
+    accessories: { imageUrl: 'https://images.pexels.com/photos/6631422/pexels-photo-6631422.jpeg?auto=compress&cs=tinysrgb&w=600', fallbackImageUrl: '/branding/category/subcategories/accessories.avif' },
+  },
 };
 
 const subcategoriesBySlug = new Map(shopSubcategories.map((subcategory) => [subcategory.slug, subcategory]));
@@ -95,7 +139,8 @@ export function getSubcategoriesForSport(sportSlug: string) {
 
   return slugs.flatMap((slug) => {
     const subcategory = subcategoriesBySlug.get(slug);
-    return subcategory ? [{ ...subcategory, label: labels[slug] ?? subcategory.label }] : [];
+    const images = subcategoryImagesBySport[sportSlug]?.[slug];
+    return subcategory ? [{ ...subcategory, label: labels[slug] ?? subcategory.label, ...images }] : [];
   });
 }
 
