@@ -450,7 +450,7 @@ function mapApiProductToCatalogProduct(item: any): Product {
   const priceEur = Number(item.sellingPrice ?? item.selling_price ?? 0);
   const discountRaw = item.discountPrice ?? item.discount_price;
   const discountPrice = discountRaw == null ? null : Number(discountRaw);
-  const effectivePrice = discountPrice != null ? discountPrice : priceEur;
+  const attributes = item.attributes && typeof item.attributes === 'object' ? item.attributes as Record<string, unknown> : {};
   const imageArray = Array.isArray(item.imageArray)
     ? item.imageArray
     : Array.isArray(item.images)
@@ -465,15 +465,19 @@ function mapApiProductToCatalogProduct(item: any): Product {
     categorySlug: String(item.sport ?? 'squash') as CategorySlug,
     type: mapSubCategoryToType(item.subCategory),
     brand: String(item.brand ?? 'Racketpoint'),
-    priceEur: Number.isFinite(effectivePrice) ? effectivePrice : 0,
+    priceEur: Number.isFinite(priceEur) ? priceEur : 0,
     salePriceEur: discountPrice != null && Number.isFinite(discountPrice) ? discountPrice : undefined,
     originalPriceEur: discountPrice != null && Number.isFinite(priceEur) ? priceEur : undefined,
-    price: `EUR ${Number.isFinite(effectivePrice) ? effectivePrice.toFixed(2) : '0.00'}`,
+    price: `EUR ${Number.isFinite(priceEur) ? priceEur.toFixed(2) : '0.00'}`,
     costEur: Number(item.costPrice ?? item.cost_price ?? 0),
     stock: Number(item.stock ?? 0),
     details: String(item.description ?? ''),
-    badges: [],
+    badges: Array.isArray(attributes.tags)
+      ? attributes.tags.filter((tag): tag is string => typeof tag === 'string')
+      : [],
     imageUrl: bestImageUrl || 'https://via.placeholder.com/1200x800?text=Racketpoint',
+    color: typeof attributes.color === 'string' ? attributes.color : undefined,
+    headShape: typeof attributes.headShape === 'string' ? attributes.headShape as Product['headShape'] : undefined,
     weightGrams: item.weightGrams == null ? undefined : Number(item.weightGrams),
     balance: typeof item.balance === 'string' ? item.balance as Product['balance'] : undefined,
     attributes: item.attributes && typeof item.attributes === 'object'
@@ -820,6 +824,7 @@ export async function createProductApi(product: Product) {
       attributes: {
         color: product.color,
         headShape: product.headShape,
+        tags: product.badges,
       },
       sizes: [],
       weightGrams: product.weightGrams ?? null,
@@ -850,6 +855,11 @@ export async function updateProductApi(productSku: string, nextProduct: Product)
       discountPrice: nextProduct.salePriceEur ?? null,
       stock: nextProduct.stock ?? 0,
       imageArray: [nextProduct.imageUrl],
+      attributes: {
+        color: nextProduct.color,
+        headShape: nextProduct.headShape,
+        tags: nextProduct.badges,
+      },
       weightGrams: nextProduct.weightGrams ?? null,
       balance: nextProduct.balance ?? null,
       rating: 4.5,

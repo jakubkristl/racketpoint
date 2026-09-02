@@ -982,15 +982,15 @@ function AdminPage({ snapshot, onSnapshotChange, isAuthenticated, onAuthChange }
                 </label>
                 <label>
                   Цена (EUR)
-                  <input value={selectedProduct.priceEur?.toString() ?? ''} onChange={(event) => updateProductField('priceEur', event.target.value)} />
+                  <input type="number" min="0" step="0.01" inputMode="decimal" value={selectedProduct.priceEur?.toString() ?? ''} onChange={(event) => updateProductField('priceEur', event.target.value)} />
                 </label>
                 <label>
                   Промо цена (EUR)
-                  <input value={selectedProduct.salePriceEur?.toString() ?? ''} onChange={(event) => updateProductField('salePriceEur', event.target.value)} placeholder="Празно = без промоция" />
+                  <input type="number" min="0" step="0.01" inputMode="decimal" value={selectedProduct.salePriceEur?.toString() ?? ''} onChange={(event) => updateProductField('salePriceEur', event.target.value)} placeholder="Празно = без промоция" />
                 </label>
                 <label>
                   Себестойност (EUR)
-                  <input value={selectedProduct.costEur?.toString() ?? ''} onChange={(event) => updateProductField('costEur', event.target.value)} />
+                  <input type="number" min="0" step="0.01" inputMode="decimal" value={selectedProduct.costEur?.toString() ?? ''} onChange={(event) => updateProductField('costEur', event.target.value)} />
                 </label>
                 <label>
                   Наличност (бр.)
@@ -1187,11 +1187,11 @@ function AdminPage({ snapshot, onSnapshotChange, isAuthenticated, onAuthChange }
 
               <label>
                 Price EUR
-                <input value={quickPriceEur} onChange={(event) => setQuickPriceEur(event.target.value)} />
+                <input type="number" min="0" step="0.01" inputMode="decimal" value={quickPriceEur} onChange={(event) => setQuickPriceEur(event.target.value)} />
               </label>
               <label>
                 Cost EUR
-                <input value={quickCostEur} onChange={(event) => setQuickCostEur(event.target.value)} />
+                <input type="number" min="0" step="0.01" inputMode="decimal" value={quickCostEur} onChange={(event) => setQuickCostEur(event.target.value)} />
               </label>
               <label>
                 Stock amount
