@@ -35,8 +35,8 @@ async function ensureDatabase(env: AppEnvironment) {
 }
 
 async function syncAdminAccount(env: AppEnvironment) {
-  const email = string(env.ADMIN_EMAIL, 254).toLowerCase(); const password = env.ADMIN_PASSWORD ?? '';
-  if (!email || password.length < 12) return;
+  const email = string(env.ADMIN_EMAIL, 254).toLowerCase(); const password = string(env.ADMIN_PASSWORD);
+  if (!email || password.length < 8) return;
   const existing = await env.DB.prepare('SELECT id FROM users WHERE email = ?').bind(email).first();
   const hash = await passwordHash(password);
   if (!existing) {
@@ -120,6 +120,13 @@ async function orderStatus(request: Request, env: AppEnvironment) {
 
 async function adminStats(request: Request, env: AppEnvironment) { if (!await adminFor(request, env)) return fail('Admin role required.', 403); const stats = await env.DB.prepare("SELECT (SELECT COUNT(*) FROM users) users,(SELECT COUNT(*) FROM products) products,(SELECT COUNT(*) FROM orders) orders,(SELECT COALESCE(SUM(total_amount),0) FROM orders WHERE status!='Cancelled') revenueEur").first(); return json(stats ?? { users: 0, products: 0, orders: 0, revenueEur: 0 }); }
 
+async function health(env: AppEnvironment) {
+  const email = string(env.ADMIN_EMAIL, 254).toLowerCase();
+  const configured = Boolean(email && string(env.ADMIN_PASSWORD).length >= 8);
+  const admin = configured ? await env.DB.prepare("SELECT id FROM users WHERE email=? AND role='ADMIN'").bind(email).first() : null;
+  return json({ ok: true, adminConfigured: configured, adminProvisioned: Boolean(admin) });
+}
+
 export default { async fetch(request, env: AppEnvironment) {
   const path = new URL(request.url).pathname;
   try {
@@ -135,6 +142,7 @@ export default { async fetch(request, env: AppEnvironment) {
     if (path === '/api/admin/stock-adjustments' && request.method === 'POST') return stock(request, env);
     if (path === '/api/admin/stock-movements' && request.method === 'GET') return stock(request, env);
     if (path === '/api/admin/stats' && request.method === 'GET') return adminStats(request, env);
+    if (path === '/api/system/health' && request.method === 'GET') return health(env);
     return fail('Not found.', 404);
   } catch (error) { console.error(JSON.stringify({ path, error: error instanceof Error ? error.message : 'Unknown error' })); return fail(error instanceof Error ? error.message : 'Request failed.', 500); }
 } } satisfies ExportedHandler<AppEnvironment>;
