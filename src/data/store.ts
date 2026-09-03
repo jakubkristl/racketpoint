@@ -450,7 +450,7 @@ function mapApiProductToCatalogProduct(item: any): Product {
   const priceEur = Number(item.sellingPrice ?? item.selling_price ?? 0);
   const discountRaw = item.discountPrice ?? item.discount_price;
   const discountPrice = discountRaw == null ? null : Number(discountRaw);
-  const attributes = item.attributes && typeof item.attributes === 'object' ? item.attributes as Record<string, unknown> : {};
+  const effectivePrice = discountPrice != null ? discountPrice : priceEur;
   const imageArray = Array.isArray(item.imageArray)
     ? item.imageArray
     : Array.isArray(item.images)
@@ -465,19 +465,15 @@ function mapApiProductToCatalogProduct(item: any): Product {
     categorySlug: String(item.sport ?? 'squash') as CategorySlug,
     type: mapSubCategoryToType(item.subCategory),
     brand: String(item.brand ?? 'Racketpoint'),
-    priceEur: Number.isFinite(priceEur) ? priceEur : 0,
+    priceEur: Number.isFinite(effectivePrice) ? effectivePrice : 0,
     salePriceEur: discountPrice != null && Number.isFinite(discountPrice) ? discountPrice : undefined,
     originalPriceEur: discountPrice != null && Number.isFinite(priceEur) ? priceEur : undefined,
-    price: `EUR ${Number.isFinite(priceEur) ? priceEur.toFixed(2) : '0.00'}`,
+    price: `EUR ${Number.isFinite(effectivePrice) ? effectivePrice.toFixed(2) : '0.00'}`,
     costEur: Number(item.costPrice ?? item.cost_price ?? 0),
     stock: Number(item.stock ?? 0),
     details: String(item.description ?? ''),
-    badges: Array.isArray(attributes.tags)
-      ? attributes.tags.filter((tag): tag is string => typeof tag === 'string')
-      : [],
+    badges: [],
     imageUrl: bestImageUrl || 'https://via.placeholder.com/1200x800?text=Racketpoint',
-    color: typeof attributes.color === 'string' ? attributes.color : undefined,
-    headShape: typeof attributes.headShape === 'string' ? attributes.headShape as Product['headShape'] : undefined,
     weightGrams: item.weightGrams == null ? undefined : Number(item.weightGrams),
     balance: typeof item.balance === 'string' ? item.balance as Product['balance'] : undefined,
     attributes: item.attributes && typeof item.attributes === 'object'
@@ -575,6 +571,21 @@ export async function fetchProducts() {
     fetchImportedSquashpointProducts().catch(() => [] as Product[]),
   ]);
 
+  if (referenceCatalog.length > 0) {
+    const overrideBySku = new Map(mapped.map((product) => [product.sku, product] as const));
+    const combined = referenceCatalog.map((product) => overrideBySku.get(product.sku) ?? product);
+
+    for (const product of mapped) {
+      if (!referenceCatalog.some((reference) => reference.sku === product.sku)) {
+        combined.push(product);
+      }
+    }
+
+    const normalized = hydrateProductImages(combined, referenceCatalog);
+    productCache = normalized;
+    return normalized;
+  }
+
   if (mapped.length === 0) {
     const seeded = await requestCatalogSeed().catch(() => false);
 
@@ -587,6 +598,13 @@ export async function fetchProducts() {
       }
     }
 
+    const localStarterCatalog = loadSnapshot().products;
+    if (localStarterCatalog.length > 0) {
+      const normalized = hydrateProductImages(localStarterCatalog, referenceCatalog);
+      productCache = normalized;
+      return normalized;
+    }
+
     const imported = referenceCatalog;
     if (imported.length > 0) {
       const normalized = hydrateProductImages(imported, imported);
@@ -594,9 +612,7 @@ export async function fetchProducts() {
       return normalized;
     }
 
-    const localStarterCatalog = hydrateProductImages(loadSnapshot().products, referenceCatalog);
-    productCache = localStarterCatalog;
-    return localStarterCatalog;
+    return [];
   }
 
   const normalized = hydrateProductImages(mapped, referenceCatalog);
@@ -818,13 +834,12 @@ export async function createProductApi(product: Product) {
       subCategory: mapTypeToSubCategory(product.type),
       costPrice: product.costEur ?? 0,
       sellingPrice: product.priceEur ?? 0,
-      discountPrice: product.salePriceEur ?? null,
+      discountPrice: null,
       stock: product.stock ?? 0,
       imageArray: [product.imageUrl],
       attributes: {
         color: product.color,
         headShape: product.headShape,
-        tags: product.badges,
       },
       sizes: [],
       weightGrams: product.weightGrams ?? null,
@@ -867,7 +882,7 @@ export async function updateProductApi(productSku: string, nextProduct: Product)
   });
 
   await parseResponse<any>(response);
-  return loadStoreSnapshot();
+  return updateProduct(productSku, nextProduct);
 }
 
 export async function deleteProductApi(productSku: string) {
@@ -877,20 +892,6 @@ export async function deleteProductApi(productSku: string) {
   });
 
   await parseResponse<{ ok: boolean }>(response);
-  return loadStoreSnapshot();
-}
-
-export async function adjustProductStockApi(productSku: string, deltaQuantity: number, reason: string) {
-  const response = await fetch('/api/admin/stock-adjustments', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...getAuthHeaders(),
-    },
-    body: JSON.stringify({ sku: productSku, deltaQuantity, reason }),
-  });
-
-  await parseResponse<{ sku: string; stock: number }>(response);
   return loadStoreSnapshot();
 }
 
