@@ -2,7 +2,7 @@ import { type FormEvent, type ReactNode, useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import BrandLogo from './BrandLogo';
 import { getFavoriteSkus } from '../data/favorites';
-import { getSubcategoriesForSport } from '../data/subcategories';
+import { shopSubcategories } from '../data/subcategories';
 
 type StoreHeaderProps = {
   activeSportSlug?: string;
@@ -34,7 +34,6 @@ function StoreHeader({ activeSportSlug }: StoreHeaderProps) {
   const currentSearch = new URLSearchParams(location.search).get('q') ?? '';
   const [searchValue, setSearchValue] = useState(currentSearch);
   const [favoriteCount, setFavoriteCount] = useState(() => getFavoriteSkus().length);
-  const [openSport, setOpenSport] = useState<string | null>(null);
 
   useEffect(() => {
     setSearchValue(currentSearch);
@@ -76,21 +75,9 @@ function StoreHeader({ activeSportSlug }: StoreHeaderProps) {
           {navOrder.map((item) => {
             const isActive = item.key === activeSportSlug || (item.key === 'contact' && location.pathname === '/contact');
             const hasSubcategories = item.key !== 'contact';
-            const subcategories = hasSubcategories ? getSubcategoriesForSport(item.key) : [];
 
             return (
-              <div
-                className="retail-nav-item"
-                key={item.key}
-                onMouseEnter={() => setOpenSport(item.key)}
-                onMouseLeave={() => setOpenSport(null)}
-                onFocus={() => setOpenSport(item.key)}
-                onBlur={(event) => {
-                  if (!event.currentTarget.contains(event.relatedTarget)) {
-                    setOpenSport(null);
-                  }
-                }}
-              >
+              <div className="retail-nav-item" key={item.key}>
                 <Link
                   className={isActive ? 'retail-link active' : 'retail-link'}
                   to={item.to}
@@ -110,9 +97,9 @@ function StoreHeader({ activeSportSlug }: StoreHeaderProps) {
                   <span>{item.label}</span>
                 </Link>
 
-                {hasSubcategories && openSport === item.key ? (
+                {hasSubcategories ? (
                   <div className="retail-mega-menu" aria-label={`${item.label} подкатегории`}>
-                    {subcategories.map((subcategory) => (
+                    {shopSubcategories.map((subcategory) => (
                       <Link
                         className="retail-mega-link"
                         key={`${item.key}-${subcategory.slug}`}

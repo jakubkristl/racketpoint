@@ -6,7 +6,6 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "check:worker": "wrangler deploy --dry-run",
     "preview": "vite preview",
     "seed:products": "node scripts/seedProducts.js",
     "import:squashpoint": "node scripts/importSquashpoint.js",

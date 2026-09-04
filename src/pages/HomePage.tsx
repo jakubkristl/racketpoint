@@ -3,7 +3,6 @@ import type { Category, Product } from '../data/catalog';
 import { createSportArtwork } from '../data/catalog';
 import { getPublicShortDetails } from '../data/publicCatalog';
 import { shopSubcategories } from '../data/subcategories';
-import ProductTags from '../components/ProductTags';
 
 type HomePageProps = {
   categories: Category[];
@@ -11,7 +10,7 @@ type HomePageProps = {
   onAddToCart: (sku: string) => void;
 };
 
-const heroVideoPath = '/branding/homepage/hero/FB%20Final.mp4';
+const heroVideoPath = '/branding/homepage/hero/launch-loop.mp4';
 
 function createHomeHeroArtwork() {
   return createSportArtwork('Hero', 'Racketpoint editorial storefront', '#0d4e8f');
@@ -126,6 +125,31 @@ function hasHomepageFeatureTag(product: Product) {
       && product.salePriceEur < product.originalPriceEur);
 }
 
+function getHomepageFeatureBadges(product: Product) {
+  const badgeText = product.badges.join(' ').toLowerCase();
+  const badges: string[] = [];
+
+  if (badgeText.includes('hot') || badgeText.includes('хит')) {
+    badges.push('HOT');
+  }
+
+  if (badgeText.includes('new') || badgeText.includes('нов')) {
+    badges.push('NEW');
+  }
+
+  if (badgeText.includes('sale')
+    || badgeText.includes('akcia')
+    || badgeText.includes('акция')
+    || badgeText.includes('%')
+    || (typeof product.originalPriceEur === 'number'
+      && typeof product.salePriceEur === 'number'
+      && product.salePriceEur < product.originalPriceEur)) {
+    badges.push('SALE');
+  }
+
+  return badges;
+}
+
 function HomePage({ categories, products, onAddToCart }: HomePageProps) {
   const featuredProducts = products.filter(hasHomepageFeatureTag).slice(0, 8);
   const homeCategoryOrder = ['squash', 'badminton', 'padel', 'table-tennis', 'tennis'];
@@ -153,13 +177,7 @@ function HomePage({ categories, products, onAddToCart }: HomePageProps) {
             </div>
           </article>
 
-          <a
-            className="home-editorial-media"
-            href="https://www.doubleyellowsquash.com/"
-            target="_blank"
-            rel="noreferrer"
-            aria-label="Посети Double Yellow Squash"
-          >
+          <article className="home-editorial-media" aria-label="Hero animation area">
             <img
               src={heroPosterPath}
               alt="Racketpoint hero"
@@ -169,7 +187,11 @@ function HomePage({ categories, products, onAddToCart }: HomePageProps) {
             <video className="home-editorial-video" autoPlay muted loop playsInline poster={heroPosterPath}>
               <source src={heroVideoPath} type="video/mp4" />
             </video>
-          </a>
+            <div className="home-editorial-media-overlay">
+              <strong>Поставете анимационния файл тук:</strong>
+              <span>/public/branding/homepage/hero/launch-loop.mp4</span>
+            </div>
+          </article>
         </section>
 
         <section className="section" id="shop-categories">
@@ -226,11 +248,11 @@ function HomePage({ categories, products, onAddToCart }: HomePageProps) {
                   <div>
                     <p className="product-category">{product.brand}</p>
                     <h3 className={getProductTitleClass(product.name)}>{product.name}</h3>
-                    <p className="product-description">{getPublicShortDetails(product)}</p>
+                    <p>{getPublicShortDetails(product)}</p>
                   </div>
                   <div className="product-badges">
                     <span className="stock-pill">{getInventoryBadge(product)}</span>
-                    <ProductTags product={product} />
+                    {getHomepageFeatureBadges(product).map((badge) => <span key={badge}>{badge}</span>)}
                   </div>
                   {isOutOfStock(product) ? <p className="delivery-note">Доставка 7-14 дни</p> : null}
                   <div className="product-footer">

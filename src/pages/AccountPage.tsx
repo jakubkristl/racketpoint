@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { fetchOrders, type OrderRecord } from '../data/store';
 import {
   ensureSeededAdminUser,
@@ -6,6 +7,7 @@ import {
   login,
   logout,
   refreshProfile,
+  resendVerificationEmail,
   signup,
   type AccountAddress,
   type AccountUser,
@@ -16,7 +18,6 @@ function AccountPage() {
   const [mode, setMode] = useState<'login' | 'signup'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
   const [name, setName] = useState('');
   const [status, setStatus] = useState<string | null>(null);
   const [sessionUser, setSessionUser] = useState<AccountUser | null>(() => getSessionUser());
@@ -35,6 +36,7 @@ function AccountPage() {
     zipCode: '',
     country: 'Bulgaria',
   });
+  const [resendLoading, setResendLoading] = useState(false);
 
   useEffect(() => {
     ensureSeededAdminUser();
@@ -137,22 +139,6 @@ function AccountPage() {
     }
   }
 
-  async function handleDeleteAddress(addressId: string) {
-    if (!sessionUser) {
-      return;
-    }
-
-    try {
-      const next = await updateProfile({
-        addresses: sessionUser.addresses.filter((address) => address.id !== addressId),
-      });
-      setSessionUser(next);
-      setStatus('Адресът е изтрит.');
-    } catch (error) {
-      setStatus(error instanceof Error ? error.message : 'Неуспешно изтриване на адреса.');
-    }
-  }
-
   async function handleNameSave(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!sessionUser) {
@@ -166,6 +152,23 @@ function AccountPage() {
       window.dispatchEvent(new CustomEvent('racketpoint:auth-changed'));
     } catch (error) {
       setStatus(error instanceof Error ? error.message : 'Неуспешно обновяване на профила.');
+    }
+  }
+
+  async function handleResendVerification() {
+    if (!email.trim()) {
+      setStatus('Въведете имейла си, след което поискайте ново потвърждение.');
+      return;
+    }
+
+    setResendLoading(true);
+    try {
+      const result = await resendVerificationEmail(email);
+      setStatus(result.message || 'При нужда е изпратен нов имейл за потвърждение.');
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : 'Неуспешно повторно изпращане на имейла за потвърждение.');
+    } finally {
+      setResendLoading(false);
     }
   }
 
@@ -243,13 +246,24 @@ function AccountPage() {
             </label>
             <label>
               Парола
-              <input type={showPassword ? 'text' : 'password'} value={password} onChange={(event) => setPassword(event.target.value)} required />
-            </label>
-            <label className="account-password-toggle">
-              <input type="checkbox" checked={showPassword} onChange={(event) => setShowPassword(event.target.checked)} />
-              Покажи паролата
+              <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} required />
             </label>
             <button className="button button-primary" type="submit">{mode === 'login' ? 'Вход' : 'Създай акаунт'}</button>
+            {mode === 'login' ? (
+              <p className="support-copy">
+                Забравена парола? <Link to="/forgot-password">Нулирайте я тук</Link>.
+              </p>
+            ) : null}
+            {mode === 'login' ? (
+              <button
+                className="button button-secondary"
+                type="button"
+                onClick={handleResendVerification}
+                disabled={resendLoading}
+              >
+                {resendLoading ? 'Изпращане на потвърждение...' : 'Изпрати потвърждение отново'}
+              </button>
+            ) : null}
             {status ? <p className="form-status">{status}</p> : null}
           </form>
         </section>
@@ -274,9 +288,6 @@ function AccountPage() {
                   <p>{address.street}</p>
                   <p>{address.city}, {address.zipCode}</p>
                   <p>{address.country}</p>
-                  <button className="button button-secondary" type="button" onClick={() => handleDeleteAddress(address.id)}>
-                    Изтрий адреса
-                  </button>
                 </article>
               )) : <article className="empty-state"><h3>Все още няма запазени адреси.</h3></article>}
             </div>

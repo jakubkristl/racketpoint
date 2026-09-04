@@ -9,8 +9,8 @@ function BrandLogo({ subtitle = 'Премиум магазин за ракети
       <div className="brand-wording brand-logo-frame">
         <img
           className="brand-logo-image"
-          src="/branding/logo-new.png"
-          alt="Racketpoint"
+          src="/branding/logo-transparent.svg"
+          alt="Racketpoint.bg Everything for Racket Sports"
           onError={(event) => {
             const target = event.currentTarget;
             if (target.src.endsWith('/branding/logo.webp')) {

@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   createProductApi,
-  adjustProductStockApi,
   deleteProductApi,
   exportStoreSnapshot,
   fetchOrders,
@@ -20,7 +19,7 @@ import {
   deleteBrand,
   deleteCategory,
 } from '../data/store';
-import { createProductArtwork } from '../data/catalog';
+import { createProductArtwork, getProductSupplierSource } from '../data/catalog';
 import type { Brand, Category, Product, CategorySlug, ProductType } from '../data/catalog';
 import { getAdminPasswordHint, signInAdmin, signOutAdmin } from '../data/adminAuth';
 import type { ChangeEvent, FormEvent } from 'react';
@@ -56,7 +55,6 @@ type StockMovementRecord = {
 
 const productTypes: ProductType[] = ['Racket', 'Balls', 'Wear', 'Bag', 'Accessory', 'String', 'Grip', 'Shoe'];
 const quickAddProductTypes: ProductType[] = ['Racket', 'Shoe', 'Grip', 'Wear', 'Bag', 'Balls', 'Accessory', 'String'];
-const merchandisingTags = ['HOT', 'SALE', 'BUNDLE', 'NEW'] as const;
 const mainSportOptions = [
   { slug: 'squash', label: 'Squash' },
   { slug: 'tennis', label: 'Tennis' },
@@ -86,6 +84,7 @@ const newProductTemplate: Product = {
   details: 'Добави детайли за продукта.',
   badges: ['Нов'],
   imageUrl: createProductArtwork('Нов продукт', 'Продуктова карта', '#6ea8fe'),
+  supplierSource: 'Добави източник за поръчка',
 };
 const newBrandTemplate: Brand = {
   name: 'Нова марка',
@@ -267,11 +266,6 @@ function AdminPage({ snapshot, onSnapshotChange, isAuthenticated, onAuthChange }
   const [adminStats, setAdminStats] = useState<AdminStats | null>(null);
   const [stockMovements, setStockMovements] = useState<StockMovementRecord[]>([]);
   const [isCatalogSyncing, setIsCatalogSyncing] = useState(false);
-  const [promotionPercent, setPromotionPercent] = useState('10');
-  const [promotionSkuSet, setPromotionSkuSet] = useState<string[]>([]);
-  const [stockAdjustment, setStockAdjustment] = useState('');
-  const [stockAdjustmentReason, setStockAdjustmentReason] = useState('Warehouse count');
-  const [isProductEditorOpen, setIsProductEditorOpen] = useState(false);
 
   const productTypesWithShoe: ProductType[] = [...productTypes];
 
@@ -414,29 +408,16 @@ function AdminPage({ snapshot, onSnapshotChange, isAuthenticated, onAuthChange }
             ...product,
             [field]: field === 'badges'
               ? value.split(',').map((item) => item.trim()).filter(Boolean)
-              : field === 'priceEur' || field === 'salePriceEur' || field === 'costEur' || field === 'weightGrams'
+              : field === 'priceEur' || field === 'costEur' || field === 'weightGrams'
                 ? (Number.isFinite(Number.parseFloat(value)) ? Number.parseFloat(value) : undefined)
                 : field === 'stock'
                   ? (Number.isFinite(Number.parseInt(value, 10)) ? Number.parseInt(value, 10) : undefined)
                   : value || undefined,
-            ...(field === 'priceEur' && Number.isFinite(Number.parseFloat(value))
-              ? { price: `EUR ${Number.parseFloat(value).toFixed(2)}` }
-              : {}),
           }
         : product,
     );
 
     persistAndSelect({ ...snapshot, products: updatedProducts }, 'Продуктът е записан.');
-  }
-
-  function toggleProductTag(tag: typeof merchandisingTags[number]) {
-    if (!selectedProduct) {
-      return;
-    }
-
-    const existingTags = selectedProduct.badges.filter((badge) => !merchandisingTags.includes(badge.trim().toUpperCase() as typeof merchandisingTags[number]));
-    const hasTag = selectedProduct.badges.some((badge) => badge.trim().toUpperCase() === tag);
-    updateProductField('badges', [...existingTags, ...(hasTag ? [] : [tag])].join(', '));
   }
 
   function updateCategoryField(field: keyof Category, value: string) {
@@ -648,59 +629,8 @@ function AdminPage({ snapshot, onSnapshotChange, isAuthenticated, onAuthChange }
       const nextSnapshot = await updateProductApi(selectedProduct.sku, selectedProduct);
       onSnapshotChange(nextSnapshot);
       setMessage('Продуктът е обновен.');
-      setIsProductEditorOpen(false);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Записът не успя.');
-    }
-  }
-
-  function togglePromotionProduct(sku: string) {
-    setPromotionSkuSet((selectedSkus) => selectedSkus.includes(sku)
-      ? selectedSkus.filter((selectedSku) => selectedSku !== sku)
-      : [...selectedSkus, sku]);
-  }
-
-  async function handleApplyPromotion() {
-    const percentage = Number.parseFloat(promotionPercent);
-    const selectedProducts = snapshot.products.filter((product) => promotionSkuSet.includes(product.sku));
-    if (!Number.isFinite(percentage) || percentage <= 0 || percentage >= 100 || selectedProducts.length === 0) {
-      setMessage('Избери продукти и въведи отстъпка между 1% и 99%.');
-      return;
-    }
-
-    try {
-      await Promise.all(selectedProducts.map((product) => updateProductApi(product.sku, {
-        ...product,
-        originalPriceEur: product.priceEur,
-        salePriceEur: Number(((product.priceEur ?? 0) * (1 - percentage / 100)).toFixed(2)),
-      })));
-      onSnapshotChange(await loadStoreSnapshot());
-      setMessage(`Промоцията е приложена за ${selectedProducts.length} продукта.`);
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'Промоцията не успя.');
-    }
-  }
-
-  async function handleStockAdjustment() {
-    if (!selectedProduct) {
-      return;
-    }
-
-    const deltaQuantity = Number.parseInt(stockAdjustment, 10);
-    if (!Number.isFinite(deltaQuantity) || deltaQuantity === 0 || !stockAdjustmentReason.trim()) {
-      setMessage('Въведи ненулева складова корекция и причина.');
-      return;
-    }
-
-    try {
-      const nextSnapshot = await adjustProductStockApi(selectedProduct.sku, deltaQuantity, stockAdjustmentReason.trim());
-      onSnapshotChange(nextSnapshot);
-      setStockAdjustment('');
-      setMessage('Складовата наличност е коригирана и записана в историята.');
-      const response = await fetch('/api/admin/stock-movements', { headers: getAuthHeaders() });
-      setStockMovements(await response.json() as StockMovementRecord[]);
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'Складовата корекция не успя.');
     }
   }
 
@@ -853,10 +783,7 @@ function AdminPage({ snapshot, onSnapshotChange, isAuthenticated, onAuthChange }
                 key={product.sku}
                 className={product.sku === selectedProductSku ? 'admin-list-item active' : 'admin-list-item'}
                 type="button"
-                onClick={() => {
-                  setSelectedProductSku(product.sku);
-                  setIsProductEditorOpen(true);
-                }}
+                onClick={() => setSelectedProductSku(product.sku)}
               >
                 <strong>{product.name}</strong>
                 <span>{product.categorySlug}</span>
@@ -935,21 +862,8 @@ function AdminPage({ snapshot, onSnapshotChange, isAuthenticated, onAuthChange }
         </aside>
 
         <section className="admin-editor">
-          {isProductEditorOpen ? (
-            <div className="admin-editor-overlay" role="presentation" onMouseDown={() => setIsProductEditorOpen(false)}>
-              <article
-                className="admin-panel admin-product-editor admin-product-editor-modal"
-                role="dialog"
-                aria-modal="true"
-                aria-labelledby="admin-product-editor-title"
-                onMouseDown={(event) => event.stopPropagation()}
-              >
-                <div className="admin-editor-modal-header">
-                  <p className="eyebrow" id="admin-product-editor-title">Редакция на продукт</p>
-                  <button className="retail-icon-btn" type="button" onClick={() => setIsProductEditorOpen(false)} aria-label="Затвори редакцията" title="Затвори">
-                    x
-                  </button>
-                </div>
+          <article className="admin-panel">
+            <p className="eyebrow">Редакция на продукт</p>
             {selectedProduct ? (
               <div className="admin-form-grid">
                 <label>
@@ -980,17 +894,25 @@ function AdminPage({ snapshot, onSnapshotChange, isAuthenticated, onAuthChange }
                   Марка
                   <input value={selectedProduct.brand} onChange={(event) => updateProductField('brand', event.target.value)} />
                 </label>
-                <label>
-                  Цена (EUR)
-                  <input type="number" min="0" step="0.01" inputMode="decimal" value={selectedProduct.priceEur?.toString() ?? ''} onChange={(event) => updateProductField('priceEur', event.target.value)} />
+                <label className="full-width">
+                  Източник за поръчка (само за админ)
+                  <input
+                    value={getProductSupplierSource(selectedProduct)}
+                    onChange={(event) => updateProductField('supplierSource', event.target.value)}
+                    placeholder="Напр. Tecnifibre - https://www.tecnifibre.com/"
+                  />
                 </label>
                 <label>
-                  Промо цена (EUR)
-                  <input type="number" min="0" step="0.01" inputMode="decimal" value={selectedProduct.salePriceEur?.toString() ?? ''} onChange={(event) => updateProductField('salePriceEur', event.target.value)} placeholder="Празно = без промоция" />
+                  Цена
+                  <input value={selectedProduct.price} onChange={(event) => updateProductField('price', event.target.value)} />
+                </label>
+                <label>
+                  Цена (EUR число)
+                  <input value={selectedProduct.priceEur?.toString() ?? ''} onChange={(event) => updateProductField('priceEur', event.target.value)} />
                 </label>
                 <label>
                   Себестойност (EUR)
-                  <input type="number" min="0" step="0.01" inputMode="decimal" value={selectedProduct.costEur?.toString() ?? ''} onChange={(event) => updateProductField('costEur', event.target.value)} />
+                  <input value={selectedProduct.costEur?.toString() ?? ''} onChange={(event) => updateProductField('costEur', event.target.value)} />
                 </label>
                 <label>
                   Наличност (бр.)
@@ -1030,19 +952,10 @@ function AdminPage({ snapshot, onSnapshotChange, isAuthenticated, onAuthChange }
                   Детайли
                   <textarea rows={4} value={selectedProduct.details} onChange={(event) => updateProductField('details', event.target.value)} />
                 </label>
-                <div className="full-width admin-product-tags">
-                  <strong>Етикети за продуктова карта</strong>
-                  {merchandisingTags.map((tag) => (
-                    <label key={tag} className={`product-tag product-tag-${tag.toLowerCase()}`}>
-                      <input
-                        type="checkbox"
-                        checked={selectedProduct.badges.some((badge) => badge.trim().toUpperCase() === tag)}
-                        onChange={() => toggleProductTag(tag)}
-                      />
-                      {tag}
-                    </label>
-                  ))}
-                </div>
+                <label className="full-width">
+                  Етикети, разделени със запетая
+                  <input value={selectedProduct.badges.join(', ')} onChange={(event) => updateProductField('badges', event.target.value)} />
+                </label>
                 <label className="full-width">
                   Image URL
                   <input value={selectedProduct.imageUrl} onChange={(event) => updateProductField('imageUrl', event.target.value)} />
@@ -1055,50 +968,6 @@ function AdminPage({ snapshot, onSnapshotChange, isAuthenticated, onAuthChange }
             ) : (
               <p className="admin-empty">Избери продукт.</p>
             )}
-              </article>
-            </div>
-          ) : null}
-
-          <article className="admin-panel">
-            <p className="eyebrow">Складова операция</p>
-            {selectedProduct ? (
-              <div className="admin-form-grid">
-                <p className="full-width admin-empty">{selectedProduct.name}: наличност {selectedProduct.stock ?? 0} бр.</p>
-                <label>
-                  Корекция (+/- бр.)
-                  <input value={stockAdjustment} onChange={(event) => setStockAdjustment(event.target.value)} placeholder="Напр. 24 или -2" inputMode="numeric" />
-                </label>
-                <label>
-                  Причина
-                  <input value={stockAdjustmentReason} onChange={(event) => setStockAdjustmentReason(event.target.value)} />
-                </label>
-                <div className="full-width admin-inline-actions">
-                  <button className="button button-primary" type="button" onClick={handleStockAdjustment}>Запиши складова корекция</button>
-                </div>
-              </div>
-            ) : <p className="admin-empty">Избери продукт.</p>}
-          </article>
-
-          <article className="admin-panel">
-            <p className="eyebrow">Промоции и групови отстъпки</p>
-            <div className="admin-form-grid">
-              <label>
-                Отстъпка (%)
-                <input value={promotionPercent} onChange={(event) => setPromotionPercent(event.target.value)} inputMode="decimal" />
-              </label>
-              <div className="admin-inline-actions">
-                <button className="button button-primary" type="button" onClick={handleApplyPromotion}>Приложи за избраните</button>
-              </div>
-              <div className="full-width admin-promotion-list">
-                {snapshot.products.map((product) => (
-                  <label key={product.sku} className="admin-promotion-product">
-                    <input type="checkbox" checked={promotionSkuSet.includes(product.sku)} onChange={() => togglePromotionProduct(product.sku)} />
-                    <span>{product.name}</span>
-                    <strong>{formatEur(product.priceEur ?? parsePriceValue(product.price))}</strong>
-                  </label>
-                ))}
-              </div>
-            </div>
           </article>
 
           <article className="admin-panel">
@@ -1187,11 +1056,11 @@ function AdminPage({ snapshot, onSnapshotChange, isAuthenticated, onAuthChange }
 
               <label>
                 Price EUR
-                <input type="number" min="0" step="0.01" inputMode="decimal" value={quickPriceEur} onChange={(event) => setQuickPriceEur(event.target.value)} />
+                <input value={quickPriceEur} onChange={(event) => setQuickPriceEur(event.target.value)} />
               </label>
               <label>
                 Cost EUR
-                <input type="number" min="0" step="0.01" inputMode="decimal" value={quickCostEur} onChange={(event) => setQuickCostEur(event.target.value)} />
+                <input value={quickCostEur} onChange={(event) => setQuickCostEur(event.target.value)} />
               </label>
               <label>
                 Stock amount

@@ -2,8 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { type BalanceProfile, type Brand, type Category, type Product } from '../data/catalog';
 import { getFavoriteSkus, isFavoriteSku, toggleFavoriteSku } from '../data/favorites';
-import { getSubcategoriesForProducts, getSubcategoryByParam, getSubcategoriesForSport } from '../data/subcategories';
-import ProductTags from '../components/ProductTags';
+import { getSubcategoriesForProducts, getSubcategoryByParam, shopSubcategories } from '../data/subcategories';
 
 type CategoryPageProps = {
   category: Category;
@@ -188,8 +187,8 @@ function CategoryPage({ category, products, brands, onAddToCart }: CategoryPageP
   );
 
   const subcategoryBlocks = useMemo(
-    () => getSubcategoriesForProducts(products, category.slug),
-    [products, category.slug],
+    () => getSubcategoriesForProducts(products),
+    [products],
   );
 
   const filteredProducts = useMemo(() => {
@@ -370,7 +369,7 @@ function CategoryPage({ category, products, brands, onAddToCart }: CategoryPageP
                 <h3>Sub-category</h3>
                 <select value={requestedSub} onChange={(event) => setParam('sub', event.target.value)}>
                   <option value="all">Всички</option>
-                  {getSubcategoriesForSport(category.slug).map((item) => <option key={item.slug} value={item.slug}>{item.label}</option>)}
+                  {shopSubcategories.map((item) => <option key={item.slug} value={item.slug}>{item.label}</option>)}
                 </select>
               </div>
 
@@ -454,7 +453,6 @@ function CategoryPage({ category, products, brands, onAddToCart }: CategoryPageP
                         <img className="product-image" src={product.imageUrl} alt={product.name} loading="lazy" />
                         <div className="product-body">
                           <h3 className={getProductTitleClass(product.name)}>{product.name}</h3>
-                          <ProductTags product={product} />
 
                           <p className="product-availability">{getStockLabel(product)}</p>
                           {isOutOfStock(product) ? <p className="delivery-note">Доставка 7-14 дни</p> : null}

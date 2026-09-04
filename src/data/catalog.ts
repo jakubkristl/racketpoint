@@ -22,6 +22,14 @@ export type Brand = {
   note: string;
 };
 
+const supplierSourceByBrand: Record<string, string> = {
+  unsquashable: 'Double Yellow Squash - https://www.doubleyellowsquash.com/',
+  karakal: 'Karakal - https://www.karakal.com/',
+  tecnifibre: 'Tecnifibre - https://www.tecnifibre.com/',
+  dunlop: 'Dunlop Sports - https://www.dunlopsports.com/',
+  head: 'HEAD - https://www.head.com/',
+};
+
 export type Product = {
   sku: string;
   name: string;
@@ -38,6 +46,7 @@ export type Product = {
   descriptionBg?: string;
   badges: string[];
   imageUrl: string;
+  supplierSource?: string;
   stock?: number;
   nameBg?: string;
   costEur?: number;
@@ -47,6 +56,18 @@ export type Product = {
   weightGrams?: number;
   attributes?: Record<string, string>;
 };
+
+export function getProductSupplierSource(product: Pick<Product, 'brand' | 'imageUrl' | 'supplierSource'>) {
+  if (product.supplierSource?.trim()) {
+    return product.supplierSource.trim();
+  }
+
+  if (product.imageUrl.includes('doubleyellowsquash.com')) {
+    return supplierSourceByBrand.unsquashable;
+  }
+
+  return supplierSourceByBrand[product.brand.toLowerCase()] ?? 'Добави източник за поръчка';
+}
 
 function mapUnsquashableToSportCatalog() {
   return unsquashableProducts.map((item) => ({

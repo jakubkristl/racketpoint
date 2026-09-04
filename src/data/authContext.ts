@@ -30,6 +30,15 @@ export interface AuthState {
   token: string | null;
 }
 
+interface AuthResponse {
+  user: User;
+  token: string;
+}
+
+interface ErrorResponse {
+  message?: string;
+}
+
 type AuthAction =
   | { type: 'LOGIN_REQUEST' }
   | { type: 'LOGIN_SUCCESS'; payload: { user: User; token: string } }
@@ -115,11 +124,11 @@ export function useAuth() {
       });
       
       if (!response.ok) {
-        const error = await response.json();
+        const error = await response.json() as ErrorResponse;
         throw new Error(error.message || 'Registration failed');
       }
 
-      const data = await response.json();
+      const data = await response.json() as AuthResponse;
       localStorage.setItem('racketpoint-auth-token', data.token);
       localStorage.setItem('racketpoint-user', JSON.stringify(data.user));
       dispatch({ type: 'REGISTER_SUCCESS', payload: data });
@@ -141,11 +150,11 @@ export function useAuth() {
       });
 
       if (!response.ok) {
-        const error = await response.json();
+        const error = await response.json() as ErrorResponse;
         throw new Error(error.message || 'Login failed');
       }
 
-      const data = await response.json();
+      const data = await response.json() as AuthResponse;
       localStorage.setItem('racketpoint-auth-token', data.token);
       localStorage.setItem('racketpoint-user', JSON.stringify(data.user));
       dispatch({ type: 'LOGIN_SUCCESS', payload: data });
@@ -176,7 +185,7 @@ export function useAuth() {
 
       if (!response.ok) throw new Error('Failed to update profile');
 
-      const updatedUser = await response.json();
+      const updatedUser = await response.json() as User;
       localStorage.setItem('racketpoint-user', JSON.stringify(updatedUser));
       dispatch({ type: 'UPDATE_USER', payload: updatedUser });
       return { success: true };

@@ -25,6 +25,8 @@ const deliveryChoices = [
 ] as const;
 
 const paymentChoices = [
+  { value: 'card', title: 'Карта', badge: 'V/MC', note: 'Сигурно онлайн картово плащане.' },
+  { value: 'google_pay', title: 'Google Pay', badge: 'GPay', note: 'Следва вграждане на портфейлния поток.' },
   { value: 'cash_on_delivery', title: 'Наложен платеж', badge: 'COD', note: 'Плащане при получаване на поръчката.' },
 ] as const;
 
@@ -67,7 +69,7 @@ function CheckoutPage({ products, lines, onIncrement, onDecrement, onRemove, onC
   const [city, setCity] = useState('');
   const [address, setAddress] = useState('');
   const [deliveryOption, setDeliveryOption] = useState<'econt' | 'speedy' | 'pickup'>('econt');
-  const [paymentOption, setPaymentOption] = useState<'cash_on_delivery'>('cash_on_delivery');
+  const [paymentOption, setPaymentOption] = useState<'card' | 'google_pay' | 'cash_on_delivery'>('card');
   const [notes, setNotes] = useState('');
   const [status, setStatus] = useState<string | null>(null);
 
@@ -114,8 +116,13 @@ function CheckoutPage({ products, lines, onIncrement, onDecrement, onRemove, onC
         ? 'Спиди'
         : 'Вземане от магазин';
 
-    const paymentLabel = 'Наложен платеж';
-    const paymentMethod = paymentOption;
+    const paymentLabel = paymentOption === 'google_pay'
+      ? 'Google Pay'
+      : paymentOption === 'cash_on_delivery'
+        ? 'Наложен платеж'
+        : 'Картово плащане';
+
+    const paymentMethod: 'card' | 'cash_on_delivery' = paymentOption === 'cash_on_delivery' ? 'cash_on_delivery' : 'card';
 
     const orderNotes = [
       `Телефон: ${phone}`,
@@ -156,7 +163,7 @@ function CheckoutPage({ products, lines, onIncrement, onDecrement, onRemove, onC
       setAddress('');
       setNotes('');
       setDeliveryOption('econt');
-      setPaymentOption('cash_on_delivery');
+      setPaymentOption('card');
       onClear();
       return;
     }

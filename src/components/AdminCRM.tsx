@@ -20,6 +20,8 @@ interface AdminCRMProps {
   language?: 'bg' | 'en';
 }
 
+type AdminResponse = any[] | Record<string, unknown>;
+
 function AdminCRM({ userRole = 'user', language = 'bg' }: AdminCRMProps) {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [orders, setOrders] = useState<any[]>([]);
@@ -48,10 +50,10 @@ function AdminCRM({ userRole = 'user', language = 'bg' }: AdminCRMProps) {
       });
 
       if (response.ok) {
-        const data = await response.json();
-        if (tab === 'orders') setOrders(data);
-        if (tab === 'users') setUsers(data);
-        if (tab === 'products') setProducts(data);
+        const data = await response.json() as AdminResponse;
+        if (tab === 'orders' && Array.isArray(data)) setOrders(data);
+        if (tab === 'users' && Array.isArray(data)) setUsers(data);
+        if (tab === 'products' && Array.isArray(data)) setProducts(data);
         if (tab === 'dashboard') setStats(data);
       }
     } catch (error) {
