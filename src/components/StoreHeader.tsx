@@ -2,7 +2,7 @@ import { type FormEvent, type ReactNode, useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import BrandLogo from './BrandLogo';
 import { getFavoriteSkus } from '../data/favorites';
-import { shopSubcategories } from '../data/subcategories';
+import { getSubcategoriesForSport } from '../data/subcategories';
 
 type StoreHeaderProps = {
   activeSportSlug?: string;
@@ -12,16 +12,14 @@ type NavItem = {
   key: string;
   label: string;
   to: string;
-  iconPath?: string;
 };
 
 const navOrder: NavItem[] = [
-  { key: 'squash', label: 'Скуош', to: '/category/squash', iconPath: '/branding/navigation/thumbnails/squash.png' },
-  { key: 'badminton', label: 'Бадминтон', to: '/category/badminton', iconPath: '/branding/navigation/thumbnails/badminton.png' },
-  { key: 'padel', label: 'Падел', to: '/category/padel', iconPath: '/branding/navigation/thumbnails/padel.png' },
-  { key: 'table-tennis', label: 'Тенис на маса', to: '/category/table-tennis', iconPath: '/branding/navigation/thumbnails/table-tennis.png' },
-  { key: 'tennis', label: 'Тенис', to: '/category/tennis', iconPath: '/branding/navigation/thumbnails/tennis.png' },
-  { key: 'contact', label: 'Контакт', to: '/contact' },
+  { key: 'squash', label: 'Скуош', to: '/category/squash' },
+  { key: 'badminton', label: 'Бадминтон', to: '/category/badminton' },
+  { key: 'padel', label: 'Падел', to: '/category/padel' },
+  { key: 'table-tennis', label: 'Тенис на маса', to: '/category/table-tennis' },
+  { key: 'tennis', label: 'Тенис', to: '/category/tennis' },
 ];
 
 function HeaderIcon({ children }: { children: ReactNode }) {
@@ -34,6 +32,7 @@ function StoreHeader({ activeSportSlug }: StoreHeaderProps) {
   const currentSearch = new URLSearchParams(location.search).get('q') ?? '';
   const [searchValue, setSearchValue] = useState(currentSearch);
   const [favoriteCount, setFavoriteCount] = useState(() => getFavoriteSkus().length);
+  const [openSport, setOpenSport] = useState<string | null>(null);
 
   useEffect(() => {
     setSearchValue(currentSearch);
@@ -73,33 +72,32 @@ function StoreHeader({ activeSportSlug }: StoreHeaderProps) {
 
         <nav className="retail-links" aria-label="Основна навигация">
           {navOrder.map((item) => {
-            const isActive = item.key === activeSportSlug || (item.key === 'contact' && location.pathname === '/contact');
-            const hasSubcategories = item.key !== 'contact';
+            const isActive = item.key === activeSportSlug;
+            const subcategories = getSubcategoriesForSport(item.key);
 
             return (
-              <div className="retail-nav-item" key={item.key}>
+              <div
+                className={openSport === item.key ? 'retail-nav-item is-open' : 'retail-nav-item'}
+                key={item.key}
+                onMouseEnter={() => setOpenSport(item.key)}
+                onMouseLeave={() => setOpenSport(null)}
+                onFocus={() => setOpenSport(item.key)}
+                onBlur={(event) => {
+                  if (!event.currentTarget.contains(event.relatedTarget)) {
+                    setOpenSport(null);
+                  }
+                }}
+              >
                 <Link
                   className={isActive ? 'retail-link active' : 'retail-link'}
                   to={item.to}
                 >
-                  {item.iconPath ? (
-                    <img
-                      className="retail-link-thumb"
-                      src={item.iconPath}
-                      alt=""
-                      aria-hidden="true"
-                      loading="lazy"
-                      onError={(event) => {
-                        event.currentTarget.style.display = 'none';
-                      }}
-                    />
-                  ) : null}
                   <span>{item.label}</span>
                 </Link>
 
-                {hasSubcategories ? (
+                {openSport === item.key ? (
                   <div className="retail-mega-menu" aria-label={`${item.label} подкатегории`}>
-                    {shopSubcategories.map((subcategory) => (
+                    {subcategories.map((subcategory) => (
                       <Link
                         className="retail-mega-link"
                         key={`${item.key}-${subcategory.slug}`}
@@ -142,6 +140,12 @@ function StoreHeader({ activeSportSlug }: StoreHeaderProps) {
         </form>
 
         <div className="retail-icons">
+          <Link
+            className={location.pathname === '/contact' ? 'retail-link active' : 'retail-link'}
+            to="/contact"
+          >
+            Контакт
+          </Link>
 
           <Link
             className={location.pathname.startsWith('/favorites') ? 'retail-icon-btn active' : 'retail-icon-btn'}

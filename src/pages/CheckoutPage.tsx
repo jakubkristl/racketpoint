@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import type { Product } from '../data/catalog';
-import { submitOrderRequest } from '../data/store';
+import { findProductBySku, submitOrderRequest } from '../data/store';
 import { savePendingBoricaOrder } from '../data/paymentSession';
 
 type CartLine = {
@@ -19,14 +19,12 @@ type CheckoutPageProps = {
 };
 
 const deliveryChoices = [
-  { value: 'econt', title: 'Еконт', badge: 'EC', note: 'Куриерска доставка. Интеграцията предстои.' },
-  { value: 'speedy', title: 'Спиди', badge: 'SP', note: 'Куриерска доставка. Интеграцията предстои.' },
-  { value: 'pickup', title: 'Вземане от магазин', badge: 'PU', note: 'Вземане от физически обект.' },
+  { value: 'pickup', title: 'Вземане от магазин', badge: 'София', note: 'Вземане от ул. „Любен Русев“ 6, 1113 София.' },
+  { value: 'courier', title: 'Куриер', badge: 'BG', note: 'Ще се свържем с вас за доставка след поръчката.' },
 ] as const;
 
 const paymentChoices = [
   { value: 'card', title: 'Карта', badge: 'V/MC', note: 'Сигурно онлайн картово плащане.' },
-  { value: 'google_pay', title: 'Google Pay', badge: 'GPay', note: 'Следва вграждане на портфейлния поток.' },
   { value: 'cash_on_delivery', title: 'Наложен платеж', badge: 'COD', note: 'Плащане при получаване на поръчката.' },
 ] as const;
 
@@ -68,23 +66,23 @@ function CheckoutPage({ products, lines, onIncrement, onDecrement, onRemove, onC
   const [phone, setPhone] = useState('');
   const [city, setCity] = useState('');
   const [address, setAddress] = useState('');
-  const [deliveryOption, setDeliveryOption] = useState<'econt' | 'speedy' | 'pickup'>('econt');
-  const [paymentOption, setPaymentOption] = useState<'card' | 'google_pay' | 'cash_on_delivery'>('card');
+  const [deliveryOption, setDeliveryOption] = useState<'pickup' | 'courier'>('pickup');
+  const [paymentOption, setPaymentOption] = useState<'card' | 'cash_on_delivery'>('card');
   const [notes, setNotes] = useState('');
   const [status, setStatus] = useState<string | null>(null);
 
   const cartItems = useMemo(() => {
-    const productBySku = new Map(products.map((product) => [product.sku, product] as const));
     const items: Array<{ sku: string; quantity: number; product: Product; lineTotal: number }> = [];
 
     for (const line of lines) {
-      const product = productBySku.get(line.sku);
+      const product = findProductBySku(products, line.sku);
       if (!product) {
         continue;
       }
       const price = product.priceEur || parsePrice(product.price || '0');
       items.push({
-        ...line,
+        sku: product.sku,
+        quantity: line.quantity,
         product,
         lineTotal: price * line.quantity,
       });
@@ -110,17 +108,8 @@ function CheckoutPage({ products, lines, onIncrement, onDecrement, onRemove, onC
       return;
     }
 
-    const deliveryLabel = deliveryOption === 'econt'
-      ? 'Еконт'
-      : deliveryOption === 'speedy'
-        ? 'Спиди'
-        : 'Вземане от магазин';
-
-    const paymentLabel = paymentOption === 'google_pay'
-      ? 'Google Pay'
-      : paymentOption === 'cash_on_delivery'
-        ? 'Наложен платеж'
-        : 'Картово плащане';
+    const deliveryLabel = deliveryOption === 'courier' ? 'Куриер' : 'Вземане от магазин';
+    const paymentLabel = paymentOption === 'cash_on_delivery' ? 'Наложен платеж' : 'Картово плащане';
 
     const paymentMethod: 'card' | 'cash_on_delivery' = paymentOption === 'cash_on_delivery' ? 'cash_on_delivery' : 'card';
 
@@ -162,7 +151,7 @@ function CheckoutPage({ products, lines, onIncrement, onDecrement, onRemove, onC
       setCity('');
       setAddress('');
       setNotes('');
-      setDeliveryOption('econt');
+      setDeliveryOption('pickup');
       setPaymentOption('card');
       onClear();
       return;

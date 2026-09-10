@@ -275,7 +275,7 @@ function normalizeProductImage(product: Product): Product {
 }
 
 function normalizeProductList(products: Product[]) {
-  return products.map(normalizeProductImage);
+  return retagCatalogProducts(products.map(normalizeProductImage));
 }
 
 function enrichProductsWithReferenceImages(products: Product[], references: Product[]) {
@@ -306,11 +306,17 @@ function hydrateProductImages(products: Product[], references: Product[]) {
 }
 
 function normalizeCmsState(snapshot: CmsState): CmsState {
-  const normalizedCategories = snapshot.categories.map((category) => ({
-    ...category,
-    // Force-remove legacy marketing filler from previously cached category entries.
-    heroCopy: '',
-  }));
+  const normalizedCategories = snapshot.categories.map((category) => {
+    const defaults = defaultCategories.find((item) => item.slug === category.slug);
+
+    return {
+      ...category,
+      ...defaults,
+      heroCopy: '',
+      name: defaults?.name ?? category.name,
+      description: defaults?.description ?? category.description,
+    };
+  });
 
   return {
     categories: normalizedCategories,
@@ -380,38 +386,118 @@ function loadOrders(): OrderRecord[] {
   }));
 }
 
-function mapSubCategoryToType(value: string | undefined): Product['type'] {
-  const normalized = (value ?? '').trim().toLowerCase();
+function mapSportToSlug(value: unknown): CategorySlug {
+  const normalized = String(value ?? 'squash').trim().toLowerCase();
 
-  if (normalized.includes('ball') || normalized.includes('shuttle')) {
-    return 'Balls';
+  if (normalized.includes('badminton')) {
+    return 'badminton';
   }
 
-  if (normalized.includes('apparel') || normalized.includes('wear')) {
-    return 'Wear';
+  if (normalized.includes('padel')) {
+    return 'padel';
   }
 
-  if (normalized.includes('shoe')) {
+  if (normalized.includes('table')) {
+    return 'table-tennis';
+  }
+
+  if (normalized.includes('tennis')) {
+    return 'tennis';
+  }
+
+  return 'squash';
+}
+
+function decodeProductText(value: unknown) {
+  return String(value ?? '')
+    .replace(/&#039;|&apos;/gi, "'")
+    .replace(/&amp;/gi, '&')
+    .replace(/&quot;/gi, '"')
+    .replace(/&nbsp;/gi, ' ')
+    .trim();
+}
+
+function typeFromTitle(text: string): Product['type'] | null {
+  const value = decodeProductText(text).toLowerCase();
+
+  if (/\b(shoe|shoes|trainer|trainers|footwear|obuv|обувки|gel-rocket|gel-court|gel-tactic|gel rocket|powerbreak|upcourt|blade ff|viper sl|viper pro|recoil strike|recoil ultra|asics)\b/.test(value)) {
     return 'Shoe';
   }
 
-  if (normalized.includes('bag')) {
+  if (/\b(bag|backpack|holdall|duffel|rucksack|taska|чанта|combi)\b/.test(value) || /\b\d{1,2}r\b/.test(value)) {
     return 'Bag';
   }
 
-  if (normalized.includes('string')) {
-    return 'String';
-  }
-
-  if (normalized.includes('grip') || normalized.includes('overgrip')) {
+  if (/\b(overgrip|replacement grip|grip|грип)\b/.test(value)) {
     return 'Grip';
   }
 
-  if (normalized.includes('accessor')) {
+  if (/\b(string reel|string set|strings?|vyplet|кордаж|корди|reel\s*\d+|set\s*\d+(?:[.,]\d+)?\s*m)\b/.test(value) && !/\b(racket|racquet|ракета)\b/.test(value)) {
+    return 'String';
+  }
+
+  if (/\b(shuttlecock|shuttle|kosik|пера)\b/.test(value)) {
+    return 'Balls';
+  }
+
+  if (/\b(squash ball|tennis ball|padel ball|loptick|lopty|balls?|топка|топчета|double yellow|single yellow)\b/.test(value) && !/\b(racket|racquet|ракета)\b/.test(value)) {
+    return 'Balls';
+  }
+
+  if (/\b(polo|tee\b|t-shirt|tshirt|shirt|shorts?|hoodie|jacket|skirt|socks?|sweater|fleece|jumper|bandana|apparel|облекло|insole|headband|hairband)\b/.test(value)) {
+    return 'Wear';
+  }
+
+  if (/\b(dampener|crashtape|bottle|wristband|hat|cap|tape|goggles|glasses|sunglasses|eyewear|towel|bumper|grommet|stencil|sweatband|visor|eye protection)\b/.test(value) && !/\b(racket|racquet|ракета)\b/.test(value)) {
     return 'Accessory';
   }
 
+  if (/\b(racket|racquet|frame|хилк|ракета)\b/.test(value)) {
+    return 'Racket';
+  }
+
+  return null;
+}
+
+function resolveProductType(item: {
+  title?: unknown;
+  name?: unknown;
+  subCategory?: unknown;
+  sub_category?: unknown;
+  type?: unknown;
+  attributes?: unknown;
+}): Product['type'] {
+  const title = decodeProductText(item.title ?? item.name);
+  const fromTitle = typeFromTitle(title);
+
+  // Importer buckets are untrusted (rackets were filed as Bags/Footwear from page copy).
+  // Classify from the product name; unknown racket-sport models default to Racket.
+  if (fromTitle) {
+    return fromTitle;
+  }
+
   return 'Racket';
+}
+
+function normalizeSkuToken(value: string) {
+  return value.toLowerCase().replace(/^prd_/, '').replace(/[^a-z0-9]/g, '');
+}
+
+export function findProductBySku(products: Product[], sku: string) {
+  const exact = products.find((product) => product.sku === sku);
+  if (exact) {
+    return exact;
+  }
+
+  const needle = normalizeSkuToken(sku);
+  if (!needle) {
+    return undefined;
+  }
+
+  return products.find((product) => {
+    const tokens = [product.sku, product.attributes?.sourceSku];
+    return tokens.some((token) => token && normalizeSkuToken(token) === needle);
+  });
 }
 
 function mapTypeToSubCategory(type: Product['type']) {
@@ -460,10 +546,10 @@ function mapApiProductToCatalogProduct(item: any): Product {
   const bestImageUrl = pickBestImageUrlFromCandidates(images);
 
   return {
-    sku: String(item.id ?? item.sku ?? ''),
-    name: String(item.title ?? 'Unnamed product'),
-    categorySlug: String(item.sport ?? 'squash') as CategorySlug,
-    type: mapSubCategoryToType(item.subCategory),
+    sku: String(item.sku ?? item.id ?? ''),
+    name: decodeProductText(item.title ?? item.name) || 'Unnamed product',
+    categorySlug: mapSportToSlug(item.sport ?? item.categorySlug),
+    type: resolveProductType(item),
     brand: String(item.brand ?? 'Racketpoint'),
     priceEur: Number.isFinite(effectivePrice) ? effectivePrice : 0,
     salePriceEur: discountPrice != null && Number.isFinite(discountPrice) ? discountPrice : undefined,
@@ -565,6 +651,18 @@ async function fetchImportedSquashpointProducts() {
   return Array.isArray(payload) ? payload.map(mapApiProductToCatalogProduct) : [];
 }
 
+function retagCatalogProducts(products: Product[]) {
+  return products.map((product) => ({
+    ...product,
+    name: decodeProductText(product.name) || product.name,
+    categorySlug: mapSportToSlug(product.categorySlug),
+    type: resolveProductType({
+      title: product.name,
+      name: product.name,
+    }),
+  }));
+}
+
 export async function fetchProducts() {
   const [mapped, referenceCatalog] = await Promise.all([
     fetchProductsFromApi().catch(() => [] as Product[]),
@@ -581,7 +679,15 @@ export async function fetchProducts() {
       }
     }
 
-    const normalized = hydrateProductImages(combined, referenceCatalog);
+    const existingSkus = new Set(combined.map((product) => product.sku));
+    for (const product of defaultProducts) {
+      if (!existingSkus.has(product.sku)) {
+        combined.push(product);
+        existingSkus.add(product.sku);
+      }
+    }
+
+    const normalized = retagCatalogProducts(hydrateProductImages(combined, referenceCatalog));
     productCache = normalized;
     return normalized;
   }
@@ -592,7 +698,7 @@ export async function fetchProducts() {
     if (seeded) {
       const retry = await fetchProductsFromApi().catch(() => [] as Product[]);
       if (retry.length > 0) {
-        const normalized = hydrateProductImages(retry, referenceCatalog);
+        const normalized = retagCatalogProducts(hydrateProductImages(retry, referenceCatalog));
         productCache = normalized;
         return normalized;
       }
@@ -600,14 +706,14 @@ export async function fetchProducts() {
 
     const localStarterCatalog = loadSnapshot().products;
     if (localStarterCatalog.length > 0) {
-      const normalized = hydrateProductImages(localStarterCatalog, referenceCatalog);
+      const normalized = retagCatalogProducts(hydrateProductImages(localStarterCatalog, referenceCatalog));
       productCache = normalized;
       return normalized;
     }
 
     const imported = referenceCatalog;
     if (imported.length > 0) {
-      const normalized = hydrateProductImages(imported, imported);
+      const normalized = retagCatalogProducts(hydrateProductImages(imported, imported));
       productCache = normalized;
       return normalized;
     }
@@ -615,7 +721,7 @@ export async function fetchProducts() {
     return [];
   }
 
-  const normalized = hydrateProductImages(mapped, referenceCatalog);
+  const normalized = retagCatalogProducts(hydrateProductImages(mapped, referenceCatalog));
   productCache = normalized;
   return normalized;
 }
@@ -641,7 +747,7 @@ export async function loadStoreSnapshot() {
   ]);
 
   return {
-    categories: cms.categories,
+    categories: defaultCategories,
     brands: cms.brands,
     products,
     orders,
@@ -652,7 +758,7 @@ export function getStoreSnapshot(): StoreSnapshot {
   const snapshot = loadSnapshot();
 
   return {
-    categories: snapshot.categories,
+    categories: defaultCategories,
     brands: snapshot.brands,
     products: normalizeProductList(productCache ?? snapshot.products),
     orders: orderCache.length > 0 ? orderCache : loadOrders(),

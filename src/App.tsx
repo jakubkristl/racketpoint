@@ -4,7 +4,7 @@ import HomePage from './pages/HomePage';
 import CategoryPage from './pages/CategoryPage';
 import type { CategorySlug } from './data/catalog';
 import AdminPage from './pages/AdminPage';
-import { getStoreSnapshot, loadStoreSnapshot, saveStoreSnapshot, submitOrderRequest, type StoreSnapshot } from './data/store';
+import { findProductBySku, getStoreSnapshot, loadStoreSnapshot, saveStoreSnapshot, submitOrderRequest, type StoreSnapshot } from './data/store';
 import { isAdminAuthenticated } from './data/adminAuth';
 import BrandLogo from './components/BrandLogo';
 import CartDrawer from './components/CartDrawer';
@@ -170,8 +170,14 @@ function App() {
   }, [cartLines]);
 
   useEffect(() => {
-    const existingSkus = new Set(store.products.map((product) => product.sku));
-    setCartLines((prevLines) => prevLines.filter((line) => existingSkus.has(line.sku)));
+    if (store.products.length === 0) {
+      return;
+    }
+
+    setCartLines((prevLines) => prevLines.map((line) => {
+      const product = findProductBySku(store.products, line.sku);
+      return product && product.sku !== line.sku ? { ...line, sku: product.sku } : line;
+    }));
   }, [store.products]);
 
   function handleSnapshotChange(nextSnapshot: StoreSnapshot) {
