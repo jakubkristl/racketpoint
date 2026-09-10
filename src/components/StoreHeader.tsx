@@ -103,19 +103,21 @@ function StoreHeader({ activeSportSlug }: StoreHeaderProps) {
                         key={`${item.key}-${subcategory.slug}`}
                         to={`${item.to}?sub=${encodeURIComponent(subcategory.slug)}`}
                       >
-                        <img
-                          src={subcategory.imageUrl}
-                          alt=""
-                          aria-hidden="true"
-                          loading="lazy"
-                          onError={(event) => {
-                            const target = event.currentTarget;
-                            if (target.src === subcategory.fallbackImageUrl) {
-                              return;
-                            }
-                            target.src = subcategory.fallbackImageUrl;
-                          }}
-                        />
+                        <span className="retail-mega-thumb">
+                          <img
+                            src={subcategory.imageUrl}
+                            alt=""
+                            aria-hidden="true"
+                            loading="lazy"
+                            onError={(event) => {
+                              const target = event.currentTarget;
+                              if (target.src === subcategory.fallbackImageUrl) {
+                                return;
+                              }
+                              target.src = subcategory.fallbackImageUrl;
+                            }}
+                          />
+                        </span>
                         <span>{subcategory.label}</span>
                       </Link>
                     ))}

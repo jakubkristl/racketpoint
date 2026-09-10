@@ -17,6 +17,7 @@ type ProductPayload = {
 
 type WorkerEnvironment = Env & { ADMIN_EMAIL?: string; ADMIN_PASSWORD?: string };
 const encoder = new TextEncoder();
+let adminUserReady = false;
 
 const schema = `
 	CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, name TEXT NOT NULL, email TEXT UNIQUE NOT NULL, password_hash TEXT NOT NULL, role TEXT NOT NULL, addresses TEXT NOT NULL DEFAULT '[]', created_at TEXT NOT NULL);
@@ -42,6 +43,31 @@ async function passwordMatches(password: string, stored: string) {
 	if (actual.length !== expected.length) return false;
 	let difference = 0; for (let index = 0; index < actual.length; index += 1) difference |= actual[index] ^ expected[index];
 	return difference === 0;
+}
+
+async function ensureAdminUser(env: WorkerEnvironment) {
+	if (adminUserReady) {
+		return;
+	}
+
+	const email = text(env.ADMIN_EMAIL || 'admin@racketpoint.bg', 254).toLowerCase();
+	const password = env.ADMIN_PASSWORD ?? '';
+	if (!/^\S+@\S+\.\S+$/.test(email) || password.length < 8) {
+		adminUserReady = true;
+		return;
+	}
+
+	const hash = await hashPassword(password);
+	const existing = await env.DB.prepare('SELECT id FROM users WHERE email=?').bind(email).first<{ id: string }>();
+	if (existing?.id) {
+		await env.DB.prepare('UPDATE users SET password_hash=?, role=? WHERE id=?').bind(hash, 'ADMIN', existing.id).run();
+	} else {
+		await env.DB.prepare('INSERT INTO users (id,name,email,password_hash,role,addresses,created_at) VALUES (?,?,?,?,?,?,?)')
+			.bind(`adm_${crypto.randomUUID()}`, 'Racketpoint Admin', email, hash, 'ADMIN', '[]', new Date().toISOString())
+			.run();
+	}
+
+	adminUserReady = true;
 }
 
 async function auth(request: Request, env: WorkerEnvironment, register: boolean) {
@@ -102,10 +128,12 @@ export default {
 			const path = new URL(request.url).pathname;
 			if (path === '/api/auth/register' && request.method === 'POST') {
 				await env.DB.exec(schema);
+				await ensureAdminUser(env);
 				return auth(request, env, true);
 			}
 			if (path === '/api/auth/login' && request.method === 'POST') {
 				await env.DB.exec(schema);
+				await ensureAdminUser(env);
 				return auth(request, env, false);
 			}
 			if (path === '/api/products') {

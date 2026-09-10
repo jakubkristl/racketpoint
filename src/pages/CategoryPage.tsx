@@ -337,23 +337,25 @@ function CategoryPage({ category, products, brands, onAddToCart }: CategoryPageP
                     className={isSelected ? 'subcategory-block active' : 'subcategory-block'}
                     onClick={() => selectSubCategory(subCategory.slug)}
                   >
-                    <img
-                      className="subcategory-block-media"
-                      src={subCategory.imageUrl}
-                      alt={`${subCategory.label} stock visual`}
-                      loading="lazy"
-                      onError={(event) => {
-                        const target = event.currentTarget;
-                        if (target.src.endsWith('/branding/logo-fallback.png')) {
-                          return;
-                        }
-                        if (target.src === subCategory.fallbackImageUrl) {
-                          target.src = '/branding/logo-fallback.png';
-                          return;
-                        }
-                        target.src = subCategory.fallbackImageUrl;
-                      }}
-                    />
+                    <span className="subcategory-block-thumb">
+                      <img
+                        className="subcategory-block-media"
+                        src={subCategory.imageUrl}
+                        alt={`${subCategory.label} stock visual`}
+                        loading="lazy"
+                        onError={(event) => {
+                          const target = event.currentTarget;
+                          if (target.src.endsWith('/branding/logo-fallback.png')) {
+                            return;
+                          }
+                          if (target.src === subCategory.fallbackImageUrl) {
+                            target.src = '/branding/logo-fallback.png';
+                            return;
+                          }
+                          target.src = subCategory.fallbackImageUrl;
+                        }}
+                      />
+                    </span>
                     <div className="subcategory-block-copy">
                       <span>{subCategory.label}</span>
                       <strong>{subCategory.count} артикула</strong>
