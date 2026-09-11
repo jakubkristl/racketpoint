@@ -1,0 +1,17 @@
+{
+  "name": "Racketpoint.bg",
+  "install": "cd /agent/repos/racketpoint && npm ci",
+  "terminals": [
+    {
+      "name": "dev",
+      "command": "cd /agent/repos/racketpoint && npm run dev",
+      "description": "Vite dev server for the Racketpoint.bg storefront on http://localhost:5173"
+    }
+  ],
+  "ports": [
+    {
+      "name": "Vite dev server",
+      "port": 5173
+    }
+  ]
+}
