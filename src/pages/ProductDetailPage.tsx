@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import type { Product } from '../data/catalog';
 import { isFavoriteSku, toggleFavoriteSku } from '../data/favorites';
+import { getAvailabilityClassName, getStockDetailLabel, isMadeToOrder, MADE_TO_ORDER_DELIVERY_NOTE } from '../data/inventory';
 import { getPublicAttributes, getPublicDescription } from '../data/publicCatalog';
 
 function formatEur(value: number) {
@@ -26,26 +27,6 @@ function getPricePresentation(product: Product) {
     sale: typeof product.priceEur === 'number' ? formatEur(product.priceEur) : 'EUR 0.00',
     original: null,
   };
-}
-
-function getAvailability(product: Product) {
-  if (typeof product.stock !== 'number') {
-    return 'Наличност: ограничено количество';
-  }
-
-  if (product.stock <= 0) {
-    return 'Наличност: изчерпано';
-  }
-
-  if (product.stock < 5) {
-    return `Наличност: ограничени бройки (${product.stock})`;
-  }
-
-  return `Наличност: налично (${product.stock})`;
-}
-
-function isOutOfStock(product: Product) {
-  return typeof product.stock === 'number' && product.stock <= 0;
 }
 
 type ProductDetailPageProps = {
@@ -84,8 +65,8 @@ function ProductDetailPage({ product, onAddToCart }: ProductDetailPageProps) {
           <article className="product-detail-panel">
             <p className="eyebrow">{product.brand}</p>
             <h1>{product.name}</h1>
-            <p className="product-detail-availability">{getAvailability(product)}</p>
-            {isOutOfStock(product) ? <p className="delivery-note delivery-note-detail">Доставка 7-14 дни</p> : null}
+            <p className={getAvailabilityClassName(product, 'product-detail-availability')}>{getStockDetailLabel(product)}</p>
+            {isMadeToOrder(product) ? <p className="delivery-note delivery-note-detail">{MADE_TO_ORDER_DELIVERY_NOTE}</p> : null}
             <div className="price-stack product-detail-price">
               {pricing.isOnSale && pricing.original ? <p className="price-original">{pricing.original}</p> : null}
               <strong className={pricing.isOnSale ? 'price-sale' : ''}>{pricing.sale}</strong>

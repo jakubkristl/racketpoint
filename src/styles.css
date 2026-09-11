@@ -1650,6 +1650,10 @@ button {
   font-weight: 700;
 }
 
+.product-detail-availability.made-to-order {
+  color: #9a3412;
+}
+
 .product-detail-price {
   padding-top: 4px;
 }
@@ -2060,6 +2064,18 @@ button {
   color: #163d67;
   font-size: 0.76rem;
   font-weight: 700;
+}
+
+.product-availability.made-to-order,
+.stock-pill.made-to-order {
+  border-color: rgba(180, 83, 9, 0.28);
+  background: rgba(251, 191, 36, 0.18);
+  color: #9a3412;
+}
+
+.stock-pill.made-to-order {
+  background: rgba(251, 191, 36, 0.18) !important;
+  color: #9a3412 !important;
 }
 
 .delivery-note {

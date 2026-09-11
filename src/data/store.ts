@@ -69,8 +69,8 @@ export type CatalogSyncResult = {
 
 export type CmsCollection = 'categories' | 'brands' | 'products';
 
-const storageKey = 'racketpoint-cms-state-v6';
-const previousStorageKey = 'racketpoint-cms-state-v5';
+const storageKey = 'racketpoint-cms-state-v7';
+const previousStorageKey = 'racketpoint-cms-state-v6';
 const orderStorageKey = 'racketpoint-order-inbox-v4';
 const legacyStorageKey = 'racketshop-cms-state-v3';
 const legacyOrderStorageKey = 'racketshop-order-inbox-v3';
@@ -300,8 +300,44 @@ function enrichProductsWithReferenceImages(products: Product[], references: Prod
   });
 }
 
+function resolveCatalogSourceProduct(product: Product) {
+  const skuNorm = normalizeSkuToken(product.sku);
+  const sourceSku = product.attributes?.sourceSku;
+  const sourceNorm = sourceSku ? normalizeSkuToken(sourceSku) : '';
+
+  const match = defaultProducts.find((item) => {
+    const itemNorm = normalizeSkuToken(item.sku);
+    return itemNorm === skuNorm || (sourceNorm.length > 0 && itemNorm === sourceNorm);
+  });
+
+  if (match && hasUsableProductImage(match.imageUrl) && !isFallbackProductImage(match.imageUrl)) {
+    return match;
+  }
+
+  return null;
+}
+
 function hydrateProductImages(products: Product[], references: Product[]) {
-  const enriched = enrichProductsWithReferenceImages(products, references);
+  const withCatalogImages = products.map((product) => {
+    if (!isFallbackProductImage(product.imageUrl)) {
+      return product;
+    }
+
+    const catalogSource = resolveCatalogSourceProduct(product);
+    if (catalogSource) {
+      return {
+        ...product,
+        name: catalogSource.name,
+        details: catalogSource.details,
+        imageUrl: catalogSource.imageUrl,
+        supplierSource: catalogSource.supplierSource ?? product.supplierSource,
+      };
+    }
+
+    return product;
+  });
+
+  const enriched = enrichProductsWithReferenceImages(withCatalogImages, references);
   return normalizeProductList(enriched);
 }
 
@@ -321,7 +357,7 @@ function normalizeCmsState(snapshot: CmsState): CmsState {
   return {
     categories: normalizedCategories,
     brands: snapshot.brands,
-    products: normalizeProductList(snapshot.products),
+    products: hydrateProductImages(snapshot.products, []),
   };
 }
 
@@ -760,7 +796,7 @@ export function getStoreSnapshot(): StoreSnapshot {
   return {
     categories: defaultCategories,
     brands: snapshot.brands,
-    products: normalizeProductList(productCache ?? snapshot.products),
+    products: productCache ?? hydrateProductImages(snapshot.products, []),
     orders: orderCache.length > 0 ? orderCache : loadOrders(),
   };
 }

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { type BalanceProfile, type Brand, type Category, type Product } from '../data/catalog';
 import { getFavoriteSkus, isFavoriteSku, toggleFavoriteSku } from '../data/favorites';
+import { getAvailabilityClassName, getStockLabel, isMadeToOrder, MADE_TO_ORDER_DELIVERY_NOTE } from '../data/inventory';
 import { getSubcategoriesForProducts, getSubcategoryByParam, getSubcategoriesForSport } from '../data/subcategories';
 
 type CategoryPageProps = {
@@ -58,26 +59,6 @@ function getPriceValue(product: Product) {
 
   const parsed = Number.parseFloat(product.price.replace(/[^\d.,-]/g, '').replace(',', '.'));
   return Number.isFinite(parsed) ? parsed : 0;
-}
-
-function getStockLabel(product: Product) {
-  if (typeof product.stock !== 'number') {
-    return 'Ограничено количество';
-  }
-
-  if (product.stock <= 0) {
-    return 'Изчерпано';
-  }
-
-  if (product.stock < 5) {
-    return 'Ограничени бройки';
-  }
-
-  return 'Налично';
-}
-
-function isOutOfStock(product: Product) {
-  return typeof product.stock === 'number' && product.stock <= 0;
 }
 
 function hasSize(product: Product, requestedSize: string) {
@@ -234,11 +215,11 @@ function CategoryPage({ category, products, brands, onAddToCart }: CategoryPageP
         return false;
       }
 
-      if (requestedStock === 'in-stock' && (typeof product.stock === 'number' ? product.stock <= 0 : false)) {
+      if (requestedStock === 'in-stock' && isMadeToOrder(product)) {
         return false;
       }
 
-      if (requestedStock === 'out-of-stock' && (typeof product.stock === 'number' ? product.stock > 0 : true)) {
+      if (requestedStock === 'out-of-stock' && !isMadeToOrder(product)) {
         return false;
       }
 
@@ -429,7 +410,7 @@ function CategoryPage({ category, products, brands, onAddToCart }: CategoryPageP
                 <select value={requestedStock} onChange={(event) => setParam('stock', event.target.value)}>
                   <option value="all">Всички</option>
                   <option value="in-stock">Налично</option>
-                  <option value="out-of-stock">Изчерпано</option>
+                  <option value="out-of-stock">Поръчва се при заявка</option>
                 </select>
               </div>
 
@@ -460,8 +441,8 @@ function CategoryPage({ category, products, brands, onAddToCart }: CategoryPageP
                         <div className="product-body">
                           <h3 className={getProductTitleClass(product.name)}>{product.name}</h3>
 
-                          <p className="product-availability">{getStockLabel(product)}</p>
-                          {isOutOfStock(product) ? <p className="delivery-note">Доставка 7-14 дни</p> : null}
+                          <p className={getAvailabilityClassName(product, 'product-availability')}>{getStockLabel(product)}</p>
+                          {isMadeToOrder(product) ? <p className="delivery-note">{MADE_TO_ORDER_DELIVERY_NOTE}</p> : null}
 
                           <div className="product-footer">
                             <div className="price-stack">

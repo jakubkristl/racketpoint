@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import type { Category, Product } from '../data/catalog';
+import { getAvailabilityClassName, getStockLabel, isMadeToOrder, MADE_TO_ORDER_DELIVERY_NOTE } from '../data/inventory';
 import { getPublicShortDetails } from '../data/publicCatalog';
 import { getSubcategoriesForSport, shopSubcategories } from '../data/subcategories';
 
@@ -53,26 +54,6 @@ const sportVisuals = [
     href: '/category/tennis',
   },
 ];
-
-function getInventoryBadge(product: Product) {
-  if (typeof product.stock !== 'number') {
-    return 'Ограничено количество';
-  }
-
-  if (product.stock <= 0) {
-    return 'Изчерпано';
-  }
-
-  if (product.stock < 5) {
-    return 'Ограничени бройки';
-  }
-
-  return 'Налично';
-}
-
-function isOutOfStock(product: Product) {
-  return typeof product.stock === 'number' && product.stock <= 0;
-}
 
 function getDisplayPriceValue(product: Product) {
   if (typeof product.salePriceEur === 'number' && Number.isFinite(product.salePriceEur)) {
@@ -251,10 +232,10 @@ function HomePage({ categories, products, onAddToCart }: HomePageProps) {
                     <p>{getPublicShortDetails(product)}</p>
                   </div>
                   <div className="product-badges">
-                    <span className="stock-pill">{getInventoryBadge(product)}</span>
+                    <span className={getAvailabilityClassName(product, 'stock-pill')}>{getStockLabel(product)}</span>
                     {getHomepageFeatureBadges(product).map((badge) => <span key={badge}>{badge}</span>)}
                   </div>
-                  {isOutOfStock(product) ? <p className="delivery-note">Доставка 7-14 дни</p> : null}
+                  {isMadeToOrder(product) ? <p className="delivery-note">{MADE_TO_ORDER_DELIVERY_NOTE}</p> : null}
                   <div className="product-footer">
                     <strong>{getDisplayPriceValue(product)}</strong>
                     <button type="button" onClick={() => onAddToCart(product.sku)}>Бързо добавяне</button>

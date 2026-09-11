@@ -199,8 +199,8 @@ export default async function handler(req: any, res: any) {
 
       const update = await sql`
         UPDATE products
-        SET stock = stock - ${item.quantity}
-        WHERE id = ${item.sku} AND stock >= ${item.quantity}
+        SET stock = GREATEST(0, stock - ${item.quantity})
+        WHERE id = ${item.sku}
         RETURNING id, selling_price, discount_price, stock
       `;
 
@@ -208,7 +208,7 @@ export default async function handler(req: any, res: any) {
         for (const rollback of decremented) {
           await sql`UPDATE products SET stock = stock + ${rollback.quantity} WHERE id = ${rollback.sku}`;
         }
-        res.status(409).json({ error: `Insufficient stock for SKU: ${item.sku}` });
+        res.status(400).json({ error: `Product not found for SKU: ${item.sku}` });
         return;
       }
 
