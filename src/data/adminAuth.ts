@@ -1,56 +1,28 @@
-const authKey = 'racketpoint-admin-auth';
-
-function allowFrontendAdminPassword() {
-  return import.meta.env.DEV || import.meta.env.VITE_ENABLE_FRONTEND_ADMIN_PASSWORD === 'true';
-}
-
-function hasWindow() {
-  return typeof window !== 'undefined';
-}
-
-function readPassword() {
-  if (!allowFrontendAdminPassword()) {
-    return '';
-  }
-
-  return import.meta.env.VITE_ADMIN_PASSWORD?.trim() || '';
-}
+import { getSessionUser, login, logout } from './accountStore';
 
 export function isAdminAuthenticated() {
-  if (!hasWindow()) {
-    return false;
-  }
-
-  return window.sessionStorage.getItem(authKey) === 'true';
+  return getSessionUser()?.role === 'ADMIN';
 }
 
-export function signInAdmin(password: string) {
-  const configuredPassword = readPassword();
-  if (!configuredPassword) {
-    return false;
+export async function signInAdmin(email: string, password: string) {
+  try {
+    const user = await login(email.trim().toLowerCase(), password);
+
+    if (user.role !== 'ADMIN') {
+      logout();
+      throw new Error('Този акаунт няма достъп до админ панела.');
+    }
+
+    return user;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '';
+    if (/invalid credentials/i.test(message)) {
+      throw new Error('Невалиден имейл или парола.');
+    }
+    throw error;
   }
-
-  const isValid = password.trim() === configuredPassword;
-
-  if (hasWindow() && isValid) {
-    window.sessionStorage.setItem(authKey, 'true');
-  }
-
-  return isValid;
 }
 
 export function signOutAdmin() {
-  if (hasWindow()) {
-    window.sessionStorage.removeItem(authKey);
-  }
-}
-
-export function getAdminPasswordHint() {
-  if (!allowFrontendAdminPassword()) {
-    return 'Frontend admin password unlock is disabled in production.';
-  }
-
-  return import.meta.env.VITE_ADMIN_PASSWORD
-    ? 'Конфигурирана в VITE_ADMIN_PASSWORD'
-    : 'VITE_ADMIN_PASSWORD is required for frontend admin unlock.';
+  logout();
 }

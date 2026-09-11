@@ -306,8 +306,8 @@ export function createSportArtwork(sport: string, _subtitle: string, accent: str
 export const categories: Category[] = [
   {
     slug: 'squash',
-    name: 'Squash',
-    description: 'Rackets, grips, strings, bags and apparel for squash players.',
+    name: 'Скуош',
+    description: 'Ракети, грипове, кордажи, чанти и екипировка за скуош.',
     heroTitle: 'Squash selection for club and tournament players.',
     heroCopy: '',
     accent: 'Main launch vertical',
@@ -315,8 +315,8 @@ export const categories: Category[] = [
   },
   {
     slug: 'tennis',
-    name: 'Tennis',
-    description: 'Tennis rackets, grips, bags, balls and essentials.',
+    name: 'Тенис',
+    description: 'Тенис ракети, грипове, чанти, топки и аксесоари.',
     heroTitle: 'Tennis category foundation for performance and club play.',
     heroCopy: '',
     accent: 'Growth category',
@@ -324,8 +324,8 @@ export const categories: Category[] = [
   },
   {
     slug: 'table-tennis',
-    name: 'Table Tennis',
-    description: 'Bats, rubbers, balls, covers and accessories.',
+    name: 'Тенис на маса',
+    description: 'Хилки, топчета, калъфи и аксесоари.',
     heroTitle: 'Table tennis layout with clear subcategory navigation.',
     heroCopy: '',
     accent: 'Structured rollout',
@@ -333,8 +333,8 @@ export const categories: Category[] = [
   },
   {
     slug: 'badminton',
-    name: 'Badminton',
-    description: 'Badminton rackets, shuttlecocks, grips, apparel and bags.',
+    name: 'Бадминтон',
+    description: 'Бадминтон ракети, пера, грипове, екипировка и чанти.',
     heroTitle: 'Badminton setup for recreational and competitive players.',
     heroCopy: '',
     accent: 'Category expansion',
@@ -342,8 +342,8 @@ export const categories: Category[] = [
   },
   {
     slug: 'padel',
-    name: 'Padel',
-    description: 'Padel rackets, overgrips, bags and match accessories.',
+    name: 'Падел',
+    description: 'Падел ракети, грипове, чанти и аксесоари.',
     heroTitle: 'Padel category prepared for retail conversion and merchandising.',
     heroCopy: '',
     accent: 'Fast-moving category',

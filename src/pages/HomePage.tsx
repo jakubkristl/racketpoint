@@ -1,8 +1,7 @@
 import { Link } from 'react-router-dom';
 import type { Category, Product } from '../data/catalog';
-import { createSportArtwork } from '../data/catalog';
 import { getPublicShortDetails } from '../data/publicCatalog';
-import { shopSubcategories } from '../data/subcategories';
+import { getSubcategoriesForSport, shopSubcategories } from '../data/subcategories';
 
 type HomePageProps = {
   categories: Category[];
@@ -12,51 +11,45 @@ type HomePageProps = {
 
 const heroVideoPath = '/branding/homepage/hero/launch-loop.mp4';
 
-function createHomeHeroArtwork() {
-  return createSportArtwork('Hero', 'Racketpoint editorial storefront', '#0d4e8f');
-}
-
-const heroPosterPath = createHomeHeroArtwork();
-
 const sportVisuals = [
   {
     slug: 'squash',
     sport: 'Скуош',
     caption: '',
-    imageUrl: '/branding/homepage/categories/squash.webp',
-    fallbackImageUrl: 'https://images.pexels.com/photos/7648269/pexels-photo-7648269.jpeg?auto=compress&cs=tinysrgb&w=1200',
+    imageUrl: 'https://images.pexels.com/photos/7648269/pexels-photo-7648269.jpeg?auto=compress&cs=tinysrgb&w=1200',
+    fallbackImageUrl: 'https://images.pexels.com/photos/14629511/pexels-photo-14629511.jpeg?auto=compress&cs=tinysrgb&w=1200',
     href: '/category/squash',
   },
   {
     slug: 'badminton',
     sport: 'Бадминтон',
     caption: '',
-    imageUrl: '/branding/homepage/categories/badminton.webp',
-    fallbackImageUrl: 'https://images.pexels.com/photos/2202685/pexels-photo-2202685.jpeg?auto=compress&cs=tinysrgb&w=1200',
+    imageUrl: 'https://images.pexels.com/photos/2202685/pexels-photo-2202685.jpeg?auto=compress&cs=tinysrgb&w=1200',
+    fallbackImageUrl: 'https://images.pexels.com/photos/3660204/pexels-photo-3660204.jpeg?auto=compress&cs=tinysrgb&w=1200',
     href: '/category/badminton',
   },
   {
     slug: 'padel',
     sport: 'Падел',
     caption: '',
-    imageUrl: '/branding/homepage/categories/padel.webp',
-    fallbackImageUrl: 'https://images.pexels.com/photos/35248332/pexels-photo-35248332.jpeg?auto=compress&cs=tinysrgb&w=1200',
+    imageUrl: 'https://images.pexels.com/photos/35248332/pexels-photo-35248332.jpeg?auto=compress&cs=tinysrgb&w=1200',
+    fallbackImageUrl: 'https://images.pexels.com/photos/35248374/pexels-photo-35248374.jpeg?auto=compress&cs=tinysrgb&w=1200',
     href: '/category/padel',
   },
   {
     slug: 'table-tennis',
     sport: 'Тенис на маса',
     caption: '',
-    imageUrl: '/branding/homepage/categories/table-tennis.webp',
-    fallbackImageUrl: 'https://images.pexels.com/photos/709134/pexels-photo-709134.jpeg?auto=compress&cs=tinysrgb&w=1200',
+    imageUrl: 'https://images.pexels.com/photos/709134/pexels-photo-709134.jpeg?auto=compress&cs=tinysrgb&w=1200',
+    fallbackImageUrl: 'https://images.pexels.com/photos/4080060/pexels-photo-4080060.jpeg?auto=compress&cs=tinysrgb&w=1200',
     href: '/category/table-tennis',
   },
   {
     slug: 'tennis',
     sport: 'Тенис',
     caption: '',
-    imageUrl: '/branding/homepage/categories/tennis.webp',
-    fallbackImageUrl: 'https://images.pexels.com/photos/209977/pexels-photo-209977.jpeg?auto=compress&cs=tinysrgb&w=1200',
+    imageUrl: 'https://images.pexels.com/photos/209977/pexels-photo-209977.jpeg?auto=compress&cs=tinysrgb&w=1200',
+    fallbackImageUrl: 'https://images.pexels.com/photos/5739115/pexels-photo-5739115.jpeg?auto=compress&cs=tinysrgb&w=1200',
     href: '/category/tennis',
   },
 ];
@@ -177,21 +170,28 @@ function HomePage({ categories, products, onAddToCart }: HomePageProps) {
             </div>
           </article>
 
-          <article className="home-editorial-media" aria-label="Hero animation area">
-            <img
-              src={heroPosterPath}
-              alt="Racketpoint hero"
-              className="home-editorial-poster"
-              loading="eager"
-            />
-            <video className="home-editorial-video" autoPlay muted loop playsInline poster={heroPosterPath}>
+          <a
+            className="home-editorial-media"
+            href="https://www.doubleyellowsquash.com/"
+            target="_blank"
+            rel="noreferrer"
+            aria-label="Посети Double Yellow Squash"
+          >
+            <video
+              className="home-editorial-video"
+              autoPlay
+              muted
+              loop
+              playsInline
+              preload="auto"
+              onCanPlay={(event) => {
+                event.currentTarget.play().catch(() => undefined);
+              }}
+            >
               <source src={heroVideoPath} type="video/mp4" />
+              <source src="/branding/homepage/hero/FB%20Final.mp4" type="video/mp4" />
             </video>
-            <div className="home-editorial-media-overlay">
-              <strong>Поставете анимационния файл тук:</strong>
-              <span>/public/branding/homepage/hero/launch-loop.mp4</span>
-            </div>
-          </article>
+          </a>
         </section>
 
         <section className="section" id="shop-categories">
@@ -278,7 +278,7 @@ function HomePage({ categories, products, onAddToCart }: HomePageProps) {
               <article className="mega-menu-column" key={`home-${category.slug}`}>
                 <h3>{category.name}</h3>
                 <div className="mega-menu-links">
-                  {shopSubcategories.map((sub) => (
+                  {getSubcategoriesForSport(category.slug).map((sub) => (
                     <Link key={`${category.slug}-${sub.slug}`} to={`/category/${category.slug}?sub=${encodeURIComponent(sub.slug)}`}>
                       {sub.label}
                     </Link>

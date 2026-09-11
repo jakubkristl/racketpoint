@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { type BalanceProfile, type Brand, type Category, type Product } from '../data/catalog';
 import { getFavoriteSkus, isFavoriteSku, toggleFavoriteSku } from '../data/favorites';
-import { getSubcategoriesForProducts, getSubcategoryByParam, shopSubcategories } from '../data/subcategories';
+import { getSubcategoriesForProducts, getSubcategoryByParam, getSubcategoriesForSport } from '../data/subcategories';
 
 type CategoryPageProps = {
   category: Category;
@@ -187,8 +187,12 @@ function CategoryPage({ category, products, brands, onAddToCart }: CategoryPageP
   );
 
   const subcategoryBlocks = useMemo(
-    () => getSubcategoriesForProducts(products),
-    [products],
+    () => getSubcategoriesForProducts(products, category.slug),
+    [products, category.slug],
+  );
+  const sportSubcategories = useMemo(
+    () => getSubcategoriesForSport(category.slug),
+    [category.slug],
   );
 
   const filteredProducts = useMemo(() => {
@@ -323,7 +327,7 @@ function CategoryPage({ category, products, brands, onAddToCart }: CategoryPageP
         <section className="section" id="products">
           <div className="catalog-top-row">
             <div className="subcategory-block-grid">
-              {subcategoryBlocks.map((subCategory) => {
+              {subcategoryBlocks.filter((subCategory) => subCategory.count > 0).map((subCategory) => {
                 const isSelected = requestedSub === subCategory.slug || requestedSub === subCategory.label;
 
                 return (
@@ -333,23 +337,25 @@ function CategoryPage({ category, products, brands, onAddToCart }: CategoryPageP
                     className={isSelected ? 'subcategory-block active' : 'subcategory-block'}
                     onClick={() => selectSubCategory(subCategory.slug)}
                   >
-                    <img
-                      className="subcategory-block-media"
-                      src={subCategory.imageUrl}
-                      alt={`${subCategory.label} stock visual`}
-                      loading="lazy"
-                      onError={(event) => {
-                        const target = event.currentTarget;
-                        if (target.src.endsWith('/branding/logo-fallback.png')) {
-                          return;
-                        }
-                        if (target.src === subCategory.fallbackImageUrl) {
-                          target.src = '/branding/logo-fallback.png';
-                          return;
-                        }
-                        target.src = subCategory.fallbackImageUrl;
-                      }}
-                    />
+                    <span className="subcategory-block-thumb">
+                      <img
+                        className="subcategory-block-media"
+                        src={subCategory.imageUrl}
+                        alt={`${subCategory.label} stock visual`}
+                        loading="lazy"
+                        onError={(event) => {
+                          const target = event.currentTarget;
+                          if (target.src.endsWith('/branding/logo-fallback.png')) {
+                            return;
+                          }
+                          if (target.src === subCategory.fallbackImageUrl) {
+                            target.src = '/branding/logo-fallback.png';
+                            return;
+                          }
+                          target.src = subCategory.fallbackImageUrl;
+                        }}
+                      />
+                    </span>
                     <div className="subcategory-block-copy">
                       <span>{subCategory.label}</span>
                       <strong>{subCategory.count} артикула</strong>
@@ -363,18 +369,18 @@ function CategoryPage({ category, products, brands, onAddToCart }: CategoryPageP
           <div className="catalog-layout">
             <aside className="catalog-sidebar" id="filters">
               <div className="catalog-sidebar-header">
-                <h3>Filters</h3>
+                <h3>Филтри</h3>
               </div>
               <div className="filter-block">
-                <h3>Sub-category</h3>
+                <h3>Подкатегория</h3>
                 <select value={requestedSub} onChange={(event) => setParam('sub', event.target.value)}>
                   <option value="all">Всички</option>
-                  {shopSubcategories.map((item) => <option key={item.slug} value={item.slug}>{item.label}</option>)}
+                  {sportSubcategories.map((item) => <option key={item.slug} value={item.slug}>{item.label}</option>)}
                 </select>
               </div>
 
               <div className="filter-block">
-                <h3>Brand</h3>
+                <h3>Марка</h3>
                 <select value={requestedBrand} onChange={(event) => setParam('brand', event.target.value)}>
                   <option value="all">Всички марки</option>
                   {availableBrands.map((brand) => <option key={brand} value={brand}>{brand}</option>)}
@@ -393,15 +399,15 @@ function CategoryPage({ category, products, brands, onAddToCart }: CategoryPageP
               </div>
 
               <div className="filter-block">
-                <h3>Size</h3>
+                <h3>Размер</h3>
                 <select value={requestedSize} onChange={(event) => setParam('size', event.target.value)}>
-                  <option value="">All sizes</option>
+                  <option value="">Всички размери</option>
                   {sizeOptions.map((size) => <option key={size} value={size}>{size}</option>)}
                 </select>
               </div>
 
               <div className="filter-block">
-                <h3>Weight</h3>
+                <h3>Тегло</h3>
                 <select value={requestedWeight} onChange={(event) => setParam('weight', event.target.value)}>
                   <option value="">Всички тегла</option>
                   <option value="lte120">До 120 г</option>

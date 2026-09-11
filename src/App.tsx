@@ -4,7 +4,7 @@ import HomePage from './pages/HomePage';
 import CategoryPage from './pages/CategoryPage';
 import type { CategorySlug } from './data/catalog';
 import AdminPage from './pages/AdminPage';
-import { getStoreSnapshot, loadStoreSnapshot, saveStoreSnapshot, submitOrderRequest, type StoreSnapshot } from './data/store';
+import { findProductBySku, getStoreSnapshot, loadStoreSnapshot, saveStoreSnapshot, submitOrderRequest, type StoreSnapshot } from './data/store';
 import { isAdminAuthenticated } from './data/adminAuth';
 import BrandLogo from './components/BrandLogo';
 import CartDrawer from './components/CartDrawer';
@@ -15,7 +15,6 @@ import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
 import VerifyEmailPage from './pages/VerifyEmailPage';
 import ContactPage from './pages/ContactPage';
-import { getSessionUser } from './data/accountStore';
 import StoreHeader from './components/StoreHeader';
 import ProductDetailPage from './pages/ProductDetailPage';
 import FavoritesPage from './pages/FavoritesPage';
@@ -111,10 +110,6 @@ function FavoritesRoute({
   return <FavoritesPage products={snapshot.products} onAddToCart={onAddToCart} />;
 }
 
-function hasAdminRole() {
-  return getSessionUser()?.role === 'ADMIN';
-}
-
 function App() {
   const [store, setStore] = useState<StoreSnapshot>(() => getStoreSnapshot());
   const [isAdminAuthed, setIsAdminAuthed] = useState(() => isAdminAuthenticated());
@@ -154,6 +149,7 @@ function App() {
 
   useEffect(() => {
     function handleAuthChanged() {
+      setIsAdminAuthed(isAdminAuthenticated());
       loadStoreSnapshot()
         .then((snapshot) => setStore(snapshot))
         .catch(() => undefined);
@@ -170,8 +166,14 @@ function App() {
   }, [cartLines]);
 
   useEffect(() => {
-    const existingSkus = new Set(store.products.map((product) => product.sku));
-    setCartLines((prevLines) => prevLines.filter((line) => existingSkus.has(line.sku)));
+    if (store.products.length === 0) {
+      return;
+    }
+
+    setCartLines((prevLines) => prevLines.map((line) => {
+      const product = findProductBySku(store.products, line.sku);
+      return product && product.sku !== line.sku ? { ...line, sku: product.sku } : line;
+    }));
   }, [store.products]);
 
   function handleSnapshotChange(nextSnapshot: StoreSnapshot) {
@@ -322,7 +324,7 @@ function App() {
             <AdminPage
               snapshot={store}
               onSnapshotChange={handleSnapshotChange}
-              isAuthenticated={isAdminAuthed || hasAdminRole()}
+              isAuthenticated={isAdminAuthed}
               onAuthChange={handleAdminAuthChange}
             />
           )}

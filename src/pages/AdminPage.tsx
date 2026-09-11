@@ -21,7 +21,7 @@ import {
 } from '../data/store';
 import { createProductArtwork, getProductSupplierSource } from '../data/catalog';
 import type { Brand, Category, Product, CategorySlug, ProductType } from '../data/catalog';
-import { getAdminPasswordHint, signInAdmin, signOutAdmin } from '../data/adminAuth';
+import { signInAdmin, signOutAdmin } from '../data/adminAuth';
 import type { ChangeEvent, FormEvent } from 'react';
 import BrandLogo from '../components/BrandLogo';
 import { unsquashableProducts } from '../data/productsUnsquashable';
@@ -241,7 +241,11 @@ function mergeBrands(current: Brand[], incoming: Brand[] | undefined, products: 
 }
 
 function AdminPage({ snapshot, onSnapshotChange, isAuthenticated, onAuthChange }: AdminPageProps) {
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [adminTab, setAdminTab] = useState<'dashboard' | 'products' | 'orders' | 'catalog'>('dashboard');
+  const [productQuery, setProductQuery] = useState('');
   const [selectedProductSku, setSelectedProductSku] = useState(snapshot.products[0]?.sku ?? '');
   const [selectedCategorySlug, setSelectedCategorySlug] = useState(snapshot.categories[0]?.slug ?? '');
   const [selectedBrandName, setSelectedBrandName] = useState(snapshot.brands[0]?.name ?? '');
@@ -274,7 +278,18 @@ function AdminPage({ snapshot, onSnapshotChange, isAuthenticated, onAuthChange }
   const selectedBrand = snapshot.brands.find((brand) => brand.name === selectedBrandName) ?? snapshot.brands[0];
   const selectedOrder = snapshot.orders.find((order) => order.reference === selectedOrderReference) ?? snapshot.orders[0];
 
-  const visibleOrders = useMemo(() => snapshot.orders.slice(0, 20), [snapshot.orders]);
+  const visibleOrders = useMemo(() => snapshot.orders.slice(0, 40), [snapshot.orders]);
+  const filteredProducts = useMemo(() => {
+    const query = productQuery.trim().toLowerCase();
+    const matches = query
+      ? snapshot.products.filter((product) => {
+          const haystack = `${product.name} ${product.sku} ${product.brand} ${product.categorySlug} ${product.type}`.toLowerCase();
+          return haystack.includes(query);
+        })
+      : snapshot.products;
+
+    return matches.slice(0, 50);
+  }, [productQuery, snapshot.products]);
   const salesStats = useMemo(() => {
     const productBySku = new Map(snapshot.products.map((product) => [product.sku, product] as const));
     const soldBySku = new Map<string, number>();
@@ -380,21 +395,30 @@ function AdminPage({ snapshot, onSnapshotChange, isAuthenticated, onAuthChange }
     setMessage(statusMessage);
   }
 
-  function handleLogin(event: FormEvent<HTMLFormElement>) {
+  async function handleLogin(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    setIsLoggingIn(true);
+    setMessage('');
 
-    const authed = signInAdmin(password);
-    onAuthChange(authed);
-    setMessage(authed ? 'Админ достъпът е разрешен.' : 'Невалидна админ парола.');
-    if (authed) {
+    try {
+      await signInAdmin(email, password);
+      onAuthChange(true);
       setPassword('');
+      setMessage('Влязохте в админ панела.');
+      window.dispatchEvent(new CustomEvent('racketpoint:auth-changed'));
+    } catch (error) {
+      onAuthChange(false);
+      setMessage(error instanceof Error ? error.message : 'Невалиден имейл или парола.');
+    } finally {
+      setIsLoggingIn(false);
     }
   }
 
   function handleLogout() {
     signOutAdmin();
     onAuthChange(false);
-    setMessage('Админът е отписан.');
+    setMessage('Излязохте от админ панела.');
+    window.dispatchEvent(new CustomEvent('racketpoint:auth-changed'));
   }
 
   function updateProductField(field: keyof Product, value: string) {
@@ -712,6 +736,10 @@ function AdminPage({ snapshot, onSnapshotChange, isAuthenticated, onAuthChange }
   }
 
   function handleReset() {
+    if (!window.confirm('Това връща каталога към началните данни. Продължавате ли?')) {
+      return;
+    }
+
     resetStoreSnapshot();
     const nextSnapshot = {
       ...snapshot,
@@ -724,48 +752,64 @@ function AdminPage({ snapshot, onSnapshotChange, isAuthenticated, onAuthChange }
   if (!isAuthenticated) {
     return (
       <div className="page-shell admin-shell">
-        <header className="hero admin-hero">
-          <BrandLogo compact subtitle="CMS" />
-          <h1>Вход за админ</h1>
-          <p className="intro">{getAdminPasswordHint()}</p>
+        <section className="admin-login-card">
+          <BrandLogo compact subtitle="Админ" />
+          <h1>Вход за персонала</h1>
+          <p className="intro">Въведи служебния имейл и парола. Магазинът остава недостъпен без тях.</p>
           <form className="admin-login" onSubmit={handleLogin}>
             <label>
-              Парола
-              <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} />
+              Имейл
+              <input
+                type="email"
+                autoComplete="username"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                required
+              />
             </label>
-            <button className="button button-primary" type="submit">
-              Вход
+            <label>
+              Парола
+              <input
+                type="password"
+                autoComplete="current-password"
+                minLength={8}
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                required
+              />
+            </label>
+            <button className="button button-primary" type="submit" disabled={isLoggingIn}>
+              {isLoggingIn ? 'Влизане...' : 'Вход'}
             </button>
           </form>
           {message ? <p className="form-status">{message}</p> : null}
-        </header>
+          <a className="admin-login-back" href="/">Обратно към магазина</a>
+        </section>
       </div>
     );
   }
 
   return (
-    <div className="page-shell admin-shell">
+    <div className="page-shell admin-shell" data-tab={adminTab}>
       <header className="hero admin-hero">
         <div className="topbar">
           <div>
-            <BrandLogo compact subtitle="CMS" />
-            <h1>Racketpoint съдържание.</h1>
+            <BrandLogo compact subtitle="Админ" />
+            <h1>Управление на магазина</h1>
           </div>
           <a className="nav-cta" href="/">
-            Обратно към магазина
+            Към магазина
           </a>
         </div>
 
+        <nav className="admin-tabs" aria-label="Админ раздели">
+          <button className={adminTab === 'dashboard' ? 'admin-tab active' : 'admin-tab'} type="button" onClick={() => setAdminTab('dashboard')}>Табло</button>
+          <button className={adminTab === 'products' ? 'admin-tab active' : 'admin-tab'} type="button" onClick={() => setAdminTab('products')}>Продукти</button>
+          <button className={adminTab === 'orders' ? 'admin-tab active' : 'admin-tab'} type="button" onClick={() => setAdminTab('orders')}>Поръчки</button>
+          <button className={adminTab === 'catalog' ? 'admin-tab active' : 'admin-tab'} type="button" onClick={() => setAdminTab('catalog')}>Каталог</button>
+        </nav>
+
         <div className="admin-actions">
-          <button className="button button-primary" type="button" onClick={() => setImportText(exportStoreSnapshot())}>
-            Експорт на JSON
-          </button>
-          <button className="button button-primary" type="button" onClick={handleSeedStarterCatalog}>
-            Seed starter catalog
-          </button>
-          <button className="button button-secondary" type="button" onClick={handleReset}>
-            Нулирай каталога
-          </button>
           <button className="button button-secondary" type="button" onClick={handleLogout}>
             Изход
           </button>
@@ -776,9 +820,16 @@ function AdminPage({ snapshot, onSnapshotChange, isAuthenticated, onAuthChange }
 
       <main className="admin-layout">
         <aside className="admin-sidebar">
-          <section className="admin-list-card">
-            <p className="eyebrow">Продукти</p>
-            {snapshot.products.map((product) => (
+          <section className="admin-list-card admin-pane-products">
+            <p className="eyebrow">Продукти ({snapshot.products.length})</p>
+            <input
+              className="admin-search"
+              type="search"
+              value={productQuery}
+              onChange={(event) => setProductQuery(event.target.value)}
+              placeholder="Търси по име, SKU или марка"
+            />
+            {filteredProducts.map((product) => (
               <button
                 key={product.sku}
                 className={product.sku === selectedProductSku ? 'admin-list-item active' : 'admin-list-item'}
@@ -786,9 +837,13 @@ function AdminPage({ snapshot, onSnapshotChange, isAuthenticated, onAuthChange }
                 onClick={() => setSelectedProductSku(product.sku)}
               >
                 <strong>{product.name}</strong>
-                <span>{product.categorySlug}</span>
+                <span>{product.brand} · {product.type} · {product.sku}</span>
               </button>
             ))}
+            {filteredProducts.length === 0 ? <p className="admin-empty">Няма продукти по това търсене.</p> : null}
+            {productQuery.trim() === '' && snapshot.products.length > filteredProducts.length ? (
+              <p className="admin-empty">Показани са първите {filteredProducts.length}. Използвай търсенето за останалите.</p>
+            ) : null}
             <div className="admin-create-stack">
               <input value={newProduct.sku} onChange={(event) => setNewProduct({ ...newProduct, sku: event.target.value })} placeholder="Нов SKU" />
               <input value={newProduct.name} onChange={(event) => setNewProduct({ ...newProduct, name: event.target.value })} placeholder="Име на продукта" />
@@ -798,7 +853,7 @@ function AdminPage({ snapshot, onSnapshotChange, isAuthenticated, onAuthChange }
             </div>
           </section>
 
-          <section className="admin-list-card">
+          <section className="admin-list-card admin-pane-catalog">
             <p className="eyebrow">Категории</p>
             {snapshot.categories.map((category) => (
               <button
@@ -820,7 +875,7 @@ function AdminPage({ snapshot, onSnapshotChange, isAuthenticated, onAuthChange }
             </div>
           </section>
 
-          <section className="admin-list-card">
+          <section className="admin-list-card admin-pane-catalog">
             <p className="eyebrow">Марки</p>
             {snapshot.brands.map((brand) => (
               <button
@@ -841,7 +896,7 @@ function AdminPage({ snapshot, onSnapshotChange, isAuthenticated, onAuthChange }
             </div>
           </section>
 
-          <section className="admin-list-card">
+          <section className="admin-list-card admin-pane-orders">
             <p className="eyebrow">Поръчки</p>
             {visibleOrders.length > 0 ? (
               visibleOrders.map((order) => (
@@ -862,7 +917,7 @@ function AdminPage({ snapshot, onSnapshotChange, isAuthenticated, onAuthChange }
         </aside>
 
         <section className="admin-editor">
-          <article className="admin-panel">
+          <article className="admin-panel admin-pane-products">
             <p className="eyebrow">Редакция на продукт</p>
             {selectedProduct ? (
               <div className="admin-form-grid">
@@ -970,7 +1025,7 @@ function AdminPage({ snapshot, onSnapshotChange, isAuthenticated, onAuthChange }
             )}
           </article>
 
-          <article className="admin-panel">
+          <article className="admin-panel admin-pane-catalog">
             <p className="eyebrow">Редакция на категория</p>
             {selectedCategory ? (
               <div className="admin-form-grid">
@@ -1012,7 +1067,7 @@ function AdminPage({ snapshot, onSnapshotChange, isAuthenticated, onAuthChange }
             )}
           </article>
 
-          <article className="admin-panel">
+          <article className="admin-panel admin-pane-catalog">
             <p className="eyebrow">Редакция на марка</p>
             {selectedBrand ? (
               <div className="admin-form-grid">
@@ -1041,8 +1096,8 @@ function AdminPage({ snapshot, onSnapshotChange, isAuthenticated, onAuthChange }
             )}
           </article>
 
-          <article className="admin-panel">
-            <p className="eyebrow">Бързо добавяне (чекбокс)</p>
+          <article className="admin-panel admin-pane-products">
+            <p className="eyebrow">Бързо добавяне</p>
             <div className="admin-form-grid">
               <label className="full-width">
                 Product name
@@ -1158,7 +1213,7 @@ function AdminPage({ snapshot, onSnapshotChange, isAuthenticated, onAuthChange }
             </div>
           </article>
 
-          <article className="admin-panel">
+          <article className="admin-panel admin-pane-dashboard">
             <p className="eyebrow">Статистика на продажбите</p>
             {adminStats ? (
               <div className="admin-stats-grid">
@@ -1247,7 +1302,7 @@ function AdminPage({ snapshot, onSnapshotChange, isAuthenticated, onAuthChange }
             ) : null}
           </article>
 
-          <article className="admin-panel">
+          <article className="admin-panel admin-pane-catalog">
             <p className="eyebrow">Импорт и експорт</p>
             <label>
               Качи catalog JSON (offline файл)
@@ -1268,10 +1323,16 @@ function AdminPage({ snapshot, onSnapshotChange, isAuthenticated, onAuthChange }
               <button className="button button-secondary" type="button" onClick={() => setImportText(exportStoreSnapshot())}>
                 Зареди JSON експорт
               </button>
+              <button className="button button-secondary" type="button" onClick={handleSeedStarterCatalog}>
+                Зареди стартов каталог
+              </button>
+              <button className="button button-secondary" type="button" onClick={handleReset}>
+                Нулирай каталога
+              </button>
             </div>
           </article>
 
-          <article className="admin-panel">
+          <article className="admin-panel admin-pane-orders">
             <p className="eyebrow">Входящи заявки</p>
             {selectedOrder ? (
               <div className="admin-order-detail">
@@ -1313,8 +1374,8 @@ function AdminPage({ snapshot, onSnapshotChange, isAuthenticated, onAuthChange }
             )}
           </article>
 
-          <article className="admin-panel">
-            <p className="eyebrow">Stock movements</p>
+          <article className="admin-panel admin-pane-dashboard">
+            <p className="eyebrow">Движения по склад</p>
             {stockMovements.length > 0 ? (
               <div className="admin-order-list">
                 {stockMovements.slice(0, 30).map((movement) => (

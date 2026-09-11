@@ -185,6 +185,7 @@ function AccountPage() {
 
         <div className="account-toolbar">
           <a className="button button-secondary" href="/">Към магазина</a>
+          {sessionUser?.role === 'ADMIN' ? <a className="button button-secondary" href="/admin">Админ панел</a> : null}
           {sessionUser ? <button className="button button-primary" type="button" onClick={handleLogout}>Изход</button> : null}
         </div>
 

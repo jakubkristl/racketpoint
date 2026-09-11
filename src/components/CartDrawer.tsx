@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import type { Product } from '../data/catalog';
+import { findProductBySku } from '../data/store';
 
 type CartLine = {
   sku: string;
@@ -42,19 +43,17 @@ function CartDrawer({
   const [status, setStatus] = useState<string | null>(null);
 
   const cartItems = useMemo(() => {
-    const productBySku = new Map(products.map((product) => [product.sku, product] as const));
-
     const items: Array<{ sku: string; quantity: number; product: Product; lineTotal: number }> = [];
 
     for (const line of lines) {
-      const product = productBySku.get(line.sku);
+      const product = findProductBySku(products, line.sku);
       if (!product) {
         continue;
       }
 
       const unitPrice = product.priceEur || parsePrice(product.price || '0');
       items.push({
-        sku: line.sku,
+        sku: product.sku,
         quantity: line.quantity,
         product,
         lineTotal: unitPrice * line.quantity,
