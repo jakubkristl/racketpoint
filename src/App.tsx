@@ -15,7 +15,10 @@ import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
 import VerifyEmailPage from './pages/VerifyEmailPage';
 import ContactPage from './pages/ContactPage';
+import CookieConsent from './components/CookieConsent';
+import StoreFooter from './components/StoreFooter';
 import StoreHeader from './components/StoreHeader';
+import LegalPage from './pages/LegalPage';
 import ProductDetailPage from './pages/ProductDetailPage';
 import FavoritesPage from './pages/FavoritesPage';
 import CheckoutPage from './pages/CheckoutPage';
@@ -114,18 +117,22 @@ function App() {
   const [store, setStore] = useState<StoreSnapshot>(() => getStoreSnapshot());
   const [isAdminAuthed, setIsAdminAuthed] = useState(() => isAdminAuthenticated());
   const [cartLines, setCartLines] = useState<CartLine[]>(() => loadCartLines());
+  const [cookieSettingsOpen, setCookieSettingsOpen] = useState(false);
   const location = useLocation();
   const checkoutRetryToken = location.search.includes('checkout=retry') ? location.search : '';
   const isAdminRoute = location.pathname.startsWith('/admin');
   const isAccountRoute = location.pathname.startsWith('/account');
   const isPaymentResultRoute = location.pathname.startsWith('/payments/borica/result');
   const isCheckoutRoute = location.pathname.startsWith('/checkout');
+  const isLegalRoute = ['/terms', '/returns', '/cookies', '/privacy'].includes(location.pathname);
   const isNotFoundRoute = !['/', '/account', '/contact', '/forgot-password', '/reset-password', '/verify-email'].includes(location.pathname)
+    && !isLegalRoute
     && !location.pathname.startsWith('/category/')
     && !location.pathname.startsWith('/product/')
     && !location.pathname.startsWith('/favorites')
     && !location.pathname.startsWith('/checkout');
   const showGlobalHeader = !isAdminRoute && !isAccountRoute && !isPaymentResultRoute && !isNotFoundRoute;
+  const showStoreChrome = !isAdminRoute && !isPaymentResultRoute;
   const activeSportSlug = location.pathname.startsWith('/category/')
     ? decodeURIComponent(location.pathname.replace('/category/', '').split('/')[0] || '')
     : undefined;
@@ -317,6 +324,10 @@ function App() {
         <Route path="/reset-password" element={<ResetPasswordPage />} />
         <Route path="/verify-email" element={<VerifyEmailPage />} />
         <Route path="/contact" element={<ContactPage />} />
+        <Route path="/terms" element={<LegalPage />} />
+        <Route path="/returns" element={<LegalPage />} />
+        <Route path="/cookies" element={<LegalPage />} />
+        <Route path="/privacy" element={<LegalPage />} />
         <Route path="/payments/borica/result" element={<PaymentResultPage onBoricaApproved={handleBoricaApproved} />} />
         <Route
           path="/admin"
@@ -357,6 +368,16 @@ function App() {
           onDecrement={handleDecrementCartLine}
           onRemove={handleRemoveCartLine}
         />
+      ) : null}
+
+      {showStoreChrome ? (
+        <>
+          <StoreFooter onOpenCookieSettings={() => setCookieSettingsOpen(true)} />
+          <CookieConsent
+            forceOpen={cookieSettingsOpen}
+            onCloseSettings={() => setCookieSettingsOpen(false)}
+          />
+        </>
       ) : null}
     </>
   );

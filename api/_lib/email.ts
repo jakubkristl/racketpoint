@@ -15,7 +15,8 @@ function asBool(value: string | undefined, fallback = false) {
 
 export async function sendTransactionalEmail(message: EmailMessage) {
   const webhookUrl = (process.env.EMAIL_WEBHOOK_URL ?? '').trim();
-  const from = (process.env.EMAIL_FROM ?? 'no-reply@racketpoint.bg').trim();
+  const from = (process.env.EMAIL_FROM ?? 'info@racketpoint.bg').trim();
+  const replyTo = (process.env.EMAIL_REPLY_TO ?? 'jakubkristl77@gmail.com').trim();
 
   if (webhookUrl) {
     const response = await fetch(webhookUrl, {
@@ -25,6 +26,7 @@ export async function sendTransactionalEmail(message: EmailMessage) {
       },
       body: JSON.stringify({
         from,
+        replyTo,
         to: message.to,
         subject: message.subject,
         text: message.text,
@@ -44,6 +46,7 @@ export async function sendTransactionalEmail(message: EmailMessage) {
   if (asBool(process.env.EMAIL_DEBUG_LOG_ONLY, true) || process.env.NODE_ENV !== 'production') {
     console.log('[email:debug]', {
       from,
+      replyTo,
       to: message.to,
       subject: message.subject,
       text: message.text,

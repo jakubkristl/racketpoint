@@ -24,7 +24,6 @@ import type { Brand, Category, Product, CategorySlug, ProductType } from '../dat
 import { signInAdmin, signOutAdmin } from '../data/adminAuth';
 import type { ChangeEvent, FormEvent } from 'react';
 import BrandLogo from '../components/BrandLogo';
-import { unsquashableProducts } from '../data/productsUnsquashable';
 import { getAuthHeaders, getSessionUser } from '../data/accountStore';
 
 type AdminPageProps = {
@@ -53,8 +52,8 @@ type StockMovementRecord = {
   productTitle?: string;
 };
 
-const productTypes: ProductType[] = ['Racket', 'Balls', 'Wear', 'Bag', 'Accessory', 'String', 'Grip', 'Shoe'];
 const quickAddProductTypes: ProductType[] = ['Racket', 'Shoe', 'Grip', 'Wear', 'Bag', 'Balls', 'Accessory', 'String'];
+const productBadges = ['SALE', 'HOT', 'NEW', 'LIMITED', 'PRO'] as const;
 const mainSportOptions = [
   { slug: 'squash', label: 'Squash' },
   { slug: 'tennis', label: 'Tennis' },
@@ -70,21 +69,6 @@ const newCategoryTemplate: Category = {
   heroCopy: 'Текст за hero секцията.',
   accent: 'Нова секция',
   focus: ['Ракети', 'Обувки'],
-};
-const newProductTemplate: Product = {
-  sku: 'SKU-NEW',
-  name: 'Нов продукт',
-  categorySlug: 'squash',
-  type: 'Racket',
-  brand: 'Нова марка',
-  price: '€0.00',
-  priceEur: 0,
-  costEur: 0,
-  stock: 0,
-  details: 'Добави детайли за продукта.',
-  badges: ['Нов'],
-  imageUrl: createProductArtwork('Нов продукт', 'Продуктова карта', '#6ea8fe'),
-  supplierSource: 'Добави източник за поръчка',
 };
 const newBrandTemplate: Brand = {
   name: 'Нова марка',
@@ -244,34 +228,26 @@ function AdminPage({ snapshot, onSnapshotChange, isAuthenticated, onAuthChange }
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoggingIn, setIsLoggingIn] = useState(false);
-  const [adminTab, setAdminTab] = useState<'dashboard' | 'products' | 'orders' | 'catalog'>('dashboard');
+  const [adminTab, setAdminTab] = useState<'dashboard' | 'products' | 'orders' | 'catalog'>('products');
   const [productQuery, setProductQuery] = useState('');
   const [selectedProductSku, setSelectedProductSku] = useState(snapshot.products[0]?.sku ?? '');
   const [selectedCategorySlug, setSelectedCategorySlug] = useState(snapshot.categories[0]?.slug ?? '');
   const [selectedBrandName, setSelectedBrandName] = useState(snapshot.brands[0]?.name ?? '');
   const [selectedOrderReference, setSelectedOrderReference] = useState(snapshot.orders[0]?.reference ?? '');
   const [newCategory, setNewCategory] = useState<Category>(newCategoryTemplate);
-  const [newProduct, setNewProduct] = useState<Product>(newProductTemplate);
   const [newBrand, setNewBrand] = useState<Brand>(newBrandTemplate);
   const [importText, setImportText] = useState('');
   const [message, setMessage] = useState('');
   const [quickName, setQuickName] = useState('');
   const [quickBrand, setQuickBrand] = useState('Karakal');
   const [quickPriceEur, setQuickPriceEur] = useState('79.00');
-  const [quickCostEur, setQuickCostEur] = useState('44.00');
+  const [quickSaleEur, setQuickSaleEur] = useState('');
   const [quickSportSlug, setQuickSportSlug] = useState<CategorySlug>('squash');
   const [quickProductType, setQuickProductType] = useState<ProductType>('Racket');
   const [quickBadges, setQuickBadges] = useState<string[]>(['NEW']);
-  const [quickColor, setQuickColor] = useState('');
-  const [quickHeadShape, setQuickHeadShape] = useState<'Teardrop' | 'Round' | 'Hybrid'>('Teardrop');
-  const [quickBalance, setQuickBalance] = useState<'Head-heavy' | 'Balanced' | 'Head-light'>('Balanced');
-  const [quickWeightGrams, setQuickWeightGrams] = useState('125');
-  const [quickStock, setQuickStock] = useState('10');
   const [adminStats, setAdminStats] = useState<AdminStats | null>(null);
   const [stockMovements, setStockMovements] = useState<StockMovementRecord[]>([]);
   const [isCatalogSyncing, setIsCatalogSyncing] = useState(false);
-
-  const productTypesWithShoe: ProductType[] = [...productTypes];
 
   const selectedProduct = snapshot.products.find((product) => product.sku === selectedProductSku) ?? snapshot.products[0];
   const selectedCategory = snapshot.categories.find((category) => category.slug === selectedCategorySlug) ?? snapshot.categories[0];
@@ -432,7 +408,7 @@ function AdminPage({ snapshot, onSnapshotChange, isAuthenticated, onAuthChange }
             ...product,
             [field]: field === 'badges'
               ? value.split(',').map((item) => item.trim()).filter(Boolean)
-              : field === 'priceEur' || field === 'costEur' || field === 'weightGrams'
+              : field === 'priceEur' || field === 'costEur' || field === 'weightGrams' || field === 'salePriceEur' || field === 'originalPriceEur'
                 ? (Number.isFinite(Number.parseFloat(value)) ? Number.parseFloat(value) : undefined)
                 : field === 'stock'
                   ? (Number.isFinite(Number.parseInt(value, 10)) ? Number.parseInt(value, 10) : undefined)
@@ -442,6 +418,59 @@ function AdminPage({ snapshot, onSnapshotChange, isAuthenticated, onAuthChange }
     );
 
     persistAndSelect({ ...snapshot, products: updatedProducts }, 'Продуктът е записан.');
+  }
+
+  function patchSelectedProduct(patch: Partial<Product>, statusMessage = 'Продуктът е записан.') {
+    if (!selectedProduct) {
+      return;
+    }
+
+    const updatedProducts = snapshot.products.map((product) =>
+      product.sku === selectedProduct.sku ? { ...product, ...patch } : product,
+    );
+
+    persistAndSelect({ ...snapshot, products: updatedProducts }, statusMessage);
+  }
+
+  function toggleSelectedBadge(badge: string) {
+    if (!selectedProduct) {
+      return;
+    }
+
+    const hasBadge = selectedProduct.badges.includes(badge);
+    const nextBadges = hasBadge
+      ? selectedProduct.badges.filter((item) => item !== badge)
+      : [...selectedProduct.badges, badge];
+
+    if (badge === 'SALE' && hasBadge) {
+      patchSelectedProduct({
+        badges: nextBadges,
+        salePriceEur: undefined,
+        originalPriceEur: undefined,
+      });
+      return;
+    }
+
+    patchSelectedProduct({ badges: nextBadges });
+  }
+
+  function applySelectedSalePrice(rawSalePrice: string) {
+    if (!selectedProduct) {
+      return;
+    }
+
+    const regular = typeof selectedProduct.priceEur === 'number'
+      ? selectedProduct.priceEur
+      : parsePriceValue(selectedProduct.price);
+    const sale = Number.parseFloat(rawSalePrice);
+    const onSale = Number.isFinite(sale) && sale > 0 && sale < regular;
+    const nextBadges = selectedProduct.badges.filter((item) => item !== 'SALE');
+
+    patchSelectedProduct({
+      salePriceEur: onSale ? sale : undefined,
+      originalPriceEur: onSale ? regular : undefined,
+      badges: onSale ? [...nextBadges, 'SALE'] : nextBadges,
+    });
   }
 
   function updateCategoryField(field: keyof Category, value: string) {
@@ -478,21 +507,6 @@ function AdminPage({ snapshot, onSnapshotChange, isAuthenticated, onAuthChange }
     persistAndSelect({ ...snapshot, brands: updatedBrands }, 'Марката е записана.');
   }
 
-  async function handleCreateProduct() {
-    const draft = {
-      ...newProduct,
-      sku: `${newProduct.sku}-${Date.now().toString(36).slice(-4).toUpperCase()}`,
-    };
-
-    try {
-      const nextSnapshot = await createProductApi(draft);
-      onSnapshotChange(nextSnapshot);
-      setMessage('Продуктът е създаден.');
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'Неуспешно създаване на продукт.');
-    }
-  }
-
   function toggleQuickBadge(badge: string) {
     setQuickBadges((prevBadges) => prevBadges.includes(badge)
       ? prevBadges.filter((item) => item !== badge)
@@ -508,12 +522,10 @@ function AdminPage({ snapshot, onSnapshotChange, isAuthenticated, onAuthChange }
     const normalizedSku = `${quickSportSlug.slice(0, 2).toUpperCase()}-${quickProductType.slice(0, 2).toUpperCase()}-${Date.now().toString(36).slice(-4).toUpperCase()}`;
     const numericPrice = Number.parseFloat(quickPriceEur);
     const safePrice = Number.isFinite(numericPrice) ? numericPrice : 0;
-    const numericCost = Number.parseFloat(quickCostEur);
-    const safeCost = Number.isFinite(numericCost) ? numericCost : 0;
-    const numericWeight = Number.parseFloat(quickWeightGrams);
-    const safeWeight = Number.isFinite(numericWeight) ? numericWeight : undefined;
-    const numericStock = Number.parseInt(quickStock, 10);
-    const safeStock = Number.isFinite(numericStock) ? numericStock : undefined;
+    const numericSale = Number.parseFloat(quickSaleEur);
+    const onSale = Number.isFinite(numericSale) && numericSale > 0 && numericSale < safePrice;
+    const nextBadges = (quickBadges.length > 0 ? [...quickBadges] : ['NEW'])
+      .filter((badge) => badge !== 'SALE');
 
     const draft: Product = {
       sku: normalizedSku,
@@ -523,14 +535,10 @@ function AdminPage({ snapshot, onSnapshotChange, isAuthenticated, onAuthChange }
       brand: quickBrand.trim() || 'Karakal',
       price: `€${safePrice.toFixed(2)}`,
       priceEur: safePrice,
-      costEur: safeCost,
-      color: quickColor.trim() || undefined,
-      headShape: quickProductType === 'Racket' ? quickHeadShape : undefined,
-      balance: quickProductType === 'Racket' ? quickBalance : undefined,
-      weightGrams: quickProductType === 'Racket' ? safeWeight : undefined,
-      stock: safeStock,
+      salePriceEur: onSale ? numericSale : undefined,
+      originalPriceEur: onSale ? safePrice : undefined,
       details: `${quickProductType} for ${quickSportSlug} category.`,
-      badges: quickBadges.length > 0 ? quickBadges : ['NEW'],
+      badges: onSale ? [...nextBadges, 'SALE'] : nextBadges,
       imageUrl: createProductArtwork(quickBrand.trim() || 'Racketpoint', quickName.trim(), '#36cfc9'),
     };
 
@@ -542,44 +550,6 @@ function AdminPage({ snapshot, onSnapshotChange, isAuthenticated, onAuthChange }
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Бързото добавяне не успя.');
     }
-  }
-
-  function handleImportUnsquashableCatalog() {
-    const existingSkus = new Set(snapshot.products.map((product) => product.sku));
-    const mapped = unsquashableProducts
-      .filter((item) => !existingSkus.has(item.sku))
-      .map((item) => ({
-        sku: item.sku,
-        name: item.name,
-        nameBg: item.nameBg,
-        categorySlug: 'squash' as CategorySlug,
-        type: (item.type === 'Shoe' ? 'Shoe' : item.type) as ProductType,
-        brand: 'Unsquashable',
-        price: `€${item.priceEur.toFixed(2)}`,
-        priceEur: item.priceEur,
-        costEur: Number((item.priceEur * 0.55).toFixed(2)),
-        details: item.details,
-        detailsBg: item.detailsBg,
-        description: item.description,
-        descriptionBg: item.descriptionBg,
-        badges: item.badges,
-        imageUrl: item.imageUrl.includes('via.placeholder.com')
-          ? createProductArtwork(item.name, 'Unsquashable', '#ff9f1c')
-          : item.imageUrl,
-        stock: item.stock,
-      } satisfies Product));
-
-    if (mapped.length === 0) {
-      setMessage('Unsquashable каталогът вече е добавен.');
-      return;
-    }
-
-    const nextSnapshot = {
-      ...snapshot,
-      products: [...snapshot.products, ...mapped],
-    };
-
-    persistAndSelect(nextSnapshot, `Импортирани са ${mapped.length} Unsquashable продукта от Squashpoint dataset.`);
   }
 
   function handleCreateCategory() {
@@ -803,10 +773,10 @@ function AdminPage({ snapshot, onSnapshotChange, isAuthenticated, onAuthChange }
         </div>
 
         <nav className="admin-tabs" aria-label="Админ раздели">
-          <button className={adminTab === 'dashboard' ? 'admin-tab active' : 'admin-tab'} type="button" onClick={() => setAdminTab('dashboard')}>Табло</button>
           <button className={adminTab === 'products' ? 'admin-tab active' : 'admin-tab'} type="button" onClick={() => setAdminTab('products')}>Продукти</button>
           <button className={adminTab === 'orders' ? 'admin-tab active' : 'admin-tab'} type="button" onClick={() => setAdminTab('orders')}>Поръчки</button>
           <button className={adminTab === 'catalog' ? 'admin-tab active' : 'admin-tab'} type="button" onClick={() => setAdminTab('catalog')}>Каталог</button>
+          <button className={adminTab === 'dashboard' ? 'admin-tab active' : 'admin-tab'} type="button" onClick={() => setAdminTab('dashboard')}>Табло</button>
         </nav>
 
         <div className="admin-actions">
@@ -837,20 +807,21 @@ function AdminPage({ snapshot, onSnapshotChange, isAuthenticated, onAuthChange }
                 onClick={() => setSelectedProductSku(product.sku)}
               >
                 <strong>{product.name}</strong>
-                <span>{product.brand} · {product.type} · {product.sku}</span>
+                <span>
+                  {product.brand}
+                  {typeof product.salePriceEur === 'number' && typeof product.originalPriceEur === 'number' && product.salePriceEur < product.originalPriceEur
+                    ? ` · ${formatEur(product.originalPriceEur)} → ${formatEur(product.salePriceEur)}`
+                    : ` · ${formatEur(product.priceEur ?? parsePriceValue(product.price))}`}
+                  {product.badges.includes('HOT') || product.badges.includes('Хит') ? ' · HOT' : ''}
+                  {product.badges.includes('SALE') ? ' · SALE' : ''}
+                  {` · ${getProductSupplierSource(product)}`}
+                </span>
               </button>
             ))}
             {filteredProducts.length === 0 ? <p className="admin-empty">Няма продукти по това търсене.</p> : null}
             {productQuery.trim() === '' && snapshot.products.length > filteredProducts.length ? (
               <p className="admin-empty">Показани са първите {filteredProducts.length}. Използвай търсенето за останалите.</p>
             ) : null}
-            <div className="admin-create-stack">
-              <input value={newProduct.sku} onChange={(event) => setNewProduct({ ...newProduct, sku: event.target.value })} placeholder="Нов SKU" />
-              <input value={newProduct.name} onChange={(event) => setNewProduct({ ...newProduct, name: event.target.value })} placeholder="Име на продукта" />
-              <button className="button button-primary" type="button" onClick={handleCreateProduct}>
-                Добави продукт
-              </button>
-            </div>
           </section>
 
           <section className="admin-list-card admin-pane-catalog">
@@ -918,39 +889,95 @@ function AdminPage({ snapshot, onSnapshotChange, isAuthenticated, onAuthChange }
 
         <section className="admin-editor">
           <article className="admin-panel admin-pane-products">
-            <p className="eyebrow">Редакция на продукт</p>
+            <p className="eyebrow">Цена, акция и акцент</p>
             {selectedProduct ? (
               <div className="admin-form-grid">
-                <label>
+                <label className="full-width">
                   Име
                   <input value={selectedProduct.name} onChange={(event) => updateProductField('name', event.target.value)} />
-                </label>
-                <label>
-                  Категория
-                  <select value={selectedProduct.categorySlug} onChange={(event) => updateProductField('categorySlug', event.target.value)}>
-                    {snapshot.categories.map((category) => (
-                      <option key={category.slug} value={category.slug}>
-                        {category.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  Тип
-                  <select value={selectedProduct.type} onChange={(event) => updateProductField('type', event.target.value)}>
-                      {productTypesWithShoe.map((type) => (
-                      <option key={type} value={type}>
-                        {type}
-                      </option>
-                    ))}
-                  </select>
                 </label>
                 <label>
                   Марка
                   <input value={selectedProduct.brand} onChange={(event) => updateProductField('brand', event.target.value)} />
                 </label>
+                <label>
+                  Цена EUR
+                  <input
+                    value={selectedProduct.priceEur?.toString() ?? ''}
+                    onChange={(event) => {
+                      const numeric = Number.parseFloat(event.target.value);
+                      if (!Number.isFinite(numeric)) {
+                        return;
+                      }
+
+                      patchSelectedProduct({
+                        priceEur: numeric,
+                        price: `€${numeric.toFixed(2)}`,
+                        originalPriceEur: typeof selectedProduct.salePriceEur === 'number' ? numeric : selectedProduct.originalPriceEur,
+                      });
+                    }}
+                  />
+                </label>
+                <label>
+                  Промо цена EUR
+                  <input
+                    value={selectedProduct.salePriceEur?.toString() ?? ''}
+                    onChange={(event) => applySelectedSalePrice(event.target.value)}
+                    placeholder="Празно = без акция"
+                  />
+                </label>
+
+                <div className="full-width admin-checkbox-group">
+                  <strong>Main sport (tick one)</strong>
+                  <div className="admin-checkbox-list">
+                    {mainSportOptions.map((option) => (
+                      <label key={option.slug} className="admin-checkbox-option">
+                        <input
+                          type="checkbox"
+                          checked={selectedProduct.categorySlug === option.slug}
+                          onChange={() => updateProductField('categorySlug', option.slug)}
+                        />
+                        <span>{option.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="full-width admin-checkbox-group">
+                  <strong>Product class (tick one)</strong>
+                  <div className="admin-checkbox-list">
+                    {quickAddProductTypes.map((type) => (
+                      <label key={type} className="admin-checkbox-option">
+                        <input
+                          type="checkbox"
+                          checked={selectedProduct.type === type}
+                          onChange={() => updateProductField('type', type)}
+                        />
+                        <span>{type}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="full-width admin-checkbox-group">
+                  <strong>Badges</strong>
+                  <div className="admin-checkbox-list">
+                    {productBadges.map((badge) => (
+                      <label key={badge} className="admin-checkbox-option">
+                        <input
+                          type="checkbox"
+                          checked={selectedProduct.badges.includes(badge)}
+                          onChange={() => toggleSelectedBadge(badge)}
+                        />
+                        <span>{badge}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                <p className="full-width admin-section-label">Корекция след импорт</p>
                 <label className="full-width">
-                  Източник за поръчка (само за админ)
+                  Доставчик / откъде да купя
                   <input
                     value={getProductSupplierSource(selectedProduct)}
                     onChange={(event) => updateProductField('supplierSource', event.target.value)}
@@ -958,15 +985,7 @@ function AdminPage({ snapshot, onSnapshotChange, isAuthenticated, onAuthChange }
                   />
                 </label>
                 <label>
-                  Цена
-                  <input value={selectedProduct.price} onChange={(event) => updateProductField('price', event.target.value)} />
-                </label>
-                <label>
-                  Цена (EUR число)
-                  <input value={selectedProduct.priceEur?.toString() ?? ''} onChange={(event) => updateProductField('priceEur', event.target.value)} />
-                </label>
-                <label>
-                  Себестойност (EUR)
+                  Себестойност EUR
                   <input value={selectedProduct.costEur?.toString() ?? ''} onChange={(event) => updateProductField('costEur', event.target.value)} />
                 </label>
                 <label>
@@ -974,47 +993,40 @@ function AdminPage({ snapshot, onSnapshotChange, isAuthenticated, onAuthChange }
                   <input value={selectedProduct.stock?.toString() ?? ''} onChange={(event) => updateProductField('stock', event.target.value)} />
                 </label>
                 <label>
-                  Цвят (optional)
-                  <input value={selectedProduct.color ?? ''} onChange={(event) => updateProductField('color', event.target.value)} />
+                  Цвят
+                  <input value={selectedProduct.color ?? ''} onChange={(event) => updateProductField('color', event.target.value)} placeholder="black / blue / red" />
                 </label>
-                {selectedProduct.type === 'Racket' ? (
-                  <>
-                    <label>
-                      Head shape
-                      <select value={selectedProduct.headShape ?? ''} onChange={(event) => updateProductField('headShape', event.target.value)}>
-                        <option value="">--</option>
-                        <option value="Teardrop">Teardrop</option>
-                        <option value="Round">Round</option>
-                        <option value="Hybrid">Hybrid</option>
-                      </select>
-                    </label>
-                    <label>
-                      Balance
-                      <select value={selectedProduct.balance ?? ''} onChange={(event) => updateProductField('balance', event.target.value)}>
-                        <option value="">--</option>
-                        <option value="Head-heavy">Head-heavy</option>
-                        <option value="Balanced">Balanced</option>
-                        <option value="Head-light">Head-light</option>
-                      </select>
-                    </label>
-                    <label>
-                      Weight (g)
-                      <input value={selectedProduct.weightGrams?.toString() ?? ''} onChange={(event) => updateProductField('weightGrams', event.target.value)} />
-                    </label>
-                  </>
-                ) : null}
+                <label>
+                  Head shape
+                  <select value={selectedProduct.headShape ?? ''} onChange={(event) => updateProductField('headShape', event.target.value)}>
+                    <option value="">--</option>
+                    <option value="Teardrop">Teardrop</option>
+                    <option value="Round">Round</option>
+                    <option value="Hybrid">Hybrid</option>
+                  </select>
+                </label>
+                <label>
+                  Balance
+                  <select value={selectedProduct.balance ?? ''} onChange={(event) => updateProductField('balance', event.target.value)}>
+                    <option value="">--</option>
+                    <option value="Head-heavy">Head-heavy</option>
+                    <option value="Balanced">Balanced</option>
+                    <option value="Head-light">Head-light</option>
+                  </select>
+                </label>
+                <label>
+                  Weight (g)
+                  <input value={selectedProduct.weightGrams?.toString() ?? ''} onChange={(event) => updateProductField('weightGrams', event.target.value)} />
+                </label>
                 <label className="full-width">
                   Детайли
-                  <textarea rows={4} value={selectedProduct.details} onChange={(event) => updateProductField('details', event.target.value)} />
-                </label>
-                <label className="full-width">
-                  Етикети, разделени със запетая
-                  <input value={selectedProduct.badges.join(', ')} onChange={(event) => updateProductField('badges', event.target.value)} />
+                  <textarea rows={3} value={selectedProduct.details} onChange={(event) => updateProductField('details', event.target.value)} />
                 </label>
                 <label className="full-width">
                   Image URL
                   <input value={selectedProduct.imageUrl} onChange={(event) => updateProductField('imageUrl', event.target.value)} />
                 </label>
+
                 <div className="full-width admin-inline-actions">
                   <button className="button button-primary" type="button" onClick={handleSaveSelectedProduct}>Запази</button>
                   <button className="button button-secondary" type="button" onClick={handleDeleteProduct}>Изтрий</button>
@@ -1108,22 +1120,13 @@ function AdminPage({ snapshot, onSnapshotChange, isAuthenticated, onAuthChange }
                 Brand
                 <input value={quickBrand} onChange={(event) => setQuickBrand(event.target.value)} />
               </label>
-
               <label>
                 Price EUR
                 <input value={quickPriceEur} onChange={(event) => setQuickPriceEur(event.target.value)} />
               </label>
               <label>
-                Cost EUR
-                <input value={quickCostEur} onChange={(event) => setQuickCostEur(event.target.value)} />
-              </label>
-              <label>
-                Stock amount
-                <input value={quickStock} onChange={(event) => setQuickStock(event.target.value)} />
-              </label>
-              <label>
-                Color (optional)
-                <input value={quickColor} onChange={(event) => setQuickColor(event.target.value)} placeholder="black / blue / red" />
+                Sale price EUR
+                <input value={quickSaleEur} onChange={(event) => setQuickSaleEur(event.target.value)} placeholder="Optional" />
               </label>
 
               <div className="full-width admin-checkbox-group">
@@ -1158,38 +1161,10 @@ function AdminPage({ snapshot, onSnapshotChange, isAuthenticated, onAuthChange }
                 </div>
               </div>
 
-              {quickProductType === 'Racket' ? (
-                <div className="full-width admin-checkbox-group">
-                  <strong>Racket specifications</strong>
-                  <div className="admin-form-grid">
-                    <label>
-                      Head shape
-                      <select value={quickHeadShape} onChange={(event) => setQuickHeadShape(event.target.value as 'Teardrop' | 'Round' | 'Hybrid')}>
-                        <option value="Teardrop">Teardrop</option>
-                        <option value="Round">Round</option>
-                        <option value="Hybrid">Hybrid</option>
-                      </select>
-                    </label>
-                    <label>
-                      Balance
-                      <select value={quickBalance} onChange={(event) => setQuickBalance(event.target.value as 'Head-heavy' | 'Balanced' | 'Head-light')}>
-                        <option value="Head-heavy">Head-heavy</option>
-                        <option value="Balanced">Balanced</option>
-                        <option value="Head-light">Head-light</option>
-                      </select>
-                    </label>
-                    <label>
-                      Weight (g)
-                      <input value={quickWeightGrams} onChange={(event) => setQuickWeightGrams(event.target.value)} />
-                    </label>
-                  </div>
-                </div>
-              ) : null}
-
               <div className="full-width admin-checkbox-group">
                 <strong>Badges</strong>
                 <div className="admin-checkbox-list">
-                  {['NEW', 'SALE', 'LIMITED', 'PRO', 'POPULAR'].map((badge) => (
+                  {productBadges.map((badge) => (
                     <label key={badge} className="admin-checkbox-option">
                       <input
                         type="checkbox"
@@ -1205,9 +1180,6 @@ function AdminPage({ snapshot, onSnapshotChange, isAuthenticated, onAuthChange }
               <div className="full-width admin-inline-actions">
                 <button className="button button-primary" type="button" onClick={handleQuickCreateProduct}>
                   Add product from tick-boxes
-                </button>
-                <button className="button button-secondary" type="button" onClick={handleImportUnsquashableCatalog}>
-                  Import Unsquashable from Squashpoint
                 </button>
               </div>
             </div>

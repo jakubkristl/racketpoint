@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import type { Product } from '../data/catalog';
 import { isFavoriteSku, toggleFavoriteSku } from '../data/favorites';
 import { getAvailabilityClassName, getStockDetailLabel, isMadeToOrder, MADE_TO_ORDER_DELIVERY_NOTE } from '../data/inventory';
-import { getPublicAttributes, getPublicDescription } from '../data/publicCatalog';
+import { getProductCardFacts, getPublicAttributes, getPublicDescription } from '../data/publicCatalog';
 
 function formatEur(value: number) {
   return `EUR ${value.toFixed(2)}`;
@@ -49,6 +49,7 @@ function ProductDetailPage({ product, onAddToCart }: ProductDetailPageProps) {
   const pricing = useMemo(() => getPricePresentation(product), [product]);
   const displayDescription = getPublicDescription(product);
   const publicAttributes = getPublicAttributes(product.attributes);
+  const cardFacts = getProductCardFacts(product);
 
   return (
     <div className="page-shell">
@@ -110,9 +111,7 @@ function ProductDetailPage({ product, onAddToCart }: ProductDetailPageProps) {
 
             <div className="product-detail-meta">
               <span>Категория: {product.categorySlug}</span>
-              <span>Тип: {product.type}</span>
-              {typeof product.weightGrams === 'number' ? <span>Тегло: {product.weightGrams} г</span> : null}
-              {product.balance ? <span>Баланс: {product.balance}</span> : null}
+              {cardFacts.facts.map((fact) => <span key={fact}>{fact}</span>)}
             </div>
           </article>
         </section>

@@ -699,6 +699,15 @@ function retagCatalogProducts(products: Product[]) {
   }));
 }
 
+function mergeWithDefaultCatalog(base: Product[], references: Product[]) {
+  const existingSkus = new Set(base.map((product) => product.sku));
+  const extras = defaultProducts.filter((product) => !existingSkus.has(product.sku));
+  const receptionPosExtras = extras.filter((product) => product.attributes?.source === 'reception-pos');
+  const otherExtras = extras.filter((product) => product.attributes?.source !== 'reception-pos');
+
+  return retagCatalogProducts(hydrateProductImages([...receptionPosExtras, ...base, ...otherExtras], references));
+}
+
 export async function fetchProducts() {
   const [mapped, referenceCatalog] = await Promise.all([
     fetchProductsFromApi().catch(() => [] as Product[]),
@@ -715,15 +724,7 @@ export async function fetchProducts() {
       }
     }
 
-    const existingSkus = new Set(combined.map((product) => product.sku));
-    for (const product of defaultProducts) {
-      if (!existingSkus.has(product.sku)) {
-        combined.push(product);
-        existingSkus.add(product.sku);
-      }
-    }
-
-    const normalized = retagCatalogProducts(hydrateProductImages(combined, referenceCatalog));
+    const normalized = mergeWithDefaultCatalog(combined, referenceCatalog);
     productCache = normalized;
     return normalized;
   }
@@ -734,7 +735,7 @@ export async function fetchProducts() {
     if (seeded) {
       const retry = await fetchProductsFromApi().catch(() => [] as Product[]);
       if (retry.length > 0) {
-        const normalized = retagCatalogProducts(hydrateProductImages(retry, referenceCatalog));
+        const normalized = mergeWithDefaultCatalog(retry, referenceCatalog);
         productCache = normalized;
         return normalized;
       }
@@ -742,14 +743,14 @@ export async function fetchProducts() {
 
     const localStarterCatalog = loadSnapshot().products;
     if (localStarterCatalog.length > 0) {
-      const normalized = retagCatalogProducts(hydrateProductImages(localStarterCatalog, referenceCatalog));
+      const normalized = mergeWithDefaultCatalog(localStarterCatalog, referenceCatalog);
       productCache = normalized;
       return normalized;
     }
 
     const imported = referenceCatalog;
     if (imported.length > 0) {
-      const normalized = retagCatalogProducts(hydrateProductImages(imported, imported));
+      const normalized = mergeWithDefaultCatalog(imported, imported);
       productCache = normalized;
       return normalized;
     }
@@ -757,7 +758,7 @@ export async function fetchProducts() {
     return [];
   }
 
-  const normalized = retagCatalogProducts(hydrateProductImages(mapped, referenceCatalog));
+  const normalized = mergeWithDefaultCatalog(mapped, referenceCatalog);
   productCache = normalized;
   return normalized;
 }

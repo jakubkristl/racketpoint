@@ -260,7 +260,7 @@ function HomePage({ categories, products, onAddToCart }: HomePageProps) {
                 <h3>{category.name}</h3>
                 <div className="mega-menu-links">
                   {getSubcategoriesForSport(category.slug).map((sub) => (
-                    <Link key={`${category.slug}-${sub.slug}`} to={`/category/${category.slug}?sub=${encodeURIComponent(sub.slug)}`}>
+                    <Link key={`${category.slug}-${sub.slug}`} to={`/category/${category.slug}?sub=${encodeURIComponent(sub.slug)}#catalog-results`}>
                       {sub.label}
                     </Link>
                   ))}

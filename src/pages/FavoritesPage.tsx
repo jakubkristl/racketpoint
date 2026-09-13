@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { Product } from '../data/catalog';
 import { getFavoriteSkus, toggleFavoriteSku } from '../data/favorites';
+import { getProductCardFacts } from '../data/publicCatalog';
 import { getAvailabilityClassName, getStockLabel, isMadeToOrder, MADE_TO_ORDER_DELIVERY_NOTE } from '../data/inventory';
 
 type FavoritesPageProps = {
@@ -85,6 +86,7 @@ function FavoritesPage({ products, onAddToCart }: FavoritesPageProps) {
         <div className="product-grid">
           {favoriteProducts.length > 0 ? favoriteProducts.map((product) => {
             const pricing = getPricePresentation(product);
+            const cardFacts = getProductCardFacts(product);
             return (
               <article
                 className="product-card clickable-card product-card-compact"
@@ -102,6 +104,12 @@ function FavoritesPage({ products, onAddToCart }: FavoritesPageProps) {
                 <img className="product-image" src={product.imageUrl} alt={product.name} loading="lazy" />
                 <div className="product-body">
                   <h3 className={getProductTitleClass(product.name)}>{product.name}</h3>
+                  {cardFacts.description ? <p className="product-card-copy">{cardFacts.description}</p> : null}
+                  {cardFacts.facts.length > 0 ? (
+                    <div className="product-card-specs">
+                      {cardFacts.facts.map((fact) => <span key={fact}>{fact}</span>)}
+                    </div>
+                  ) : null}
                   <p className={getAvailabilityClassName(product, 'product-availability')}>{getStockLabel(product)}</p>
                   {isMadeToOrder(product) ? <p className="delivery-note">{MADE_TO_ORDER_DELIVERY_NOTE}</p> : null}
                   <div className="product-footer">

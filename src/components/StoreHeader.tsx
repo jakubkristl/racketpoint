@@ -101,7 +101,7 @@ function StoreHeader({ activeSportSlug }: StoreHeaderProps) {
                       <Link
                         className="retail-mega-link"
                         key={`${item.key}-${subcategory.slug}`}
-                        to={`${item.to}?sub=${encodeURIComponent(subcategory.slug)}`}
+                        to={`${item.to}?sub=${encodeURIComponent(subcategory.slug)}#catalog-results`}
                       >
                         <span className="retail-mega-thumb">
                           <img

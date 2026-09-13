@@ -69,6 +69,7 @@ function CheckoutPage({ products, lines, onIncrement, onDecrement, onRemove, onC
   const [deliveryOption, setDeliveryOption] = useState<'pickup' | 'courier'>('pickup');
   const [paymentOption, setPaymentOption] = useState<'card' | 'cash_on_delivery'>('card');
   const [notes, setNotes] = useState('');
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
 
   const cartItems = useMemo(() => {
@@ -105,6 +106,11 @@ function CheckoutPage({ products, lines, onIncrement, onDecrement, onRemove, onC
 
     if (cartItems.length === 0) {
       setStatus('Добавете поне един продукт, преди да направите поръчка.');
+      return;
+    }
+
+    if (!acceptedTerms) {
+      setStatus('Моля, приемете общите условия и политиката за връщане.');
       return;
     }
 
@@ -200,7 +206,7 @@ function CheckoutPage({ products, lines, onIncrement, onDecrement, onRemove, onC
     <div className="page-shell">
       <main>
         <section className="section category-mood-banner static-banner">
-          <img src="https://images.pexels.com/photos/863988/pexels-photo-863988.jpeg?auto=compress&cs=tinysrgb&w=1800" alt="Checkout sports atmosphere" loading="lazy" />
+          <img src="https://images.pexels.com/photos/209977/pexels-photo-209977.jpeg?auto=compress&cs=tinysrgb&w=1800" alt="Тенис корт преди поръчка" loading="lazy" />
           <div className="category-mood-overlay">
             <p className="eyebrow">Сигурно плащане</p>
             <h2>Последна стъпка преди следващата ти тренировка.</h2>
@@ -321,6 +327,17 @@ function CheckoutPage({ products, lines, onIncrement, onDecrement, onRemove, onC
             <label>
               Бележки
               <textarea value={notes} onChange={(event) => setNotes(event.target.value)} rows={2} />
+            </label>
+            <label className="checkout-legal-accept">
+              <input
+                type="checkbox"
+                checked={acceptedTerms}
+                onChange={(event) => setAcceptedTerms(event.target.checked)}
+                required
+              />
+              <span>
+                Съгласен съм с <Link to="/terms">Общите условия</Link>, <Link to="/returns">Политиката за връщане</Link> и <Link to="/privacy">Политиката за поверителност</Link>.
+              </span>
             </label>
             <button className="button button-primary" type="submit" disabled={cartItems.length === 0}>
               Изпрати поръчка

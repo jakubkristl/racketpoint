@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { type BalanceProfile, type Brand, type Category, type Product } from '../data/catalog';
 import { getFavoriteSkus, isFavoriteSku, toggleFavoriteSku } from '../data/favorites';
 import { getAvailabilityClassName, getStockLabel, isMadeToOrder, MADE_TO_ORDER_DELIVERY_NOTE } from '../data/inventory';
+import { getProductCardFacts } from '../data/publicCatalog';
 import { getSubcategoriesForProducts, getSubcategoryByParam, getSubcategoriesForSport } from '../data/subcategories';
 
 type CategoryPageProps = {
@@ -156,6 +157,19 @@ function CategoryPage({ category, products, brands, onAddToCart }: CategoryPageP
   const requestedStock = searchParams.get('stock') ?? 'all';
   const requestedQuery = searchParams.get('q') ?? '';
   const selectedSubcategory = requestedSub === 'all' ? undefined : getSubcategoryByParam(requestedSub);
+
+  useEffect(() => {
+    if (requestedSub === 'all') {
+      return;
+    }
+
+    const catalog = document.getElementById('catalog-results');
+    if (!catalog) {
+      return;
+    }
+
+    catalog.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [requestedSub, category.slug]);
 
   const availableBalances = useMemo(
     () => Array.from(new Set(products.map((item) => item.balance).filter((item): item is BalanceProfile => Boolean(item)))),
@@ -347,7 +361,7 @@ function CategoryPage({ category, products, brands, onAddToCart }: CategoryPageP
             </div>
           </div>
 
-          <div className="catalog-layout">
+          <div className="catalog-layout" id="catalog-results">
             <aside className="catalog-sidebar" id="filters">
               <div className="catalog-sidebar-header">
                 <h3>Филтри</h3>
@@ -422,6 +436,7 @@ function CategoryPage({ category, products, brands, onAddToCart }: CategoryPageP
                 filteredProducts.map((product) => (
                   (() => {
                     const isFavorite = favoriteSkus.includes(product.sku) || isFavoriteSku(product.sku);
+                    const cardFacts = getProductCardFacts(product);
 
                     return (
                       <article
@@ -440,6 +455,12 @@ function CategoryPage({ category, products, brands, onAddToCart }: CategoryPageP
                         <img className="product-image" src={product.imageUrl} alt={product.name} loading="lazy" />
                         <div className="product-body">
                           <h3 className={getProductTitleClass(product.name)}>{product.name}</h3>
+                          {cardFacts.description ? <p className="product-card-copy">{cardFacts.description}</p> : null}
+                          {cardFacts.facts.length > 0 ? (
+                            <div className="product-card-specs">
+                              {cardFacts.facts.map((fact) => <span key={fact}>{fact}</span>)}
+                            </div>
+                          ) : null}
 
                           <p className={getAvailabilityClassName(product, 'product-availability')}>{getStockLabel(product)}</p>
                           {isMadeToOrder(product) ? <p className="delivery-note">{MADE_TO_ORDER_DELIVERY_NOTE}</p> : null}

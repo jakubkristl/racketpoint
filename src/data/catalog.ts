@@ -1,3 +1,4 @@
+import { receptionPosProducts } from './productsReceptionPos';
 import { unsquashableProducts } from './productsUnsquashable';
 
 export type ProductType = 'Racket' | 'Balls' | 'Wear' | 'Bag' | 'Accessory' | 'String' | 'Grip' | 'Shoe';
@@ -376,12 +377,23 @@ export const brands: Brand[] = [
   },
   {
     name: 'Dunlop',
-    categorySlugs: ['tennis', 'table-tennis', 'badminton'],
+    categorySlugs: ['squash', 'tennis', 'table-tennis', 'badminton'],
     note: 'Reliable all-round catalogue for rackets, balls and training products.',
+  },
+  {
+    name: 'Prince',
+    categorySlugs: ['squash'],
+    note: 'Club-shop squash frames available at reception.',
+  },
+  {
+    name: 'Saxon',
+    categorySlugs: ['squash'],
+    note: 'Club-shop squash frames available at reception.',
   },
 ];
 
 export const products: Product[] = [
+  ...receptionPosProducts,
   {
     sku: 'SQ-001',
     name: 'Unsquashable MIGUEL RODRIGUEZ AUTOGRAPH',

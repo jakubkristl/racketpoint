@@ -7,19 +7,17 @@ function BrandLogo({ subtitle = 'Премиум магазин за ракети
   return (
     <div className={compact ? 'brand-lockup compact' : 'brand-lockup'}>
       <div className="brand-wording brand-logo-frame">
-        <img
-          className="brand-logo-image"
-          src="/branding/logo-transparent.svg"
-          alt="Racketpoint.bg Everything for Racket Sports"
-          onError={(event) => {
-            const target = event.currentTarget;
-            if (target.src.endsWith('/branding/logo.webp')) {
-              return;
-            }
-            target.src = '/branding/logo.webp';
-          }}
-        />
-        <p className="brand-subtitle">{subtitle}</p>
+        <span className="brand-logo-image">
+          <img
+            className="brand-mark"
+            src="/branding/logo-icon.png"
+            alt="Racketpoint"
+          />
+          <span className="brand-wordmark">
+            Racket<span>point</span>
+          </span>
+        </span>
+        {subtitle ? <p className="brand-subtitle">{subtitle}</p> : null}
       </div>
     </div>
   );
