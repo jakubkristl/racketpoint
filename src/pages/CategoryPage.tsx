@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { type BalanceProfile, type Brand, type Category, type Product } from '../data/catalog';
 import { getFavoriteSkus, isFavoriteSku, toggleFavoriteSku } from '../data/favorites';
+import { getAvailabilityClassName, getStockLabel, isMadeToOrder, MADE_TO_ORDER_DELIVERY_NOTE } from '../data/inventory';
+import { getProductCardFacts } from '../data/publicCatalog';
 import { getSubcategoriesForProducts, getSubcategoryByParam, getSubcategoriesForSport } from '../data/subcategories';
 
 type CategoryPageProps = {
@@ -58,26 +60,6 @@ function getPriceValue(product: Product) {
 
   const parsed = Number.parseFloat(product.price.replace(/[^\d.,-]/g, '').replace(',', '.'));
   return Number.isFinite(parsed) ? parsed : 0;
-}
-
-function getStockLabel(product: Product) {
-  if (typeof product.stock !== 'number') {
-    return 'Ограничено количество';
-  }
-
-  if (product.stock <= 0) {
-    return 'Изчерпано';
-  }
-
-  if (product.stock < 5) {
-    return 'Ограничени бройки';
-  }
-
-  return 'Налично';
-}
-
-function isOutOfStock(product: Product) {
-  return typeof product.stock === 'number' && product.stock <= 0;
 }
 
 function hasSize(product: Product, requestedSize: string) {
@@ -176,6 +158,19 @@ function CategoryPage({ category, products, brands, onAddToCart }: CategoryPageP
   const requestedQuery = searchParams.get('q') ?? '';
   const selectedSubcategory = requestedSub === 'all' ? undefined : getSubcategoryByParam(requestedSub);
 
+  useEffect(() => {
+    if (requestedSub === 'all') {
+      return;
+    }
+
+    const catalog = document.getElementById('catalog-results');
+    if (!catalog) {
+      return;
+    }
+
+    catalog.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [requestedSub, category.slug]);
+
   const availableBalances = useMemo(
     () => Array.from(new Set(products.map((item) => item.balance).filter((item): item is BalanceProfile => Boolean(item)))),
     [products],
@@ -234,11 +229,11 @@ function CategoryPage({ category, products, brands, onAddToCart }: CategoryPageP
         return false;
       }
 
-      if (requestedStock === 'in-stock' && (typeof product.stock === 'number' ? product.stock <= 0 : false)) {
+      if (requestedStock === 'in-stock' && isMadeToOrder(product)) {
         return false;
       }
 
-      if (requestedStock === 'out-of-stock' && (typeof product.stock === 'number' ? product.stock > 0 : true)) {
+      if (requestedStock === 'out-of-stock' && !isMadeToOrder(product)) {
         return false;
       }
 
@@ -366,7 +361,7 @@ function CategoryPage({ category, products, brands, onAddToCart }: CategoryPageP
             </div>
           </div>
 
-          <div className="catalog-layout">
+          <div className="catalog-layout" id="catalog-results">
             <aside className="catalog-sidebar" id="filters">
               <div className="catalog-sidebar-header">
                 <h3>Филтри</h3>
@@ -429,7 +424,7 @@ function CategoryPage({ category, products, brands, onAddToCart }: CategoryPageP
                 <select value={requestedStock} onChange={(event) => setParam('stock', event.target.value)}>
                   <option value="all">Всички</option>
                   <option value="in-stock">Налично</option>
-                  <option value="out-of-stock">Изчерпано</option>
+                  <option value="out-of-stock">Поръчва се при заявка</option>
                 </select>
               </div>
 
@@ -441,6 +436,7 @@ function CategoryPage({ category, products, brands, onAddToCart }: CategoryPageP
                 filteredProducts.map((product) => (
                   (() => {
                     const isFavorite = favoriteSkus.includes(product.sku) || isFavoriteSku(product.sku);
+                    const cardFacts = getProductCardFacts(product);
 
                     return (
                       <article
@@ -459,9 +455,15 @@ function CategoryPage({ category, products, brands, onAddToCart }: CategoryPageP
                         <img className="product-image" src={product.imageUrl} alt={product.name} loading="lazy" />
                         <div className="product-body">
                           <h3 className={getProductTitleClass(product.name)}>{product.name}</h3>
+                          {cardFacts.description ? <p className="product-card-copy">{cardFacts.description}</p> : null}
+                          {cardFacts.facts.length > 0 ? (
+                            <div className="product-card-specs">
+                              {cardFacts.facts.map((fact) => <span key={fact}>{fact}</span>)}
+                            </div>
+                          ) : null}
 
-                          <p className="product-availability">{getStockLabel(product)}</p>
-                          {isOutOfStock(product) ? <p className="delivery-note">Доставка 7-14 дни</p> : null}
+                          <p className={getAvailabilityClassName(product, 'product-availability')}>{getStockLabel(product)}</p>
+                          {isMadeToOrder(product) ? <p className="delivery-note">{MADE_TO_ORDER_DELIVERY_NOTE}</p> : null}
 
                           <div className="product-footer">
                             <div className="price-stack">

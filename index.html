@@ -3,7 +3,8 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <meta name="google-site-verification" content="5RNnVqGzEZrkEzm1uz6kAT3GAOfyuD4XXxUNiRZ7luc" />
     <meta
       name="description"
@@ -11,17 +12,28 @@
     />
     <meta property="og:title" content="Racketpoint.bg" />
     <meta property="og:description" content="Премиум екипировка за всички основни ракетни спортове." />
-    <meta property="og:image" content="/branding/social-avatar.svg" />
+    <meta property="og:image" content="/branding/logo-icon.png" />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="Racketpoint.bg" />
     <meta name="twitter:description" content="Премиум екипировка за всички основни ракетни спортове." />
-    <meta name="twitter:image" content="/branding/social-avatar.svg" />
-    <script async src="https://www.googletagmanager.com/gtag/js?id=G-Y1G8X4J3DS"></script>
+    <meta name="twitter:image" content="/branding/logo-icon.png" />
     <script>
       window.dataLayer = window.dataLayer || [];
       function gtag() { dataLayer.push(arguments); }
+      gtag('consent', 'default', {
+        ad_storage: 'denied',
+        ad_user_data: 'denied',
+        ad_personalization: 'denied',
+        analytics_storage: 'denied',
+        functionality_storage: 'granted',
+        security_storage: 'granted',
+        wait_for_update: 500
+      });
+    </script>
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-Y1G8X4J3DS"></script>
+    <script>
       gtag('js', new Date());
-      gtag('config', 'G-Y1G8X4J3DS');
+      gtag('config', 'G-Y1G8X4J3DS', { anonymize_ip: true });
     </script>
     <title>Racketpoint.bg</title>
   </head>

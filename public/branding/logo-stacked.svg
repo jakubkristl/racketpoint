@@ -1,14 +1,14 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 520" role="img" aria-labelledby="title desc">
-  <title id="title">Racketshop.bg Stacked Logo</title>
-  <desc id="desc">Stacked version of the Double Arc + Ball logo.</desc>
-  <rect width="420" height="520" rx="44" fill="#f4efe6" />
-  <g transform="translate(56 42)">
-    <rect x="0" y="0" width="308" height="308" rx="50" fill="#0b6b57" />
-    <circle cx="208" cy="104" r="18" fill="#1a1a1a" />
-    <path d="M36 234c46-72 116-124 236-154" fill="none" stroke="#f2c230" stroke-width="22" stroke-linecap="round" />
-    <path d="M66 268c66-90 158-150 220-188" fill="none" stroke="#ffd769" stroke-width="12" stroke-linecap="round" />
-    <circle cx="208" cy="104" r="5" fill="#f2c230" />
+  <title id="title">Racketpoint stacked</title>
+  <desc id="desc">Stacked Racketpoint mark and wordmark.</desc>
+  <rect width="420" height="520" rx="44" fill="#161a21" />
+  <g fill="none" stroke="#ffffff" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="210" cy="176" r="88" stroke-width="16" />
+    <path d="M156 122l108 108M264 122L156 230M210 88v176M122 176h176" stroke-width="7" />
+    <path d="M268 248l58 68" stroke-width="16" />
   </g>
-  <text x="210" y="424" text-anchor="middle" font-family="Trebuchet MS, Verdana, Arial, sans-serif" font-size="56" font-weight="700" fill="#0c2a24">RACKETSHOP</text>
-  <text x="210" y="476" text-anchor="middle" font-family="Trebuchet MS, Verdana, Arial, sans-serif" font-size="44" font-weight="700" fill="#f2c230">.BG</text>
+  <circle cx="292" cy="124" r="36" fill="#f2c200" />
+  <path d="M272 116c12-9 28-9 40 0" fill="none" stroke="#fff" stroke-width="6" stroke-linecap="round" />
+  <text x="210" y="400" text-anchor="middle" font-family="Trebuchet MS, Avenir Next, Segoe UI, sans-serif" font-size="52" font-weight="800" fill="#ffffff">Racket</text>
+  <text x="210" y="460" text-anchor="middle" font-family="Trebuchet MS, Avenir Next, Segoe UI, sans-serif" font-size="52" font-weight="800" fill="#f2c200">point</text>
 </svg>

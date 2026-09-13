@@ -78,7 +78,7 @@ export default async function handler(req: any, res: any) {
           ${toSafeNumber(product.costEur, Math.max(0, toSafeNumber(product.priceEur, 0) * 0.56))},
           ${toSafeNumber(product.priceEur, 0)},
           NULL,
-          ${Math.max(0, Math.trunc(toSafeNumber(product.stock, 12)))},
+          ${Math.max(0, Math.trunc(toSafeNumber(product.stock, 0)))},
           ${JSON.stringify([product.imageUrl])}::jsonb,
           ${JSON.stringify({
             color: product.color ?? null,

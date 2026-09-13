@@ -1,4 +1,6 @@
 import { Link } from 'react-router-dom';
+import { legalCompany } from '../data/legalDocs';
+
 function ContactPage() {
   return (
     <div className="page-shell">
@@ -21,7 +23,8 @@ function ContactPage() {
           </p>
           <div className="hero-actions">
             <Link className="button button-primary" to="/account">Поддръжка на профила</Link>
-            <a className="button button-secondary" href="mailto:info@racketpoint.bg">Имейл info@racketpoint.bg</a>
+            <a className="button button-secondary" href={`mailto:${legalCompany.email}`}>Имейл {legalCompany.email}</a>
+            <a className="button button-secondary" href={`mailto:${legalCompany.inboxEmail}`}>Имейл {legalCompany.inboxEmail}</a>
           </div>
         </section>
 
@@ -36,7 +39,20 @@ function ContactPage() {
             <h2>Sport And Beyond Ltd</h2>
             <p>Bulstat: 208314448</p>
             <p>Адрес: ул. „Любен Русев“ 6, 1113 София</p>
-            <span>info@racketpoint.bg</span>
+            <p>
+              <a href={`mailto:${legalCompany.email}`}>{legalCompany.email}</a>
+            </p>
+            <p>
+              <a href={`mailto:${legalCompany.inboxEmail}`}>{legalCompany.inboxEmail}</a>
+            </p>
+            </article>
+            <article className="panel-card">
+            <p className="panel-label">Правни документи</p>
+            <h2>Условия и политики</h2>
+            <p><Link to="/terms">Общи условия</Link></p>
+            <p><Link to="/returns">Политика за връщане</Link></p>
+            <p><Link to="/cookies">Политика за бисквитки</Link></p>
+            <p><Link to="/privacy">Политика за поверителност</Link></p>
             </article>
           </aside>
         </section>

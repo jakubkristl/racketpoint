@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import type { Product } from '../data/catalog';
 import { isFavoriteSku, toggleFavoriteSku } from '../data/favorites';
-import { getPublicAttributes, getPublicDescription } from '../data/publicCatalog';
+import { getAvailabilityClassName, getStockDetailLabel, isMadeToOrder, MADE_TO_ORDER_DELIVERY_NOTE } from '../data/inventory';
+import { getProductCardFacts, getPublicAttributes, getPublicDescription } from '../data/publicCatalog';
 
 function formatEur(value: number) {
   return `EUR ${value.toFixed(2)}`;
@@ -28,26 +29,6 @@ function getPricePresentation(product: Product) {
   };
 }
 
-function getAvailability(product: Product) {
-  if (typeof product.stock !== 'number') {
-    return 'Наличност: ограничено количество';
-  }
-
-  if (product.stock <= 0) {
-    return 'Наличност: изчерпано';
-  }
-
-  if (product.stock < 5) {
-    return `Наличност: ограничени бройки (${product.stock})`;
-  }
-
-  return `Наличност: налично (${product.stock})`;
-}
-
-function isOutOfStock(product: Product) {
-  return typeof product.stock === 'number' && product.stock <= 0;
-}
-
 type ProductDetailPageProps = {
   product: Product;
   onAddToCart: (sku: string) => void;
@@ -68,6 +49,7 @@ function ProductDetailPage({ product, onAddToCart }: ProductDetailPageProps) {
   const pricing = useMemo(() => getPricePresentation(product), [product]);
   const displayDescription = getPublicDescription(product);
   const publicAttributes = getPublicAttributes(product.attributes);
+  const cardFacts = getProductCardFacts(product);
 
   return (
     <div className="page-shell">
@@ -84,8 +66,8 @@ function ProductDetailPage({ product, onAddToCart }: ProductDetailPageProps) {
           <article className="product-detail-panel">
             <p className="eyebrow">{product.brand}</p>
             <h1>{product.name}</h1>
-            <p className="product-detail-availability">{getAvailability(product)}</p>
-            {isOutOfStock(product) ? <p className="delivery-note delivery-note-detail">Доставка 7-14 дни</p> : null}
+            <p className={getAvailabilityClassName(product, 'product-detail-availability')}>{getStockDetailLabel(product)}</p>
+            {isMadeToOrder(product) ? <p className="delivery-note delivery-note-detail">{MADE_TO_ORDER_DELIVERY_NOTE}</p> : null}
             <div className="price-stack product-detail-price">
               {pricing.isOnSale && pricing.original ? <p className="price-original">{pricing.original}</p> : null}
               <strong className={pricing.isOnSale ? 'price-sale' : ''}>{pricing.sale}</strong>
@@ -129,9 +111,7 @@ function ProductDetailPage({ product, onAddToCart }: ProductDetailPageProps) {
 
             <div className="product-detail-meta">
               <span>Категория: {product.categorySlug}</span>
-              <span>Тип: {product.type}</span>
-              {typeof product.weightGrams === 'number' ? <span>Тегло: {product.weightGrams} г</span> : null}
-              {product.balance ? <span>Баланс: {product.balance}</span> : null}
+              {cardFacts.facts.map((fact) => <span key={fact}>{fact}</span>)}
             </div>
           </article>
         </section>

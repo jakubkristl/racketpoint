@@ -69,8 +69,8 @@ export type CatalogSyncResult = {
 
 export type CmsCollection = 'categories' | 'brands' | 'products';
 
-const storageKey = 'racketpoint-cms-state-v6';
-const previousStorageKey = 'racketpoint-cms-state-v5';
+const storageKey = 'racketpoint-cms-state-v7';
+const previousStorageKey = 'racketpoint-cms-state-v6';
 const orderStorageKey = 'racketpoint-order-inbox-v4';
 const legacyStorageKey = 'racketshop-cms-state-v3';
 const legacyOrderStorageKey = 'racketshop-order-inbox-v3';
@@ -300,8 +300,44 @@ function enrichProductsWithReferenceImages(products: Product[], references: Prod
   });
 }
 
+function resolveCatalogSourceProduct(product: Product) {
+  const skuNorm = normalizeSkuToken(product.sku);
+  const sourceSku = product.attributes?.sourceSku;
+  const sourceNorm = sourceSku ? normalizeSkuToken(sourceSku) : '';
+
+  const match = defaultProducts.find((item) => {
+    const itemNorm = normalizeSkuToken(item.sku);
+    return itemNorm === skuNorm || (sourceNorm.length > 0 && itemNorm === sourceNorm);
+  });
+
+  if (match && hasUsableProductImage(match.imageUrl) && !isFallbackProductImage(match.imageUrl)) {
+    return match;
+  }
+
+  return null;
+}
+
 function hydrateProductImages(products: Product[], references: Product[]) {
-  const enriched = enrichProductsWithReferenceImages(products, references);
+  const withCatalogImages = products.map((product) => {
+    if (!isFallbackProductImage(product.imageUrl)) {
+      return product;
+    }
+
+    const catalogSource = resolveCatalogSourceProduct(product);
+    if (catalogSource) {
+      return {
+        ...product,
+        name: catalogSource.name,
+        details: catalogSource.details,
+        imageUrl: catalogSource.imageUrl,
+        supplierSource: catalogSource.supplierSource ?? product.supplierSource,
+      };
+    }
+
+    return product;
+  });
+
+  const enriched = enrichProductsWithReferenceImages(withCatalogImages, references);
   return normalizeProductList(enriched);
 }
 
@@ -321,7 +357,7 @@ function normalizeCmsState(snapshot: CmsState): CmsState {
   return {
     categories: normalizedCategories,
     brands: snapshot.brands,
-    products: normalizeProductList(snapshot.products),
+    products: hydrateProductImages(snapshot.products, []),
   };
 }
 
@@ -663,6 +699,15 @@ function retagCatalogProducts(products: Product[]) {
   }));
 }
 
+function mergeWithDefaultCatalog(base: Product[], references: Product[]) {
+  const existingSkus = new Set(base.map((product) => product.sku));
+  const extras = defaultProducts.filter((product) => !existingSkus.has(product.sku));
+  const receptionPosExtras = extras.filter((product) => product.attributes?.source === 'reception-pos');
+  const otherExtras = extras.filter((product) => product.attributes?.source !== 'reception-pos');
+
+  return retagCatalogProducts(hydrateProductImages([...receptionPosExtras, ...base, ...otherExtras], references));
+}
+
 export async function fetchProducts() {
   const [mapped, referenceCatalog] = await Promise.all([
     fetchProductsFromApi().catch(() => [] as Product[]),
@@ -679,15 +724,7 @@ export async function fetchProducts() {
       }
     }
 
-    const existingSkus = new Set(combined.map((product) => product.sku));
-    for (const product of defaultProducts) {
-      if (!existingSkus.has(product.sku)) {
-        combined.push(product);
-        existingSkus.add(product.sku);
-      }
-    }
-
-    const normalized = retagCatalogProducts(hydrateProductImages(combined, referenceCatalog));
+    const normalized = mergeWithDefaultCatalog(combined, referenceCatalog);
     productCache = normalized;
     return normalized;
   }
@@ -698,7 +735,7 @@ export async function fetchProducts() {
     if (seeded) {
       const retry = await fetchProductsFromApi().catch(() => [] as Product[]);
       if (retry.length > 0) {
-        const normalized = retagCatalogProducts(hydrateProductImages(retry, referenceCatalog));
+        const normalized = mergeWithDefaultCatalog(retry, referenceCatalog);
         productCache = normalized;
         return normalized;
       }
@@ -706,14 +743,14 @@ export async function fetchProducts() {
 
     const localStarterCatalog = loadSnapshot().products;
     if (localStarterCatalog.length > 0) {
-      const normalized = retagCatalogProducts(hydrateProductImages(localStarterCatalog, referenceCatalog));
+      const normalized = mergeWithDefaultCatalog(localStarterCatalog, referenceCatalog);
       productCache = normalized;
       return normalized;
     }
 
     const imported = referenceCatalog;
     if (imported.length > 0) {
-      const normalized = retagCatalogProducts(hydrateProductImages(imported, imported));
+      const normalized = mergeWithDefaultCatalog(imported, imported);
       productCache = normalized;
       return normalized;
     }
@@ -721,7 +758,7 @@ export async function fetchProducts() {
     return [];
   }
 
-  const normalized = retagCatalogProducts(hydrateProductImages(mapped, referenceCatalog));
+  const normalized = mergeWithDefaultCatalog(mapped, referenceCatalog);
   productCache = normalized;
   return normalized;
 }
@@ -760,7 +797,7 @@ export function getStoreSnapshot(): StoreSnapshot {
   return {
     categories: defaultCategories,
     brands: snapshot.brands,
-    products: normalizeProductList(productCache ?? snapshot.products),
+    products: productCache ?? hydrateProductImages(snapshot.products, []),
     orders: orderCache.length > 0 ? orderCache : loadOrders(),
   };
 }

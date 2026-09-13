@@ -122,7 +122,17 @@ async function products(request: Request, env: Env) {
 	return json({ id, ok: true }, request.method === 'POST' ? 201 : 200);
 }
 
+const shopInbox = 'jakubkristl77@gmail.com';
+
 export default {
+	async email(message) {
+		if (!/@racketpoint\.bg$/i.test(message.to)) {
+			message.setReject('Unknown recipient');
+			return;
+		}
+
+		await message.forward(shopInbox);
+	},
 	async fetch(request, env: WorkerEnvironment) {
 		try {
 			const path = new URL(request.url).pathname;
