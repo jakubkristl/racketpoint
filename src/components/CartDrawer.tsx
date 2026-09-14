@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import type { Product } from '../data/catalog';
 import { findProductBySku } from '../data/store';
+import ProductImage from './ProductImage';
 
 type CartLine = {
   sku: string;
@@ -103,7 +104,7 @@ function CartDrawer({
             cartItems.map((item) => (
               <article key={item.sku} className="cart-line">
                 <div className="cart-line-main">
-                  <img className="cart-line-thumb" src={item.product.imageUrl} alt={item.product.name} loading="lazy" />
+                  <ProductImage className="cart-line-thumb" product={item.product} loading="lazy" />
                   <div>
                     <p className="product-category">{item.product.brand}</p>
                     <h3>{item.product.name}</h3>

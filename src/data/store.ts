@@ -155,6 +155,11 @@ function hasUsableProductImage(imageUrl: string | undefined) {
     return false;
   }
 
+  if (normalized.includes('reception-pos.jakub-personal.workers.dev')
+    || normalized.includes('cloudflareaccess.com')) {
+    return false;
+  }
+
   return !normalized.includes('via.placeholder.com')
     && !normalized.includes('placehold.co')
     && !normalized.includes('placeholder.com');
@@ -187,7 +192,9 @@ function pickBestImageUrlFromCandidates(images: string[]) {
       || normalized.includes('/assets/')
       || normalized.includes('banner-grid')
       || normalized.includes('logo-upload')
-      || normalized.includes('/logo.')) {
+      || normalized.includes('/logo.')
+      || normalized.includes('reception-pos.jakub-personal.workers.dev')
+      || normalized.includes('cloudflareaccess.com')) {
       continue;
     }
 
@@ -258,7 +265,7 @@ function findReferenceImage(product: Product, references: Product[]) {
   return best && best.score >= 24 ? best.imageUrl : null;
 }
 
-function getFallbackImageForProduct(product: Product) {
+export function getFallbackImageForProduct(product: Pick<Product, 'categorySlug' | 'type'>) {
   const bucket = categoryFallbackImages[product.categorySlug] ?? categoryFallbackImages.squash;
   return bucket.byType[product.type] ?? bucket.default;
 }

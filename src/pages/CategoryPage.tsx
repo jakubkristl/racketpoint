@@ -5,6 +5,7 @@ import { getFavoriteSkus, isFavoriteSku, toggleFavoriteSku } from '../data/favor
 import { getAvailabilityClassName, getStockLabel, isMadeToOrder, MADE_TO_ORDER_DELIVERY_NOTE } from '../data/inventory';
 import { getProductCardFacts } from '../data/publicCatalog';
 import { getSubcategoriesForProducts, getSubcategoryByParam, getSubcategoriesForSport } from '../data/subcategories';
+import ProductImage from '../components/ProductImage';
 
 type CategoryPageProps = {
   category: Category;
@@ -452,7 +453,7 @@ function CategoryPage({ category, products, brands, onAddToCart }: CategoryPageP
                           }
                         }}
                       >
-                        <img className="product-image" src={product.imageUrl} alt={product.name} loading="lazy" />
+                        <ProductImage className="product-image" product={product} loading="lazy" />
                         <div className="product-body">
                           <h3 className={getProductTitleClass(product.name)}>{product.name}</h3>
                           {cardFacts.description ? <p className="product-card-copy">{cardFacts.description}</p> : null}

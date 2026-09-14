@@ -4,6 +4,7 @@ import type { Product } from '../data/catalog';
 import { getFavoriteSkus, toggleFavoriteSku } from '../data/favorites';
 import { getProductCardFacts } from '../data/publicCatalog';
 import { getAvailabilityClassName, getStockLabel, isMadeToOrder, MADE_TO_ORDER_DELIVERY_NOTE } from '../data/inventory';
+import ProductImage from '../components/ProductImage';
 
 type FavoritesPageProps = {
   products: Product[];
@@ -101,7 +102,7 @@ function FavoritesPage({ products, onAddToCart }: FavoritesPageProps) {
                   }
                 }}
               >
-                <img className="product-image" src={product.imageUrl} alt={product.name} loading="lazy" />
+                <ProductImage className="product-image" product={product} loading="lazy" />
                 <div className="product-body">
                   <h3 className={getProductTitleClass(product.name)}>{product.name}</h3>
                   {cardFacts.description ? <p className="product-card-copy">{cardFacts.description}</p> : null}

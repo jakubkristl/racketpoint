@@ -3,6 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import type { Product } from '../data/catalog';
 import { findProductBySku, submitOrderRequest } from '../data/store';
 import { savePendingBoricaOrder } from '../data/paymentSession';
+import ProductImage from '../components/ProductImage';
 
 type CartLine = {
   sku: string;
@@ -227,7 +228,7 @@ function CheckoutPage({ products, lines, onIncrement, onDecrement, onRemove, onC
             {cartItems.length > 0 ? cartItems.map((item) => (
               <article key={item.sku} className="checkout-line-row">
                 <div className="checkout-line-product">
-                  <img className="checkout-line-thumb" src={item.product.imageUrl} alt={item.product.name} loading="lazy" />
+                  <ProductImage className="checkout-line-thumb" product={item.product} loading="lazy" />
                   <div>
                     <p className="product-category">{item.product.brand}</p>
                     <h3>{item.product.name}</h3>

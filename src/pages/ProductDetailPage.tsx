@@ -4,6 +4,7 @@ import type { Product } from '../data/catalog';
 import { isFavoriteSku, toggleFavoriteSku } from '../data/favorites';
 import { getAvailabilityClassName, getStockDetailLabel, isMadeToOrder, MADE_TO_ORDER_DELIVERY_NOTE } from '../data/inventory';
 import { getProductCardFacts, getPublicAttributes, getPublicDescription } from '../data/publicCatalog';
+import ProductImage from '../components/ProductImage';
 
 function formatEur(value: number) {
   return `EUR ${value.toFixed(2)}`;
@@ -60,7 +61,7 @@ function ProductDetailPage({ product, onAddToCart }: ProductDetailPageProps) {
 
         <section className="product-detail-grid">
           <article className="product-detail-gallery">
-            <img className="product-detail-image" src={product.imageUrl} alt={product.name} />
+            <ProductImage className="product-detail-image" product={product} />
           </article>
 
           <article className="product-detail-panel">

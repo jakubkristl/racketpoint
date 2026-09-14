@@ -1,12 +1,31 @@
 import type { Product, ProductType } from './catalog';
+import { unsquashableProducts } from './productsUnsquashable';
 
-const POS_IMAGE_CDN = 'https://reception-pos.jakub-personal.workers.dev';
-
-const IMAGE_REMAP: Record<string, string> = {
-  '/kiosk/store/products/strings-grips/Unsquashable TOUR-TEC PRO PU Grip.webp':
-    '/kiosk/store/products/strings-grips/Unsquashable TOUR-TEC PRO PU Grip.jpg',
-  '/kiosk/store/products/rackets/Unsquashable Y-TEC PRO 125.webp':
-    '/kiosk/store/products/rackets/Unsquashable Y-TEC PRO 125.jpg',
+const PUBLIC_IMAGE_BY_ID: Record<string, string> = {
+  'unsquashable-tour-tec-pro-125':
+    'https://cdn.shopify.com/s/files/1/0510/5264/2502/files/TOUR-TECPROracket-2600x4000-IMG001_9d3d1576-bea2-4636-8de4-7971b5dcb4db.jpg?v=1771514668&width=900',
+  'unsquashable-james-willstrop-signature':
+    'https://cdn.shopify.com/s/files/1/0510/5264/2502/files/JAMESWILLSTROPAUTOGRAPH2600x4000-ANGLE4_ca3b55e0-10ba-44ca-bc15-ccb66b20dcb3.jpg?v=1724404460&width=900',
+  'unsquashable-ultra-lite-120':
+    'https://cdn.shopify.com/s/files/1/0510/5264/2502/files/04_-_UNSQUASHABLE_THERMO-PRO_120_Squash_Racket_-_2600x4000_4f631c67-cdde-414a-b7c6-8bae42088fbf.jpg?v=1773047996&width=900',
+  'unsquashable-miguel-rodriguez-one20':
+    'https://cdn.shopify.com/s/files/1/0510/5264/2502/files/04-UNSQUASHABLEMIGUELRODRIGUEZSPEZIAL110SquashRacket-2600x4000.jpg?v=1758593935&width=900',
+  'unsquashable-tour-tec-pro-deluxe-racket-bag':
+    'https://cdn.shopify.com/s/files/1/0510/5264/2502/products/UNSQUASHABLETOUR-TECPRODeluxeRacketBag2angle.jpg?v=1724404422&width=900',
+  'karakal-pu-super-grip-pro-6-pack':
+    'https://cdn.shopify.com/s/files/1/0648/8322/8918/files/karakal-pu-super-grip-pack-of-two-02.webp?v=1784548209&width=900',
+  'tecnifibre-carboflex-125-airshaft':
+    'https://cdn.webshopapp.com/shops/40033/files/315848126/tecnifibre-carboflex-125-ns-airshaft.jpg',
+  'tecnifibre-carboflex-125-x-speed':
+    'https://cdn.webshopapp.com/shops/40033/files/308779736/tecnifibre-carboflex-125-x-speed.jpg',
+  'tecnifibre-carboflex-125-x-top':
+    'https://cdn.webshopapp.com/shops/40033/files/487694047/tecnifibre-carboflex-125-x-top.jpg',
+  'tecnifibre-carboflex-120-x-top-v2':
+    'https://cdn.webshopapp.com/shops/40033/files/466313160/tecnifibre-carboflex-120-x-top-v2.jpg',
+  'dunlop-sonic-core-ultimate-132':
+    'https://cdn.webshopapp.com/shops/40033/files/417558576/dunlop-sonic-core-ultimate-132.jpg',
+  'unsquashable-ultra-lite-135':
+    'https://cdn.shopify.com/s/files/1/0510/5264/2502/files/04_-_UNSQUASHABLE_THERMO-PRO_120_Squash_Racket_-_2600x4000_4f631c67-cdde-414a-b7c6-8bae42088fbf.jpg?v=1773047996&width=900',
 };
 
 type ReceptionPosSeed = {
@@ -344,9 +363,40 @@ const STORE_PRODUCTS: ReceptionPosSeed[] = [
   },
 ];
 
-function posImageUrl(path: string) {
-  const remapped = IMAGE_REMAP[path] ?? path;
-  return `${POS_IMAGE_CDN}${encodeURI(remapped)}`;
+function normalizeImageName(value: string) {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/\bsignature\b/g, 'autograph')
+    .replace(/\blimited edition\b/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function findPublicCatalogImage(name: string) {
+  const target = normalizeImageName(name);
+  const exact = unsquashableProducts.find((item) => normalizeImageName(item.name) === target);
+  if (exact?.imageUrl) {
+    return exact.imageUrl;
+  }
+
+  const candidates = unsquashableProducts.filter((item) => {
+    const normalized = normalizeImageName(item.name);
+    return normalized === target || target.startsWith(`${normalized} `) || normalized.startsWith(`${target} `);
+  });
+
+  return candidates.length === 1 ? candidates[0].imageUrl : undefined;
+}
+
+function posImageUrl(item: ReceptionPosSeed) {
+  const byId = PUBLIC_IMAGE_BY_ID[item.id];
+  if (byId) {
+    return byId;
+  }
+
+  return findPublicCatalogImage(item.name) ?? '';
 }
 
 function brandFromName(name: string) {
@@ -415,7 +465,7 @@ export const receptionPosProducts: Product[] = STORE_PRODUCTS.map((item) => {
     detailsBg: 'Налична бройка в клуба Double Yellow. Може да се вземе на място или да се поръча за доставка.',
     description: item.name,
     badges: item.featured ? ['На склад', 'Хит'] : ['На склад'],
-    imageUrl: posImageUrl(item.imageUrl),
+    imageUrl: posImageUrl(item),
     stock,
     supplierSource: 'Double Yellow Squash Club reception shop',
     attributes: {
