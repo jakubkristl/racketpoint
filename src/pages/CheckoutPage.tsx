@@ -4,6 +4,7 @@ import type { Product } from '../data/catalog';
 import { findProductBySku, submitOrderRequest } from '../data/store';
 import { savePendingBoricaOrder } from '../data/paymentSession';
 import ProductImage from '../components/ProductImage';
+import { COURIER_SHIPPING_EUR, getShippingEur } from '../data/checkout';
 
 type CartLine = {
   sku: string;
@@ -18,11 +19,6 @@ type CheckoutPageProps = {
   onRemove: (sku: string) => void;
   onClear: () => void;
 };
-
-const deliveryChoices = [
-  { value: 'pickup', title: 'Вземане от магазин', badge: 'София', note: 'Вземане от ул. „Любен Русев“ 6, 1113 София.' },
-  { value: 'courier', title: 'Куриер', badge: 'BG', note: 'Ще се свържем с вас за доставка след поръчката.' },
-] as const;
 
 const paymentChoices = [
   { value: 'card', title: 'Карта', badge: 'V/MC', note: 'Сигурно онлайн картово плащане.' },
@@ -42,6 +38,11 @@ function formatCurrency(value: number) {
     maximumFractionDigits: 2,
   }).format(value);
 }
+
+const deliveryChoices = [
+  { value: 'pickup' as const, title: 'Вземане от магазин', badge: 'Безплатно', note: 'Вземане от ул. „Любен Русев“ 6, 1113 София.' },
+  { value: 'courier' as const, title: 'Куриер', badge: formatCurrency(COURIER_SHIPPING_EUR), note: `Доставка в България за ${formatCurrency(COURIER_SHIPPING_EUR)}, обикновено 1–3 работни дни.` },
+];
 
 function postToGateway(actionUrl: string, fields: Record<string, string>) {
   const form = document.createElement('form');
@@ -68,7 +69,8 @@ function CheckoutPage({ products, lines, onIncrement, onDecrement, onRemove, onC
   const [city, setCity] = useState('');
   const [address, setAddress] = useState('');
   const [deliveryOption, setDeliveryOption] = useState<'pickup' | 'courier'>('pickup');
-  const [paymentOption, setPaymentOption] = useState<'card' | 'cash_on_delivery'>('card');
+  const [paymentOption, setPaymentOption] = useState<'card' | 'cash_on_delivery'>('cash_on_delivery');
+  const [cardEnabled, setCardEnabled] = useState(false);
   const [notes, setNotes] = useState('');
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
@@ -95,12 +97,41 @@ function CheckoutPage({ products, lines, onIncrement, onDecrement, onRemove, onC
 
   const totalItems = cartItems.reduce((sum, item) => sum + item.quantity, 0);
   const totalPrice = cartItems.reduce((sum, item) => sum + item.lineTotal, 0);
+  const shippingEur = getShippingEur(deliveryOption);
+  const grandTotal = totalPrice + shippingEur;
+  const visiblePaymentChoices = paymentChoices.filter((choice) => choice.value !== 'card' || cardEnabled);
 
   useEffect(() => {
     if (location.search.includes('checkout=retry')) {
       setStatus('Плащането не беше завършено. Прегледайте поръчката и опитайте отново.');
     }
   }, [location.search]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    fetch('/api/payments/gateways')
+      .then(async (response) => {
+        const payload = await response.json().catch(() => null) as { gateways?: Array<{ id?: string; enabled?: boolean }> } | null;
+        const borica = payload?.gateways?.find((gateway) => gateway.id === 'borica');
+        if (!cancelled) {
+          setCardEnabled(Boolean(borica?.enabled));
+          if (!borica?.enabled) {
+            setPaymentOption('cash_on_delivery');
+          }
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setCardEnabled(false);
+          setPaymentOption('cash_on_delivery');
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   async function handleCheckoutSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -122,9 +153,10 @@ function CheckoutPage({ products, lines, onIncrement, onDecrement, onRemove, onC
 
     const orderNotes = [
       `Телефон: ${phone}`,
-      `Град: ${city}`,
-      `Адрес: ${address}`,
+      city ? `Град: ${city}` : '',
+      address ? `Адрес: ${address}` : '',
       `Опция за доставка: ${deliveryLabel}`,
+      `Доставка: ${formatCurrency(shippingEur)}`,
       `Опция за плащане: ${paymentLabel}`,
       notes ? `Бележки: ${notes}` : '',
     ]
@@ -142,25 +174,31 @@ function CheckoutPage({ products, lines, onIncrement, onDecrement, onRemove, onC
       billingAddress: { city, address, phone },
       paymentMethod,
       notes: orderNotes,
+      shippingEur,
     } as const;
 
     if (paymentMethod === 'cash_on_delivery') {
-      const result = await submitOrderRequest({
-        ...orderRequest,
-        payment: {
-          status: 'cash_on_delivery',
-        },
-      });
-      setStatus(`Поръчката е създадена успешно: ${result.reference}.`);
-      setFullName('');
-      setEmail('');
-      setPhone('');
-      setCity('');
-      setAddress('');
-      setNotes('');
-      setDeliveryOption('pickup');
-      setPaymentOption('card');
-      onClear();
+      try {
+        const result = await submitOrderRequest({
+          ...orderRequest,
+          payment: {
+            status: 'cash_on_delivery',
+          },
+        });
+        setStatus(`Поръчката е приета: ${result.reference}. Ще се свържем с вас за потвърждение.`);
+        setFullName('');
+        setEmail('');
+        setPhone('');
+        setCity('');
+        setAddress('');
+        setNotes('');
+        setDeliveryOption('pickup');
+        setPaymentOption('cash_on_delivery');
+        onClear();
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Поръчката не беше приета. Опитайте отново.';
+        setStatus(message);
+      }
       return;
     }
 
@@ -173,7 +211,7 @@ function CheckoutPage({ products, lines, onIncrement, onDecrement, onRemove, onC
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          amount: totalPrice,
+          amount: grandTotal,
           currency: 'EUR',
           fullName,
           email,
@@ -195,7 +233,7 @@ function CheckoutPage({ products, lines, onIncrement, onDecrement, onRemove, onC
         throw new Error(payload.error || 'Неуспешно стартиране на плащането.');
       }
 
-      savePendingBoricaOrder(payload.order, totalPrice, orderRequest);
+      savePendingBoricaOrder(payload.order, grandTotal, orderRequest);
       postToGateway(payload.actionUrl, payload.fields);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Неуспешно стартиране на плащането.';
@@ -255,8 +293,14 @@ function CheckoutPage({ products, lines, onIncrement, onDecrement, onRemove, onC
           </div>
 
           <div className="cart-total checkout-total-box">
-            <strong>Общо</strong>
-            <strong>{formatCurrency(totalPrice)}</strong>
+            <div className="checkout-total-breakdown">
+              <span>Продукти</span>
+              <strong>{formatCurrency(totalPrice)}</strong>
+              <span>Доставка</span>
+              <strong>{shippingEur === 0 ? 'Безплатно' : formatCurrency(shippingEur)}</strong>
+              <span>Общо</span>
+              <strong>{formatCurrency(grandTotal)}</strong>
+            </div>
           </div>
         </section>
 
@@ -277,11 +321,11 @@ function CheckoutPage({ products, lines, onIncrement, onDecrement, onRemove, onC
             </label>
             <label>
               Град
-              <input value={city} onChange={(event) => setCity(event.target.value)} required />
+              <input value={city} onChange={(event) => setCity(event.target.value)} required={deliveryOption === 'courier'} />
             </label>
             <label>
               Адрес
-              <textarea value={address} onChange={(event) => setAddress(event.target.value)} rows={2} required />
+              <textarea value={address} onChange={(event) => setAddress(event.target.value)} rows={2} required={deliveryOption === 'courier'} />
             </label>
             <fieldset className="checkout-choice-group">
               <legend>Опция за доставка</legend>
@@ -307,7 +351,7 @@ function CheckoutPage({ products, lines, onIncrement, onDecrement, onRemove, onC
             <fieldset className="checkout-choice-group">
               <legend>Опция за плащане</legend>
               <div className="checkout-choice-grid">
-                {paymentChoices.map((choice) => (
+                {visiblePaymentChoices.map((choice) => (
                   <label key={choice.value} className={paymentOption === choice.value ? 'checkout-choice-card active' : 'checkout-choice-card'}>
                     <input
                       type="radio"

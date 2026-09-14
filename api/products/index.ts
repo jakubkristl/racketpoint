@@ -1,4 +1,5 @@
 import { ensureSchema, sql } from '../_lib/db';
+import { ensureStarterCatalogInPostgres } from '../_lib/ensureStorefrontCatalog';
 import { methodNotAllowed, normalizeSlug, readBody, toNumber } from '../_lib/http';
 import { requireAdmin } from '../_lib/auth';
 
@@ -64,6 +65,7 @@ export default async function handler(req: any, res: any) {
     await ensureSchema();
 
     if (req.method === 'GET') {
+      await ensureStarterCatalogInPostgres();
       const filters = parseFilters(req);
 
       const result = await sql`

@@ -61,7 +61,7 @@ async function loadProductForUpdate(sku: string) {
   const result = await sql`
     SELECT id, selling_price, discount_price, stock
     FROM products
-    WHERE id = ${sku}
+    WHERE id = ${sku} OR attributes->>'sourceSku' = ${sku}
     LIMIT 1
   `;
 
@@ -200,7 +200,7 @@ export default async function handler(req: any, res: any) {
       const update = await sql`
         UPDATE products
         SET stock = GREATEST(0, stock - ${item.quantity})
-        WHERE id = ${item.sku}
+        WHERE id = ${product.id}
         RETURNING id, selling_price, discount_price, stock
       `;
 
@@ -212,7 +212,7 @@ export default async function handler(req: any, res: any) {
         return;
       }
 
-      decremented.push({ sku: item.sku, quantity: item.quantity });
+      decremented.push({ sku: product.id, quantity: item.quantity });
       const updated = update.rows[0] as ProductRow;
       const serverPrice = effectivePrice(updated);
       resolvedItems.push({

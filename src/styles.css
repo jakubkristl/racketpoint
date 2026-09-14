@@ -2502,6 +2502,19 @@ button {
   margin-top: 10px;
 }
 
+.checkout-total-breakdown {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 6px 16px;
+  width: 100%;
+  font-size: 0.92rem;
+}
+
+.checkout-total-breakdown span:nth-last-child(2),
+.checkout-total-breakdown strong:last-child {
+  font-size: 1.05rem;
+}
+
 .cart-total {
   display: flex;
   align-items: center;

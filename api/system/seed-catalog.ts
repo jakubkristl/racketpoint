@@ -59,7 +59,7 @@ export default async function handler(req: any, res: any) {
 
     let inserted = 0;
     for (const product of starterProducts) {
-      const id = `prd_${product.sku.toLowerCase().replace(/[^a-z0-9]+/g, '_')}`;
+      const id = product.sku;
       const slug = normalizeSlug(`${product.name}-${product.sku}`);
       const description = product.description || product.details || product.name;
       const result = await sql`

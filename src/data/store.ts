@@ -24,6 +24,7 @@ export type OrderInput = {
   };
   paymentMethod?: 'card' | 'cash_on_delivery';
   notes?: string;
+  shippingEur?: number;
   payment?: {
     provider?: 'borica';
     status?: 'pending' | 'approved' | 'failed' | 'cash_on_delivery';
@@ -932,6 +933,7 @@ export async function submitOrderRequest(request: OrderInput): Promise<{ referen
       paymentMethod: request.paymentMethod === 'cash_on_delivery' ? 'cash_on_delivery' : 'card',
       paymentProvider: request.payment?.provider ?? (request.paymentMethod === 'card' ? 'borica' : 'manual'),
       idempotencyKey,
+      shippingEur: request.shippingEur,
       payment: request.payment
         ? {
           gatewayOrder: request.payment.gatewayOrder,
@@ -950,9 +952,9 @@ export async function submitOrderRequest(request: OrderInput): Promise<{ referen
     }),
   });
 
-  const payload = await parseResponse<{ id: string }>(response);
+  const payload = await parseResponse<{ id?: string; reference?: string }>(response);
   await fetchOrders({ includeAll: getSessionUser()?.role === 'ADMIN' }).catch(() => undefined);
-  return { reference: payload.id };
+  return { reference: payload.reference || payload.id || '' };
 }
 
 export async function updateOrderStatus(reference: string, status: OrderRecord['status']) {

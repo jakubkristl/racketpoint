@@ -1,3 +1,5 @@
+import { createStorefrontOrder, ensureStorefrontCatalog, listStorefrontOrders, paymentGatewaysResponse } from './workerCommerce';
+
 type ProductPayload = {
 	title?: string;
 	description?: string;
@@ -15,7 +17,12 @@ type ProductPayload = {
 	rating?: number;
 };
 
-type WorkerEnvironment = Env & { ADMIN_EMAIL?: string; ADMIN_PASSWORD?: string };
+type WorkerEnvironment = Env & {
+	ADMIN_EMAIL?: string;
+	ADMIN_PASSWORD?: string;
+	BORICA_PRIVATE_KEY_PEM?: string;
+	BORICA_TERMINAL_ID?: string;
+};
 const encoder = new TextEncoder();
 let adminUserReady = false;
 
@@ -23,6 +30,7 @@ const schema = `
 	CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, name TEXT NOT NULL, email TEXT UNIQUE NOT NULL, password_hash TEXT NOT NULL, role TEXT NOT NULL, addresses TEXT NOT NULL DEFAULT '[]', created_at TEXT NOT NULL);
 	CREATE TABLE IF NOT EXISTS sessions (token TEXT PRIMARY KEY, user_id TEXT NOT NULL, expires_at TEXT NOT NULL);
 	CREATE TABLE IF NOT EXISTS products (id TEXT PRIMARY KEY, title TEXT NOT NULL, slug TEXT UNIQUE NOT NULL, description TEXT NOT NULL, brand TEXT NOT NULL, sport TEXT NOT NULL, sub_category TEXT NOT NULL, cost_price REAL NOT NULL, selling_price REAL NOT NULL, discount_price REAL, stock INTEGER NOT NULL, images TEXT NOT NULL, attributes TEXT NOT NULL, sizes TEXT NOT NULL DEFAULT '[]', weight_grams INTEGER, balance TEXT, rating REAL NOT NULL DEFAULT 4.5, created_at TEXT NOT NULL);
+	CREATE TABLE IF NOT EXISTS orders (id TEXT PRIMARY KEY, email TEXT NOT NULL, full_name TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'Pending', total_amount REAL NOT NULL, payment_method TEXT NOT NULL, payment_status TEXT NOT NULL DEFAULT 'pending', address TEXT, items TEXT NOT NULL, notes TEXT, created_at TEXT NOT NULL);
 `;
 
 const json = (value: unknown, status = 200) => Response.json(value, { status, headers: { 'Cache-Control': 'no-store' } });
@@ -148,7 +156,27 @@ export default {
 			}
 			if (path === '/api/products') {
 				await env.DB.exec(schema);
+				try {
+					await ensureStorefrontCatalog(env, request);
+				} catch {
+					// Keep serving whatever is already in D1 if catalog seed fails.
+				}
 				return products(request, env);
+			}
+			if (path === '/api/payments/gateways' && request.method === 'GET') {
+				return paymentGatewaysResponse(env);
+			}
+			if (path === '/api/orders/create' && request.method === 'POST') {
+				await env.DB.exec(schema);
+				return createStorefrontOrder(request, env);
+			}
+			if (path === '/api/orders' && request.method === 'GET') {
+				await env.DB.exec(schema);
+				const includeAll = new URL(request.url).searchParams.get('all') === '1';
+				if (includeAll && !await isAdmin(request, env)) {
+					return fail('Admin role required.', 403);
+				}
+				return listStorefrontOrders(request, env);
 			}
 			return env.ASSETS.fetch(request);
 		} catch (error) {
