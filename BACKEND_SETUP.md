@@ -1,37 +1,41 @@
 # Racketpoint Backend Setup
 
-This project runs as a single system on Vercel:
+This project runs as a single system on Cloudflare Workers:
 
-- React storefront (Vite)
-- Vercel serverless API routes under `api/`
-- Vercel Postgres for persistence
-- BORICA and COD payment gateways
+- React storefront (Vite → `dist/`)
+- Worker API routes in `src/worker.ts`
+- Cloudflare D1 for persistence
+- COD (and BORICA-ready) payment gateways
 
 ## Architecture
 
 ```text
 Browser
-  -> Vite Frontend
-  -> Vercel API Routes (/api)
-  -> Vercel Postgres
+  -> Cloudflare Worker (assets + /api)
+  -> D1 (racketpoint-db)
 ```
 
-## Required environment variables
+## Deploy
 
-- `POSTGRES_URL`
-- `JWT_SECRET`
+```bash
+npm run deploy
+```
 
-## Recommended environment variables
+Config: `wrangler.jsonc`  
+Worker entry: `src/worker.ts`  
+Commerce helpers: `src/workerCommerce.ts`
+
+## Recommended Worker secrets / vars
 
 - `ADMIN_EMAIL`
-- `ADMIN_PASSWORD_HASH`
-- `BOOTSTRAP_API_KEY`
+- `ADMIN_PASSWORD`
 - `BORICA_TERMINAL_ID`
 - `BORICA_PRIVATE_KEY_PEM`
 - `BORICA_PUBLIC_KEY_PEM`
 - `BORICA_GATE_URL`
 - `BORICA_BACKREF_URL`
 - `BORICA_RESULT_URL`
+- `PUBLIC_APP_URL`
 
 ## Implemented API map
 
@@ -39,56 +43,23 @@ Browser
 
 - `POST /api/auth/register`
 - `POST /api/auth/login`
-- `GET /api/auth/profile`
-- `PUT /api/auth/profile`
 
 ### Products
 
 - `GET /api/products`
-- `POST /api/products` (admin)
-- `PUT /api/products?id=<id>` (admin)
-- `DELETE /api/products?id=<id>` (admin)
+- `POST|PUT /api/products` (admin)
 
 ### Orders
 
 - `POST /api/orders/create`
 - `GET /api/orders`
-- `PUT /api/orders/status` (admin)
-
-### Admin
-
-- `GET /api/admin/stats` (admin)
 
 ### Payments
 
 - `GET /api/payments/gateways`
-- `POST /api/payments/gateways/checkout`
-- `POST /api/payments/borica/init`
-- `GET|POST /api/payments/borica/callback`
-
-### System
-
-- `GET /api/system/health`
-- `POST /api/system/bootstrap`
-
-## Bootstrap flow
-
-1. Deploy to Vercel with Postgres connected.
-2. Set all required environment variables.
-3. Call bootstrap once to initialize admin and optional sample products.
-
-Example bootstrap call:
-
-```bash
-curl -X POST "https://racketpoint.bg/api/system/bootstrap" \
-  -H "Content-Type: application/json" \
-  -H "x-bootstrap-key: $BOOTSTRAP_API_KEY" \
-  -d '{"adminEmail":"admin@racketpoint.bg","adminPassword":"StrongPass123!","seedSampleProducts":true}'
-```
 
 ## Security notes
 
-- Use strong `JWT_SECRET` and rotate periodically.
-- Never expose bootstrap key in frontend code.
-- Keep BORICA key material only in Vercel environment variables.
-- Restrict admin operations to `ADMIN` role JWTs.
+- Use a strong admin password and rotate periodically.
+- Keep BORICA key material only in Worker secrets (never in the frontend bundle).
+- Restrict product write operations to admin sessions.

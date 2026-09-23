@@ -146,7 +146,7 @@ const categoryFallbackImages: Record<string, { default: string; byType: Partial<
   },
 };
 
-function hasUsableProductImage(imageUrl: string | undefined) {
+export function hasUsableProductImage(imageUrl: string | undefined) {
   if (!imageUrl || !imageUrl.trim()) {
     return false;
   }
@@ -156,14 +156,26 @@ function hasUsableProductImage(imageUrl: string | undefined) {
     return false;
   }
 
-  if (normalized.includes('reception-pos.jakub-personal.workers.dev')
-    || normalized.includes('cloudflareaccess.com')) {
+  if (normalized.includes('reception-pos')
+    || normalized.includes('jakub-personal.workers.dev')
+    || normalized.includes('cloudflareaccess.com')
+    || normalized.includes('/kiosk/')) {
     return false;
   }
 
-  return !normalized.includes('via.placeholder.com')
-    && !normalized.includes('placehold.co')
-    && !normalized.includes('placeholder.com');
+  if (normalized.includes('via.placeholder.com')
+    || normalized.includes('placehold.co')
+    || normalized.includes('placeholder.com')) {
+    return false;
+  }
+
+  if (normalized.startsWith('http://') || normalized.startsWith('https://')) {
+    return true;
+  }
+
+  // Local static assets that ship with the storefront build.
+  return normalized.startsWith('/branding/')
+    || normalized.startsWith('/imports/');
 }
 
 function isFallbackProductImage(imageUrl: string | undefined) {
@@ -194,8 +206,10 @@ function pickBestImageUrlFromCandidates(images: string[]) {
       || normalized.includes('banner-grid')
       || normalized.includes('logo-upload')
       || normalized.includes('/logo.')
-      || normalized.includes('reception-pos.jakub-personal.workers.dev')
-      || normalized.includes('cloudflareaccess.com')) {
+      || normalized.includes('reception-pos')
+      || normalized.includes('jakub-personal.workers.dev')
+      || normalized.includes('cloudflareaccess.com')
+      || normalized.includes('/kiosk/')) {
       continue;
     }
 
@@ -308,35 +322,63 @@ function enrichProductsWithReferenceImages(products: Product[], references: Prod
   });
 }
 
-function resolveCatalogSourceProduct(product: Product) {
+function isRealCatalogPhoto(imageUrl: string | undefined) {
+  return hasUsableProductImage(imageUrl) && !isFallbackProductImage(imageUrl);
+}
+
+function resolveCatalogSourceProduct(product: Product, references: Product[] = defaultProducts) {
+  const catalog = references.length > 0 ? references : defaultProducts;
   const skuNorm = normalizeSkuToken(product.sku);
   const sourceSku = product.attributes?.sourceSku;
   const sourceNorm = sourceSku ? normalizeSkuToken(sourceSku) : '';
+  const nameNorm = normalizeLookupValue(product.name);
+  const brandNorm = normalizeLookupValue(product.brand);
 
-  const match = defaultProducts.find((item) => {
+  const bySku = catalog.find((item) => {
+    if (!isRealCatalogPhoto(item.imageUrl)) {
+      return false;
+    }
+
     const itemNorm = normalizeSkuToken(item.sku);
-    return itemNorm === skuNorm || (sourceNorm.length > 0 && itemNorm === sourceNorm);
+    const itemSource = item.attributes?.sourceSku ? normalizeSkuToken(item.attributes.sourceSku) : '';
+    return itemNorm === skuNorm
+      || (sourceNorm.length > 0 && (itemNorm === sourceNorm || itemSource === sourceNorm))
+      || (itemSource.length > 0 && itemSource === skuNorm);
   });
 
-  if (match && hasUsableProductImage(match.imageUrl) && !isFallbackProductImage(match.imageUrl)) {
-    return match;
+  if (bySku) {
+    return bySku;
   }
 
-  return null;
+  const byExactName = catalog.find((item) => (
+    isRealCatalogPhoto(item.imageUrl)
+    && normalizeLookupValue(item.name) === nameNorm
+    && (!brandNorm || normalizeLookupValue(item.brand) === brandNorm)
+  ));
+
+  if (byExactName) {
+    return byExactName;
+  }
+
+  const referenceImage = findReferenceImage(product, catalog.filter((item) => isRealCatalogPhoto(item.imageUrl)));
+  if (!referenceImage) {
+    return null;
+  }
+
+  return catalog.find((item) => item.imageUrl === referenceImage) ?? null;
 }
 
 function hydrateProductImages(products: Product[], references: Product[]) {
+  const catalogRefs = [...references, ...defaultProducts];
   const withCatalogImages = products.map((product) => {
-    if (!isFallbackProductImage(product.imageUrl)) {
+    if (!isFallbackProductImage(product.imageUrl) && hasUsableProductImage(product.imageUrl)) {
       return product;
     }
 
-    const catalogSource = resolveCatalogSourceProduct(product);
-    if (catalogSource) {
+    const catalogSource = resolveCatalogSourceProduct(product, catalogRefs);
+    if (catalogSource && isRealCatalogPhoto(catalogSource.imageUrl)) {
       return {
         ...product,
-        name: catalogSource.name,
-        details: catalogSource.details,
         imageUrl: catalogSource.imageUrl,
         supplierSource: catalogSource.supplierSource ?? product.supplierSource,
       };
@@ -345,7 +387,7 @@ function hydrateProductImages(products: Product[], references: Product[]) {
     return product;
   });
 
-  const enriched = enrichProductsWithReferenceImages(withCatalogImages, references);
+  const enriched = enrichProductsWithReferenceImages(withCatalogImages, catalogRefs);
   return normalizeProductList(enriched);
 }
 
@@ -603,7 +645,7 @@ function mapApiProductToCatalogProduct(item: any): Product {
     stock: Number(item.stock ?? 0),
     details: String(item.description ?? ''),
     badges: [],
-    imageUrl: bestImageUrl || 'https://via.placeholder.com/1200x800?text=Racketpoint',
+    imageUrl: bestImageUrl || '',
     weightGrams: item.weightGrams == null ? undefined : Number(item.weightGrams),
     balance: typeof item.balance === 'string' ? item.balance as Product['balance'] : undefined,
     attributes: item.attributes && typeof item.attributes === 'object'
@@ -708,12 +750,36 @@ function retagCatalogProducts(products: Product[]) {
 }
 
 function mergeWithDefaultCatalog(base: Product[], references: Product[]) {
-  const existingSkus = new Set(base.map((product) => product.sku));
+  const receptionBySku = new Map(
+    defaultProducts
+      .filter((product) => product.attributes?.source === 'reception-pos')
+      .map((product) => [product.sku, product] as const),
+  );
+
+  // API/DB can still hold legacy workers.dev /kiosk URLs — prefer the public catalog photo.
+  const patchedBase = base.map((product) => {
+    const reception = receptionBySku.get(product.sku);
+    if (!reception) {
+      return product;
+    }
+
+    if (isRealCatalogPhoto(reception.imageUrl) && !isRealCatalogPhoto(product.imageUrl)) {
+      return {
+        ...product,
+        imageUrl: reception.imageUrl,
+        supplierSource: reception.supplierSource ?? product.supplierSource,
+      };
+    }
+
+    return product;
+  });
+
+  const existingSkus = new Set(patchedBase.map((product) => product.sku));
   const extras = defaultProducts.filter((product) => !existingSkus.has(product.sku));
   const receptionPosExtras = extras.filter((product) => product.attributes?.source === 'reception-pos');
   const otherExtras = extras.filter((product) => product.attributes?.source !== 'reception-pos');
 
-  return retagCatalogProducts(hydrateProductImages([...receptionPosExtras, ...base, ...otherExtras], references));
+  return retagCatalogProducts(hydrateProductImages([...receptionPosExtras, ...patchedBase, ...otherExtras], references));
 }
 
 export async function fetchProducts() {
@@ -805,7 +871,7 @@ export function getStoreSnapshot(): StoreSnapshot {
   return {
     categories: defaultCategories,
     brands: snapshot.brands,
-    products: productCache ?? hydrateProductImages(snapshot.products, []),
+    products: productCache ?? mergeWithDefaultCatalog(snapshot.products, defaultProducts),
     orders: orderCache.length > 0 ? orderCache : loadOrders(),
   };
 }

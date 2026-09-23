@@ -1,6 +1,5 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import { sql } from '@vercel/postgres';
 
 const SITE = 'https://www.squashpoint.com';
 const CONCURRENCY = 5;
@@ -266,50 +265,6 @@ function parseProductPage(url, html) {
   };
 }
 
-async function upsertProduct(product) {
-  await sql`
-    INSERT INTO products (
-      id, title, slug, description, brand, sport, sub_category,
-      cost_price, selling_price, discount_price, stock, images, attributes, sizes,
-      weight_grams, balance, rating
-    ) VALUES (
-      ${product.id},
-      ${product.title},
-      ${product.slug},
-      ${product.description},
-      ${product.brand},
-      ${product.sport},
-      ${product.sub_category},
-      ${product.cost_price},
-      ${product.selling_price},
-      ${product.discount_price},
-      ${product.stock},
-      ${JSON.stringify(product.images)}::jsonb,
-      ${JSON.stringify(product.attributes)}::jsonb,
-      ${JSON.stringify(product.sizes)}::jsonb,
-      ${product.weight_grams},
-      ${product.balance},
-      ${product.rating}
-    )
-    ON CONFLICT (slug) DO UPDATE SET
-      title = EXCLUDED.title,
-      description = EXCLUDED.description,
-      brand = EXCLUDED.brand,
-      sport = EXCLUDED.sport,
-      sub_category = EXCLUDED.sub_category,
-      cost_price = EXCLUDED.cost_price,
-      selling_price = EXCLUDED.selling_price,
-      discount_price = EXCLUDED.discount_price,
-      stock = EXCLUDED.stock,
-      images = EXCLUDED.images,
-      attributes = EXCLUDED.attributes,
-      sizes = EXCLUDED.sizes,
-      weight_grams = EXCLUDED.weight_grams,
-      balance = EXCLUDED.balance,
-      rating = EXCLUDED.rating
-  `;
-}
-
 async function main() {
   console.log('Collecting product URLs from Squashpoint collection pages...');
   const productUrls = await collectProductUrls();
@@ -346,24 +301,7 @@ async function main() {
   const outputPath = resolve(publicDir, 'squashpoint-products.json');
   await writeFile(outputPath, JSON.stringify(parsedProducts, null, 2), 'utf8');
   console.log(`Wrote public import file to ${outputPath}`);
-
-  if (process.env.POSTGRES_URL || process.env.POSTGRES_URL_NON_POOLING || process.env.DATABASE_URL) {
-    console.log('Writing products to the database...');
-    let saved = 0;
-    for (const product of parsedProducts) {
-      await upsertProduct(product);
-      saved += 1;
-      if (saved % 25 === 0 || saved === parsedProducts.length) {
-        console.log(`Saved ${saved}/${parsedProducts.length}`);
-      }
-    }
-
-    const countResult = await sql`SELECT COUNT(*)::int AS count FROM products`;
-    console.log(`Done. Database now has ${countResult.rows[0]?.count ?? 0} products.`);
-    return;
-  }
-
-  console.log('No database connection string was present, so the import was exported for local fallback only.');
+  console.log('Import complete. Deploy the Worker so D1 catalog seed / storefront can pick up the JSON.');
 }
 
 main().catch((error) => {

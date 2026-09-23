@@ -59,26 +59,40 @@ This generates:
 
 Paste it into `/admin` -> Import JSON to apply all changes at once.
 
-## Deploy to Vercel
+## Deploy to Cloudflare Workers
 
-- Push this project to your GitHub repository.
-- In Vercel, click Add New Project and import the repository.
-- Keep defaults: Framework Preset = Vite, Build Command = npm run build, Output Directory = dist.
-- Deploy.
+The storefront and `/api` routes run as one Cloudflare Worker (`src/worker.ts`) with:
 
-The project includes `vercel.json` with SPA rewrites so routes like `/category/rackets` work on refresh.
+- Static assets from `dist/` (Vite build)
+- D1 database (`racketpoint-db`) for products, users, sessions, and orders
+- Config in `wrangler.jsonc`
+
+```bash
+npm run deploy
+```
+
+For local Worker + D1:
+
+```bash
+npm run cf:dev
+```
 
 ## Connect the domain racketpoint.bg
 
-- Open your project in Vercel -> Settings -> Domains.
-- Add `racketpoint.bg` and `www.racketpoint.bg`.
-- In your domain registrar DNS, set `A` record for `@` to `76.76.21.21`.
-- In your domain registrar DNS, set `CNAME` record for `www` to `cname.vercel-dns.com`.
-- Wait for verification and SSL issuance in Vercel.
+- In Cloudflare Dashboard → Workers & Pages → your `racketpoint` Worker → Custom Domains
+- Add `racketpoint.bg` and `www.racketpoint.bg`
+- Point DNS for the domain at Cloudflare (proxied) so the Worker serves the site
 
 ## Environment setup
 
 Copy `.env.example` and configure values for your environment.
+
+Set production secrets on the Worker (Wrangler / Cloudflare dashboard), for example:
+
+- `ADMIN_EMAIL`
+- `ADMIN_PASSWORD`
+- `BORICA_TERMINAL_ID`
+- `BORICA_PRIVATE_KEY_PEM`
 
 Important defaults for production safety are already encoded in the app:
 
@@ -88,23 +102,13 @@ Important defaults for production safety are already encoded in the app:
 
 ## BORICA card payments
 
-Card checkout now uses BORICA APGW via serverless endpoints.
-
-### Implemented endpoints
-
-- `POST /api/payments/borica/init`
-  - Builds payment payload (`TERMINAL`, `TRTYPE`, `AMOUNT`, `CURRENCY`, `ORDER`, `TIMESTAMP`, `NONCE`)
-  - Signs payload with RSA SHA-256 (`P_SIGN`)
-  - Returns gateway action URL + form fields for browser POST redirect
-- `POST /api/payments/borica/callback`
-  - Verifies BORICA response signature (`P_SIGN`) with BORICA public key
-  - Redirects customer to `/payments/borica/result` with normalized status params
+Card checkout is prepared for BORICA APGW. Gateway discovery is served by the Worker at `GET /api/payments/gateways`.
 
 ### Frontend flow
 
-- `cash_on_delivery`: keeps local order queue flow.
-- `card`: calls `/api/payments/borica/init`, stores a pending local order session, then auto-posts to BORICA.
-- `/payments/borica/result`: validates callback status and finalizes approved local order record.
+- `cash_on_delivery`: order create via Worker `/api/orders/create`.
+- `card`: uses BORICA init/result flow when those Worker routes are enabled.
+- `/payments/borica/result`: validates callback status and finalizes the order record.
 
 ### Commerce backend required environment variables
 
@@ -132,77 +136,35 @@ Use this return (BackRef) URL in production:
 
 - `https://racketpoint.bg/api/payments/borica/callback`
 
-## Single-system Vercel backend (WooCommerce-like)
+## Cloudflare Worker backend
 
-This project now includes a built-in commerce backend under `api/` so you can run one system on Vercel (frontend + serverless APIs + database).
+Backend logic lives in `src/worker.ts` and `src/workerCommerce.ts` (not a separate serverless platform).
 
-### Implemented backend areas
+### Implemented Worker API areas
 
-- Auth API
+- Auth
   - `POST /api/auth/register`
   - `POST /api/auth/login`
-  - `GET /api/auth/profile`
-  - `PUT /api/auth/profile`
-  - `GET/POST /api/auth/verify-email`
-  - `POST /api/auth/resend-verification`
-  - `POST /api/auth/request-password-reset`
-  - `POST /api/auth/reset-password`
-- Products API (admin CRUD + public listing)
+- Products
   - `GET /api/products`
-  - `POST /api/products` (admin)
-  - `PUT /api/products?id=...` (admin)
-  - `DELETE /api/products?id=...` (admin)
-- Orders API
+  - `POST|PUT /api/products` (admin)
+- Orders
   - `POST /api/orders/create`
-  - `GET /api/orders` (session user)
-  - `PUT /api/orders/status` (admin)
-- Admin stats
-  - `GET /api/admin/stats` (admin)
-  - `GET /api/admin/stock-movements` (admin)
-- Payments gateway abstraction
+  - `GET /api/orders` (session user; `?all=1` for admin)
+- Payments
   - `GET /api/payments/gateways`
-  - `POST /api/payments/gateways/checkout`
-  - Existing BORICA endpoints remain active.
-- System utilities
-  - `GET /api/system/health`
-  - `POST /api/system/bootstrap` (requires bootstrap key)
 
 ### Persistence model
 
-- Database: Postgres via `@vercel/postgres`.
-- Tables are auto-created on first API usage by `api/_lib/db.ts`.
-- JWT sessions are used for API auth.
+- Database: Cloudflare D1 (`DB` binding in `wrangler.jsonc`)
+- Schema is ensured on Worker requests
+- Session tokens are stored in D1
 
-### Required environment variables
-
-- `POSTGRES_URL` (provided by Vercel Postgres integration)
-- `JWT_SECRET`
-
-### Recommended environment variables
+### Recommended Worker secrets / vars
 
 - `ADMIN_EMAIL` (default: `admin@racketpoint.bg`)
-- `ADMIN_PASSWORD_HASH` (bcrypt hash, recommended for auto-seeding admin)
-- `BOOTSTRAP_API_KEY` (required for `/api/system/bootstrap`)
-- `PUBLIC_APP_URL` (used in verification/reset links)
-- `EMAIL_VERIFICATION_REQUIRED` (`true` recommended)
-- `EMAIL_WEBHOOK_URL` (for real email delivery)
-- BORICA variables from the payment section above.
+- `ADMIN_PASSWORD`
+- `PUBLIC_APP_URL`
+- BORICA variables from the payment section above
 
-## Security and reliability hardening already implemented
-
-- Server-side pricing and stock reservation in order creation.
-- Checkout idempotency support via `X-Idempotency-Key`.
-- BORICA callback signature persistence and payment event audit table.
-- Restock on `Cancelled`/`Refunded` order status transitions (one-time guarded).
-- Inventory movement audit trail in `stock_movements`.
-- Basic API rate limiting on auth/reset/order-create endpoints.
-- Edge security headers via `vercel.json`.
-
-### Bootstrap flow
-
-1. Connect Vercel Postgres to the project.
-2. Set `JWT_SECRET` and `BOOTSTRAP_API_KEY`.
-3. Optionally call:
-   - `POST /api/system/bootstrap`
-   - Header: `x-bootstrap-key: <BOOTSTRAP_API_KEY>`
-   - Body can include admin credentials and sample product seeding.
+See `BACKEND_SETUP.md` for a shorter ops checklist.

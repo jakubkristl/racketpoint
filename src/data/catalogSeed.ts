@@ -70,9 +70,20 @@ function isUsableImage(url: string) {
     return false;
   }
 
-  return !normalized.includes('reception-pos.jakub-personal.workers.dev')
-    && !normalized.includes('cloudflareaccess.com')
-    && !normalized.includes('via.placeholder.com');
+  if (normalized.includes('reception-pos')
+    || normalized.includes('jakub-personal.workers.dev')
+    || normalized.includes('cloudflareaccess.com')
+    || normalized.includes('/kiosk/')
+    || normalized.includes('via.placeholder.com')
+    || normalized.includes('placehold.co')
+    || normalized.includes('placeholder.com')) {
+    return false;
+  }
+
+  return normalized.startsWith('http://')
+    || normalized.startsWith('https://')
+    || normalized.startsWith('/branding/')
+    || normalized.startsWith('/imports/');
 }
 
 function pickImages(values: unknown) {
