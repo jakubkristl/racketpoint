@@ -1534,6 +1534,7 @@ function AdminPage({ snapshot, onSnapshotChange, isAuthenticated, onAuthChange }
             {typeof selectedProduct.costEur !== 'number' ? (
               <p className="form-status">Предупреждение: липсва себестойност — печалбата няма да е точна.</p>
             ) : null}
+            {message && soldOnsiteOpen ? <p className="form-status">{message}</p> : null}
             <div className="admin-inline-actions">
               <button
                 className="button button-primary"
