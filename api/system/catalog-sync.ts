@@ -161,10 +161,18 @@ export default async function handler(req: any, res: any) {
 
     const normalizedProducts = body.products.map((entry, index) => sanitizeProductPayload(entry, index));
 
-    const existingResult = await sql`SELECT id, slug, attributes FROM products`;
+    const existingResult = await sql`SELECT id, slug, title, brand, attributes FROM products`;
     const existingById = new Map<string, string>();
     const existingBySlug = new Map<string, string>();
     const existingBySourceSku = new Map<string, string>();
+    const existingByBrandName = new Map<string, string>();
+
+    const normalizeIdentityText = (value: string) => value
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, ' ')
+      .trim();
 
     for (const row of existingResult.rows) {
       const id = String(row.id);
@@ -178,15 +186,36 @@ export default async function handler(req: any, res: any) {
       if (sourceSku) {
         existingBySourceSku.set(sourceSku, id);
       }
+
+      const brandNameKey = `${normalizeIdentityText(String(row.brand ?? ''))}|${normalizeIdentityText(String(row.title ?? ''))}`;
+      if (brandNameKey !== '|' && !existingByBrandName.has(brandNameKey)) {
+        existingByBrandName.set(brandNameKey, id);
+      }
     }
+
+    const suppressedResult = await sql`SELECT identity_key FROM product_suppressions`;
+    const suppressedKeys = new Set(suppressedResult.rows.map((row) => String(row.identity_key)));
 
     let inserted = 0;
     let updated = 0;
+    let skippedSuppressed = 0;
 
     for (const product of normalizedProducts) {
+      const brandNameKey = `${normalizeIdentityText(product.brand)}|${normalizeIdentityText(product.title)}`;
+      const identityCandidates = [
+        `id:${product.sku.toLowerCase().replace(/^prd_/, '').replace(/[^a-z0-9]/g, '')}`,
+        `name:${brandNameKey}`,
+      ];
+
+      if (identityCandidates.some((key) => suppressedKeys.has(key))) {
+        skippedSuppressed += 1;
+        continue;
+      }
+
       const existingId = existingById.get(product.sku)
         ?? existingBySourceSku.get(product.sku)
         ?? existingBySlug.get(product.slug)
+        ?? existingByBrandName.get(brandNameKey)
         ?? null;
 
       if (!existingId) {
@@ -207,6 +236,12 @@ export default async function handler(req: any, res: any) {
         `;
 
         inserted += 1;
+        existingById.set(product.sku, product.sku);
+        existingBySlug.set(product.slug, product.sku);
+        existingBySourceSku.set(product.sku, product.sku);
+        if (brandNameKey !== '|') {
+          existingByBrandName.set(brandNameKey, product.sku);
+        }
         continue;
       }
 
@@ -243,6 +278,7 @@ export default async function handler(req: any, res: any) {
       ok: true,
       inserted,
       updated,
+      skippedSuppressed,
       processed: normalizedProducts.length,
       totalProducts: totalResult.rows[0]?.count ?? 0,
     });

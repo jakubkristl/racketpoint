@@ -23,12 +23,26 @@ const schema = `
 	CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, name TEXT NOT NULL, email TEXT UNIQUE NOT NULL, password_hash TEXT NOT NULL, role TEXT NOT NULL, addresses TEXT NOT NULL DEFAULT '[]', created_at TEXT NOT NULL);
 	CREATE TABLE IF NOT EXISTS sessions (token TEXT PRIMARY KEY, user_id TEXT NOT NULL, expires_at TEXT NOT NULL);
 	CREATE TABLE IF NOT EXISTS products (id TEXT PRIMARY KEY, title TEXT NOT NULL, slug TEXT UNIQUE NOT NULL, description TEXT NOT NULL, brand TEXT NOT NULL, sport TEXT NOT NULL, sub_category TEXT NOT NULL, cost_price REAL NOT NULL, selling_price REAL NOT NULL, discount_price REAL, stock INTEGER NOT NULL, images TEXT NOT NULL, attributes TEXT NOT NULL, sizes TEXT NOT NULL DEFAULT '[]', weight_grams INTEGER, balance TEXT, rating REAL NOT NULL DEFAULT 4.5, created_at TEXT NOT NULL);
+	CREATE TABLE IF NOT EXISTS product_suppressions (identity_key TEXT PRIMARY KEY, label TEXT, created_at TEXT NOT NULL);
 `;
 
 const json = (value: unknown, status = 200) => Response.json(value, { status, headers: { 'Cache-Control': 'no-store' } });
 const fail = (error: string, status: number) => json({ error }, status);
 const text = (value: unknown, limit = 4000) => typeof value === 'string' ? value.trim().slice(0, limit) : '';
 const numeric = (value: unknown, fallback = 0) => Number.isFinite(Number(value)) ? Number(value) : fallback;
+
+function normalizeIdentityText(value: string) {
+	return value
+		.normalize('NFD')
+		.replace(/[\u0300-\u036f]/g, '')
+		.toLowerCase()
+		.replace(/[^a-z0-9]+/g, ' ')
+		.trim();
+}
+
+function normalizeSkuToken(value: string) {
+	return value.toLowerCase().replace(/^prd_/, '').replace(/[^a-z0-9]/g, '');
+}
 
 function base64(bytes: Uint8Array) { let result = ''; for (const byte of bytes) result += String.fromCharCode(byte); return btoa(result); }
 function fromBase64(value: string) { return Uint8Array.from(atob(value), (character) => character.charCodeAt(0)); }
@@ -125,6 +139,53 @@ async function products(request: Request, env: Env) {
 		return json(rows.results.map((row) => productRow(row, includeCost)));
 	}
 
+	if (request.method === 'DELETE') {
+		if (!await isAdmin(request, env)) return fail('Admin role required.', 403);
+		const url = new URL(request.url);
+		const id = text(url.searchParams.get('id'), 120);
+		if (!id) return fail('Product id query param is required.', 400);
+
+		let identityKeys: string[] = [];
+		try {
+			const body = await request.json<{ identityKeys?: string[] }>().catch(() => ({ identityKeys: [] as string[] }));
+			identityKeys = Array.isArray(body.identityKeys)
+				? body.identityKeys.filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+				: [];
+		} catch {
+			identityKeys = [];
+		}
+
+		const row = await env.DB.prepare('SELECT * FROM products WHERE id=?').bind(id).first<Record<string, unknown>>();
+		const autoKeys: string[] = [];
+		if (row) {
+			autoKeys.push(`id:${normalizeSkuToken(String(row.id))}`);
+			const brand = normalizeIdentityText(String(row.brand ?? ''));
+			const title = normalizeIdentityText(String(row.title ?? ''));
+			if (brand && title) autoKeys.push(`name:${brand}|${title}`);
+			const attributes = JSON.parse(String(row.attributes ?? '{}')) as Record<string, unknown>;
+			for (const attrKey of ['sourceSku', 'articleCode', 'publicSku']) {
+				const raw = attributes[attrKey];
+				if (typeof raw === 'string' && raw.trim()) {
+					autoKeys.push(`id:${normalizeSkuToken(raw)}`);
+				}
+			}
+		}
+
+		const now = new Date().toISOString();
+		for (const key of [...new Set([...autoKeys, ...identityKeys])]) {
+			await env.DB.prepare('INSERT OR IGNORE INTO product_suppressions (identity_key, label, created_at) VALUES (?,?,?)')
+				.bind(key, row ? String(row.title ?? id) : id, now)
+				.run();
+		}
+
+		if (row) {
+			await env.DB.prepare('DELETE FROM products WHERE id=?').bind(id).run();
+			return json({ ok: true, deleted: true });
+		}
+
+		return json({ ok: true, deleted: false, suppressed: identityKeys.length > 0 });
+	}
+
 	if (request.method !== 'PUT' && request.method !== 'POST') return fail('Method not allowed.', 405);
 	if (!await isAdmin(request, env)) return fail('Admin role required.', 403);
 	const body = await request.json<ProductPayload>();
@@ -147,6 +208,32 @@ async function products(request: Request, env: Env) {
 		ON CONFLICT(id) DO UPDATE SET title=excluded.title,slug=excluded.slug,description=excluded.description,brand=excluded.brand,sport=excluded.sport,sub_category=excluded.sub_category,cost_price=excluded.cost_price,selling_price=excluded.selling_price,discount_price=excluded.discount_price,stock=excluded.stock,images=excluded.images,attributes=excluded.attributes,weight_grams=excluded.weight_grams,balance=excluded.balance,rating=excluded.rating`)
 		.bind(id, title, slug, text(body.description), text(body.brand), text(body.sport), text(body.subCategory), costPrice, sellingPrice, discountPrice, Math.max(0, Math.trunc(numeric(body.stock))), JSON.stringify(body.imageArray ?? []), JSON.stringify(body.attributes ?? {}), '[]', body.weightGrams == null ? null : Math.trunc(numeric(body.weightGrams)), text(body.balance) || null, Math.max(0, numeric(body.rating, 4.5)), new Date().toISOString()).run();
 	return json({ id, ok: true }, request.method === 'POST' ? 201 : 200);
+}
+
+async function productSuppressions(request: Request, env: Env) {
+	if (request.method === 'GET') {
+		const rows = await env.DB.prepare('SELECT identity_key FROM product_suppressions ORDER BY created_at DESC').all<{ identity_key: string }>();
+		return json({ keys: rows.results.map((row) => row.identity_key) });
+	}
+
+	if (request.method !== 'POST') return fail('Method not allowed.', 405);
+	if (!await isAdmin(request, env)) return fail('Admin role required.', 403);
+
+	const body = await request.json<{ keys?: string[]; label?: string }>();
+	const keys = Array.isArray(body.keys)
+		? [...new Set(body.keys.filter((value): value is string => typeof value === 'string' && value.trim().length > 0).map((value) => value.trim()))]
+		: [];
+	if (keys.length === 0) return fail('keys array is required.', 400);
+
+	const now = new Date().toISOString();
+	const label = text(body.label, 200) || null;
+	for (const key of keys) {
+		await env.DB.prepare('INSERT OR IGNORE INTO product_suppressions (identity_key, label, created_at) VALUES (?,?,?)')
+			.bind(key, label, now)
+			.run();
+	}
+
+	return json({ ok: true, inserted: keys.length, keys });
 }
 
 const shopInbox = 'jakubkristl77@gmail.com';
@@ -176,6 +263,10 @@ export default {
 			if (path === '/api/products') {
 				await env.DB.exec(schema);
 				return products(request, env);
+			}
+			if (path === '/api/products/suppressions') {
+				await env.DB.exec(schema);
+				return productSuppressions(request, env);
 			}
 			if (path === '/api/catalog/public' && request.method === 'GET') {
 				await env.DB.exec(schema);

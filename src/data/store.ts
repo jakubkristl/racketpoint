@@ -8,6 +8,16 @@ import {
   type CategorySlug,
 } from './catalog';
 import { getAuthHeaders, getSessionUser } from './accountStore';
+import {
+  buildIdentityKeySet,
+  collectProductIdentityKeys,
+  dedupeProductsByIdentity,
+  filterProductsBySuppressedKeys,
+  normalizeLookupValue,
+  normalizeSkuToken,
+  productMatchesIdentityKeys,
+  scoreCanonicalProduct,
+} from './productIdentity';
 
 export type OrderInput = {
   fullName: string;
@@ -65,6 +75,7 @@ export type CatalogSyncResult = {
   updated: number;
   processed: number;
   totalProducts: number;
+  skippedSuppressed?: number;
 };
 
 export type CmsCollection = 'categories' | 'brands' | 'products';
@@ -201,15 +212,6 @@ function pickBestImageUrlFromCandidates(images: string[]) {
   }
 
   return images.find((imageUrl) => hasUsableProductImage(imageUrl));
-}
-
-function normalizeLookupValue(value: string) {
-  return value
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, ' ')
-    .trim();
 }
 
 function tokenizeLookupValue(value: string) {
@@ -515,10 +517,6 @@ function resolveProductType(item: {
   return 'Racket';
 }
 
-function normalizeSkuToken(value: string) {
-  return value.toLowerCase().replace(/^prd_/, '').replace(/[^a-z0-9]/g, '');
-}
-
 export function findProductBySku(products: Product[], sku: string) {
   const exact = products.find((product) => product.sku === sku);
   if (exact) {
@@ -587,32 +585,6 @@ export function validateProductPricesAgainstCost(
   return null;
 }
 
-function collectProductIdentityKeys(product: Product) {
-  const keys = new Set<string>();
-  const sku = normalizeSkuToken(product.sku);
-  if (sku) {
-    keys.add(`id:${sku}`);
-    if (sku.startsWith('pos') && sku.length > 3) {
-      keys.add(`id:${sku.slice(3)}`);
-    }
-  }
-
-  for (const attrKey of ['sourceSku', 'articleCode', 'articlecode', 'publicSku', 'internalDbId'] as const) {
-    const raw = product.attributes?.[attrKey];
-    if (typeof raw === 'string' && raw.trim()) {
-      keys.add(`id:${normalizeSkuToken(raw)}`);
-    }
-  }
-
-  const brand = normalizeLookupValue(product.brand);
-  const name = normalizeLookupValue(product.name);
-  if (brand && name) {
-    keys.add(`name:${brand}|${name}`);
-  }
-
-  return [...keys];
-}
-
 /** Apply Admin/API sell, promo, cost, and stock onto a public/import product row. */
 function applyApiCommercialOverlay(base: Product, api: Product): Product {
   return {
@@ -633,6 +605,22 @@ function applyApiCommercialOverlay(base: Product, api: Product): Product {
   };
 }
 
+function markApiSkusSharingIdentity(
+  apiProducts: Product[],
+  identityKeys: Set<string>,
+  usedApiSkus: Set<string>,
+) {
+  for (const apiProduct of apiProducts) {
+    if (usedApiSkus.has(apiProduct.sku)) {
+      continue;
+    }
+
+    if (productMatchesIdentityKeys(apiProduct, identityKeys)) {
+      usedApiSkus.add(apiProduct.sku);
+    }
+  }
+}
+
 /**
  * Import/JSON catalog keeps public URLs (numeric/article SKUs).
  * Admin/API rows often use different ids (e.g. POS-…, prd_…). Overlay commercial fields by identity
@@ -640,7 +628,7 @@ function applyApiCommercialOverlay(base: Product, api: Product): Product {
  */
 export function mergeApiProductsOverReference(apiProducts: Product[], referenceCatalog: Product[]) {
   if (referenceCatalog.length === 0) {
-    return [...apiProducts];
+    return dedupeProductsByIdentity(apiProducts);
   }
 
   if (apiProducts.length === 0) {
@@ -650,7 +638,8 @@ export function mergeApiProductsOverReference(apiProducts: Product[], referenceC
   const apiByIdentity = new Map<string, Product>();
   for (const apiProduct of apiProducts) {
     for (const key of collectProductIdentityKeys(apiProduct)) {
-      if (!apiByIdentity.has(key)) {
+      const existing = apiByIdentity.get(key);
+      if (!existing || scoreCanonicalProduct(apiProduct) > scoreCanonicalProduct(existing)) {
         apiByIdentity.set(key, apiProduct);
       }
     }
@@ -669,6 +658,11 @@ export function mergeApiProductsOverReference(apiProducts: Product[], referenceC
     }
 
     if (matched) {
+      const identityKeys = new Set([
+        ...collectProductIdentityKeys(reference),
+        ...collectProductIdentityKeys(matched),
+      ]);
+      markApiSkusSharingIdentity(apiProducts, identityKeys, usedApiSkus);
       usedApiSkus.add(matched.sku);
       combined.push(applyApiCommercialOverlay(reference, matched));
     } else {
@@ -676,9 +670,20 @@ export function mergeApiProductsOverReference(apiProducts: Product[], referenceC
     }
   }
 
+  const combinedKeys = buildIdentityKeySet(combined);
   for (const apiProduct of apiProducts) {
-    if (!usedApiSkus.has(apiProduct.sku)) {
-      combined.push(apiProduct);
+    if (usedApiSkus.has(apiProduct.sku)) {
+      continue;
+    }
+
+    if (productMatchesIdentityKeys(apiProduct, combinedKeys)) {
+      usedApiSkus.add(apiProduct.sku);
+      continue;
+    }
+
+    combined.push(apiProduct);
+    for (const key of collectProductIdentityKeys(apiProduct)) {
+      combinedKeys.add(key);
     }
   }
 
@@ -874,23 +879,96 @@ function retagCatalogProducts(products: Product[]) {
 
 function mergeWithDefaultCatalog(base: Product[], references: Product[]) {
   const existingSkus = new Set(base.map((product) => product.sku));
-  const extras = defaultProducts.filter((product) => !existingSkus.has(product.sku));
+  const existingIdentityKeys = buildIdentityKeySet(base);
+  const extras = defaultProducts.filter((product) => {
+    if (existingSkus.has(product.sku)) {
+      return false;
+    }
+
+    // Skip seed/POS twins of import or Admin rows (same brand+name or alias SKU).
+    if (productMatchesIdentityKeys(product, existingIdentityKeys)) {
+      return false;
+    }
+
+    return true;
+  });
   const receptionPosExtras = extras.filter((product) => product.attributes?.source === 'reception-pos');
   const otherExtras = extras.filter((product) => product.attributes?.source !== 'reception-pos');
 
   return retagCatalogProducts(hydrateProductImages([...receptionPosExtras, ...base, ...otherExtras], references));
 }
 
+const hiddenProductKeysStorage = 'racketpoint-hidden-product-keys-v1';
+
+function loadLocalSuppressedIdentityKeys() {
+  const raw = readJson<string[]>(hiddenProductKeysStorage);
+  return new Set(Array.isArray(raw) ? raw.filter((value) => typeof value === 'string') : []);
+}
+
+function saveLocalSuppressedIdentityKeys(keys: Set<string>) {
+  writeJson(hiddenProductKeysStorage, [...keys]);
+}
+
+export function suppressProductLocally(product: Product) {
+  const keys = loadLocalSuppressedIdentityKeys();
+  for (const key of collectProductIdentityKeys(product)) {
+    keys.add(key);
+  }
+  saveLocalSuppressedIdentityKeys(keys);
+  return keys;
+}
+
+async function fetchSuppressedIdentityKeys() {
+  const local = loadLocalSuppressedIdentityKeys();
+
+  try {
+    const response = await fetch('/api/products/suppressions', {
+      headers: getAuthHeaders(),
+    });
+
+    if (!response.ok) {
+      return local;
+    }
+
+    const payload = await response.json().catch(() => null) as { keys?: string[] } | string[] | null;
+    const remoteKeys = Array.isArray(payload)
+      ? payload
+      : Array.isArray(payload?.keys)
+        ? payload.keys
+        : [];
+
+    for (const key of remoteKeys) {
+      if (typeof key === 'string' && key.trim()) {
+        local.add(key.trim());
+      }
+    }
+
+    saveLocalSuppressedIdentityKeys(local);
+  } catch {
+    // Offline / older deploy: local suppressions still apply.
+  }
+
+  return local;
+}
+
+function finalizeCatalogProducts(products: Product[], suppressedKeys: Set<string>) {
+  return filterProductsBySuppressedKeys(products, suppressedKeys);
+}
+
 export async function fetchProducts() {
-  const [mapped, referenceCatalog] = await Promise.all([
+  const [mapped, referenceCatalog, suppressedKeys] = await Promise.all([
     fetchProductsFromApi().catch(() => [] as Product[]),
     fetchImportedSquashpointProducts().catch(() => [] as Product[]),
+    fetchSuppressedIdentityKeys().catch(() => loadLocalSuppressedIdentityKeys()),
   ]);
 
   if (referenceCatalog.length > 0) {
     // Prefer Admin/API commercial fields even when public SKU ≠ DB id (import article vs Admin id).
     const combined = mergeApiProductsOverReference(mapped, referenceCatalog);
-    const normalized = mergeWithDefaultCatalog(combined, referenceCatalog);
+    const normalized = finalizeCatalogProducts(
+      mergeWithDefaultCatalog(combined, referenceCatalog),
+      suppressedKeys,
+    );
     productCache = normalized;
     return normalized;
   }
@@ -901,7 +979,10 @@ export async function fetchProducts() {
     if (seeded) {
       const retry = await fetchProductsFromApi().catch(() => [] as Product[]);
       if (retry.length > 0) {
-        const normalized = mergeWithDefaultCatalog(retry, referenceCatalog);
+        const normalized = finalizeCatalogProducts(
+          mergeWithDefaultCatalog(retry, referenceCatalog),
+          suppressedKeys,
+        );
         productCache = normalized;
         return normalized;
       }
@@ -909,14 +990,20 @@ export async function fetchProducts() {
 
     const localStarterCatalog = loadSnapshot().products;
     if (localStarterCatalog.length > 0) {
-      const normalized = mergeWithDefaultCatalog(localStarterCatalog, referenceCatalog);
+      const normalized = finalizeCatalogProducts(
+        mergeWithDefaultCatalog(localStarterCatalog, referenceCatalog),
+        suppressedKeys,
+      );
       productCache = normalized;
       return normalized;
     }
 
     const imported = referenceCatalog;
     if (imported.length > 0) {
-      const normalized = mergeWithDefaultCatalog(imported, imported);
+      const normalized = finalizeCatalogProducts(
+        mergeWithDefaultCatalog(imported, imported),
+        suppressedKeys,
+      );
       productCache = normalized;
       return normalized;
     }
@@ -924,7 +1011,10 @@ export async function fetchProducts() {
     return [];
   }
 
-  const normalized = mergeWithDefaultCatalog(mapped, referenceCatalog);
+  const normalized = finalizeCatalogProducts(
+    mergeWithDefaultCatalog(mapped, referenceCatalog),
+    suppressedKeys,
+  );
   productCache = normalized;
   return normalized;
 }
@@ -1228,14 +1318,60 @@ export async function updateProductApi(productSku: string, nextProduct: Product)
 }
 
 export async function deleteProductApi(productSku: string) {
-  const product = (productCache ?? loadSnapshot().products).find((item) => item.sku === productSku);
+  const product = (productCache ?? loadSnapshot().products).find((item) => item.sku === productSku)
+    ?? (productCache ?? loadSnapshot().products).find((item) => (
+      item.attributes?.publicSku === productSku
+      || item.attributes?.internalDbId === productSku
+      || item.attributes?.sourceSku === productSku
+    ));
+
+  if (product) {
+    suppressProductLocally(product);
+  } else {
+    suppressProductLocally({
+      sku: productSku,
+      name: productSku,
+      brand: '',
+      categorySlug: 'squash',
+      type: 'Racket',
+      details: '',
+      badges: [],
+      imageUrl: '',
+    });
+  }
+
   const apiId = product ? resolveProductApiId(product, productSku) : productSku;
+  const identityKeys = product
+    ? collectProductIdentityKeys(product)
+    : [`id:${normalizeSkuToken(productSku)}`];
+
   const response = await fetch(`/api/products?id=${encodeURIComponent(apiId)}`, {
     method: 'DELETE',
-    headers: getAuthHeaders(),
+    headers: {
+      'Content-Type': 'application/json',
+      ...getAuthHeaders(),
+    },
+    body: JSON.stringify({ identityKeys }),
   });
 
-  await parseResponse<{ ok: boolean }>(response);
+  // Product may only exist in import/defaults (no DB row). Still treat as deleted after suppress.
+  if (!response.ok && response.status !== 404) {
+    await parseResponse<{ ok: boolean }>(response);
+  }
+
+  try {
+    await fetch('/api/products/suppressions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...getAuthHeaders(),
+      },
+      body: JSON.stringify({ keys: identityKeys }),
+    });
+  } catch {
+    // Local suppressions already recorded.
+  }
+
   productCache = null;
   return loadStoreSnapshot();
 }

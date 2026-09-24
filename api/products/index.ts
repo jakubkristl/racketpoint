@@ -210,9 +210,68 @@ export default async function handler(req: any, res: any) {
       return;
     }
 
-    await sql`DELETE FROM products WHERE id = ${id}`;
+    const existing = await sql`SELECT * FROM products WHERE id = ${id} LIMIT 1`;
+    const rawBody = req.body && typeof req.body === 'object' ? req.body as { identityKeys?: string[] } : {};
+    const identityKeys = Array.isArray(rawBody.identityKeys)
+      ? rawBody.identityKeys.filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+      : [];
+
+    if (existing.rowCount && existing.rows[0]) {
+      const row = existing.rows[0];
+      const brand = String(row.brand ?? '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, ' ')
+        .trim();
+      const title = String(row.title ?? '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, ' ')
+        .trim();
+      const autoKeys = [
+        `id:${String(row.id).toLowerCase().replace(/^prd_/, '').replace(/[^a-z0-9]/g, '')}`,
+      ];
+      if (brand && title) {
+        autoKeys.push(`name:${brand}|${title}`);
+      }
+
+      const attributes = row.attributes && typeof row.attributes === 'object'
+        ? row.attributes as Record<string, unknown>
+        : {};
+      for (const attrKey of ['sourceSku', 'articleCode', 'publicSku']) {
+        const raw = attributes[attrKey];
+        if (typeof raw === 'string' && raw.trim()) {
+          autoKeys.push(`id:${raw.toLowerCase().replace(/[^a-z0-9]/g, '')}`);
+        }
+      }
+
+      for (const key of [...new Set([...autoKeys, ...identityKeys])]) {
+        await sql`
+          INSERT INTO product_suppressions (identity_key, label)
+          VALUES (${key}, ${String(row.title ?? id)})
+          ON CONFLICT (identity_key) DO NOTHING
+        `;
+      }
+
+      await sql`DELETE FROM products WHERE id = ${id}`;
+      void notifyClubSiteCatalogChanged('product_delete');
+      res.status(200).json({ ok: true, deleted: true });
+      return;
+    }
+
+    // No DB row (import/default-only). Still record suppressions so the catalog stays clean.
+    for (const key of [...new Set(identityKeys)]) {
+      await sql`
+        INSERT INTO product_suppressions (identity_key, label)
+        VALUES (${key}, ${id})
+        ON CONFLICT (identity_key) DO NOTHING
+      `;
+    }
+
     void notifyClubSiteCatalogChanged('product_delete');
-    res.status(200).json({ ok: true });
+    res.status(200).json({ ok: true, deleted: false, suppressed: identityKeys.length > 0 });
   } catch (error) {
     res.status(500).json({ error: error instanceof Error ? error.message : 'Products API failure.' });
   }

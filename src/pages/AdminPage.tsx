@@ -574,9 +574,18 @@ function AdminPage({ snapshot, onSnapshotChange, isAuthenticated, onAuthChange }
       return;
     }
 
+    const confirmed = window.confirm(
+      `Изтриване на „${selectedProduct.name}“?\n\nПродуктът ще бъде премахнат от Admin каталога и от магазина. Това действие не може да се отмени лесно.`,
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
     try {
       const nextSnapshot = await deleteProductApi(selectedProduct.sku);
       onSnapshotChange(nextSnapshot);
+      setSelectedProductSku(nextSnapshot.products[0]?.sku ?? '');
       setMessage('Продуктът е изтрит.');
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Изтриването не успя.');

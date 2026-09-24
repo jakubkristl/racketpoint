@@ -58,8 +58,47 @@ export default async function handler(req: any, res: any) {
     await ensureSchema();
 
     let inserted = 0;
+    let skippedExisting = 0;
+
+    const existingResult = await sql`SELECT id, title, brand, attributes FROM products`;
+    const existingIds = new Set(existingResult.rows.map((row) => String(row.id)));
+    const existingBrandNames = new Set(
+      existingResult.rows.map((row) => {
+        const brand = String(row.brand ?? '')
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, ' ')
+          .trim();
+        const title = String(row.title ?? '')
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, ' ')
+          .trim();
+        return `${brand}|${title}`;
+      }),
+    );
+
     for (const product of starterProducts) {
       const id = `prd_${product.sku.toLowerCase().replace(/[^a-z0-9]+/g, '_')}`;
+      const brandNameKey = `${product.brand
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, ' ')
+        .trim()}|${product.name
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, ' ')
+        .trim()}`;
+
+      if (existingIds.has(id) || existingBrandNames.has(brandNameKey)) {
+        skippedExisting += 1;
+        continue;
+      }
+
       const slug = normalizeSlug(`${product.name}-${product.sku}`);
       const description = product.description || product.details || product.name;
       const result = await sql`
@@ -94,12 +133,17 @@ export default async function handler(req: any, res: any) {
       `;
 
       inserted += result.rowCount ?? 0;
+      if ((result.rowCount ?? 0) > 0) {
+        existingIds.add(id);
+        existingBrandNames.add(brandNameKey);
+      }
     }
 
     const countResult = await sql`SELECT COUNT(*)::int AS count FROM products`;
     res.status(200).json({
       ok: true,
       inserted,
+      skippedExisting,
       totalProducts: countResult.rows[0]?.count ?? 0,
     });
   } catch (error) {

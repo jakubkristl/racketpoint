@@ -134,6 +134,14 @@ export async function ensureSchema() {
   await sql`CREATE INDEX IF NOT EXISTS idx_stock_movements_order ON stock_movements (order_id)`;
   await sql`CREATE INDEX IF NOT EXISTS idx_borica_status ON borica_payments (status)`;
 
+  await sql`
+    CREATE TABLE IF NOT EXISTS product_suppressions (
+      identity_key TEXT PRIMARY KEY,
+      label TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `;
+
   await seedDefaultAdmin();
   schemaReady = true;
 }
