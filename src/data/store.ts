@@ -768,8 +768,13 @@ export async function fetchOrders(options?: { includeAll?: boolean }) {
   const response = await fetch(`/api/orders${query}`, {
     headers: getAuthHeaders(),
   });
-  const payload = await parseResponse<any[]>(response);
-  orderCache = payload.map(mapOrderToRecord);
+  const payload = await parseResponse<any>(response);
+  const rows = Array.isArray(payload)
+    ? payload
+    : Array.isArray(payload?.orders)
+      ? payload.orders
+      : [];
+  orderCache = rows.map(mapOrderToRecord);
   return orderCache;
 }
 

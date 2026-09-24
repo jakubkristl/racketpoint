@@ -2122,10 +2122,111 @@ button {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.account-page {
+  display: grid;
+  gap: 18px;
+  padding-bottom: 40px;
+}
+
+.account-header {
+  display: grid;
+  gap: 18px;
+  padding: 8px 0 4px;
+}
+
+.account-header-copy h1 {
+  margin: 6px 0 0;
+  font-size: clamp(1.8rem, 4vw, 2.6rem);
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+}
+
+.account-header-lead {
+  margin: 8px 0 0;
+  max-width: 46ch;
+  color: var(--muted);
+}
+
+.account-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.account-toolbar-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.account-logout {
+  margin-left: auto;
+}
+
+.account-status {
+  margin: 0;
+}
+
+.account-stack {
+  display: grid;
+  gap: 16px;
+}
+
+.account-profile-card {
+  gap: 14px;
+}
+
+.account-profile-meta {
+  display: grid;
+  gap: 6px;
+}
+
+.account-profile-email {
+  margin: 0;
+  color: var(--muted);
+  word-break: break-word;
+}
+
+.account-role-pill {
+  justify-self: start;
+  margin: 2px 0 0;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(242, 194, 0, 0.4);
+  background: rgba(242, 194, 0, 0.12);
+  color: #8a6a00;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
 .account-mode-switch {
   display: flex;
   gap: 10px;
   margin: 0 0 12px;
+}
+
+@media (max-width: 720px) {
+  .account-toolbar {
+    align-items: stretch;
+  }
+
+  .account-toolbar-nav,
+  .account-logout {
+    width: 100%;
+  }
+
+  .account-logout {
+    margin-left: 0;
+  }
+
+  .account-toolbar-nav .button,
+  .account-logout {
+    width: 100%;
+  }
 }
 
 .product-footer strong {
