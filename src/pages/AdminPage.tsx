@@ -9,6 +9,7 @@ import {
   resetStoreSnapshot,
   saveStoreSnapshot,
   seedStarterCatalog,
+  submitOrderRequest,
   syncCatalogProductsApi,
   type OrderRecord,
   type StoreSnapshot,
@@ -92,6 +93,18 @@ function formatEur(value: number) {
     currency: 'EUR',
     maximumFractionDigits: 2,
   }).format(value);
+}
+
+function getEffectiveUnitPrice(product: Product) {
+  if (typeof product.salePriceEur === 'number' && product.salePriceEur > 0) {
+    return product.salePriceEur;
+  }
+
+  if (typeof product.priceEur === 'number' && Number.isFinite(product.priceEur)) {
+    return product.priceEur;
+  }
+
+  return parsePriceValue(product.price);
 }
 
 function getPaymentStatusLabel(order: OrderRecord) {
@@ -248,6 +261,10 @@ function AdminPage({ snapshot, onSnapshotChange, isAuthenticated, onAuthChange }
   const [adminStats, setAdminStats] = useState<AdminStats | null>(null);
   const [stockMovements, setStockMovements] = useState<StockMovementRecord[]>([]);
   const [isCatalogSyncing, setIsCatalogSyncing] = useState(false);
+  const [soldOnsiteOpen, setSoldOnsiteOpen] = useState(false);
+  const [soldOnsiteQty, setSoldOnsiteQty] = useState('1');
+  const [soldOnsiteNote, setSoldOnsiteNote] = useState('onsite');
+  const [isSoldOnsiteSubmitting, setIsSoldOnsiteSubmitting] = useState(false);
 
   const selectedProduct = snapshot.products.find((product) => product.sku === selectedProductSku) ?? snapshot.products[0];
   const selectedCategory = snapshot.categories.find((category) => category.slug === selectedCategorySlug) ?? snapshot.categories[0];
@@ -628,6 +645,94 @@ function AdminPage({ snapshot, onSnapshotChange, isAuthenticated, onAuthChange }
     }
   }
 
+  function openSoldOnsiteDialog() {
+    if (!selectedProduct) {
+      return;
+    }
+
+    setSoldOnsiteQty('1');
+    setSoldOnsiteNote('onsite');
+    setSoldOnsiteOpen(true);
+    setMessage('');
+  }
+
+  function closeSoldOnsiteDialog() {
+    if (isSoldOnsiteSubmitting) {
+      return;
+    }
+
+    setSoldOnsiteOpen(false);
+  }
+
+  async function handleConfirmSoldOnsite() {
+    if (!selectedProduct) {
+      return;
+    }
+
+    const quantity = Number.parseInt(soldOnsiteQty, 10);
+    if (!Number.isFinite(quantity) || quantity < 1) {
+      setMessage('Количеството трябва да е поне 1.');
+      return;
+    }
+
+    const availableStock = typeof selectedProduct.stock === 'number' ? selectedProduct.stock : 0;
+    if (availableStock < quantity) {
+      setMessage(`Няма достатъчна наличност (налични: ${availableStock}).`);
+      return;
+    }
+
+    const sessionUser = getSessionUser();
+    const adminEmail = sessionUser?.email?.trim() || email.trim();
+    if (!adminEmail) {
+      setMessage('Липсва админ имейл за поръчката.');
+      return;
+    }
+
+    const unitPrice = getEffectiveUnitPrice(selectedProduct);
+    const note = soldOnsiteNote.trim() || 'onsite';
+
+    setIsSoldOnsiteSubmitting(true);
+    setMessage('');
+
+    try {
+      const { reference } = await submitOrderRequest({
+        fullName: sessionUser?.name?.trim() || 'Onsite sale',
+        email: adminEmail,
+        items: [{
+          sku: selectedProduct.sku,
+          quantity,
+          priceEur: unitPrice,
+        }],
+        paymentMethod: 'cash_on_delivery',
+        notes: note,
+        billingAddress: {
+          city: 'Sofia',
+          address: 'Onsite / Double Yellow',
+          phone: '-',
+        },
+      });
+
+      await updateOrderStatus(reference, 'Delivered');
+
+      const nextSnapshot = await loadStoreSnapshot();
+      onSnapshotChange(nextSnapshot);
+      setSelectedOrderReference(reference);
+
+      const movementsResponse = await fetch('/api/admin/stock-movements', { headers: getAuthHeaders() });
+      if (movementsResponse.ok) {
+        const payload = await movementsResponse.json();
+        setStockMovements(Array.isArray(payload) ? payload as StockMovementRecord[] : []);
+      }
+
+      setSoldOnsiteOpen(false);
+      setMessage(`Sold onsite: ${selectedProduct.name} × ${quantity} → ${reference} (Delivered). Stock −${quantity}.`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Sold onsite не успя.');
+    } finally {
+      setIsSoldOnsiteSubmitting(false);
+    }
+  }
+
   function handleImport() {
     try {
       const parsed = JSON.parse(importText) as StoreSnapshot;
@@ -992,6 +1097,19 @@ function AdminPage({ snapshot, onSnapshotChange, isAuthenticated, onAuthChange }
                   Наличност (бр.)
                   <input value={selectedProduct.stock?.toString() ?? ''} onChange={(event) => updateProductField('stock', event.target.value)} />
                 </label>
+                <div className="full-width admin-onsite-sale-row">
+                  <button
+                    className="button button-secondary"
+                    type="button"
+                    onClick={openSoldOnsiteDialog}
+                    disabled={!selectedProduct || (typeof selectedProduct.stock === 'number' && selectedProduct.stock < 1)}
+                  >
+                    Sold onsite
+                  </button>
+                  <span className="admin-onsite-sale-hint">
+                    Създава COD поръчка → stock −1 и P&amp;L. Не редактира само наличността.
+                  </span>
+                </div>
                 <label>
                   Цвят
                   <input value={selectedProduct.color ?? ''} onChange={(event) => updateProductField('color', event.target.value)} placeholder="black / blue / red" />
@@ -1368,6 +1486,75 @@ function AdminPage({ snapshot, onSnapshotChange, isAuthenticated, onAuthChange }
           </article>
         </section>
       </main>
+
+      {soldOnsiteOpen && selectedProduct ? (
+        <div className="admin-confirm-overlay" role="presentation" onClick={closeSoldOnsiteDialog}>
+          <div
+            className="admin-confirm-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="sold-onsite-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <p className="eyebrow">Sold onsite</p>
+            <h2 id="sold-onsite-title">{selectedProduct.name}</h2>
+            <p className="admin-confirm-copy">
+              Създава нормална COD поръчка: stock −qty и печалбата в таблото. Цена = list/sale.
+            </p>
+            <div className="admin-form-grid">
+              <label>
+                Количество
+                <input
+                  type="number"
+                  min={1}
+                  step={1}
+                  value={soldOnsiteQty}
+                  onChange={(event) => setSoldOnsiteQty(event.target.value)}
+                  disabled={isSoldOnsiteSubmitting}
+                />
+              </label>
+              <label>
+                Цена EUR
+                <input
+                  type="text"
+                  value={formatEur(getEffectiveUnitPrice(selectedProduct))}
+                  readOnly
+                />
+              </label>
+              <label className="full-width">
+                Бележка
+                <input
+                  value={soldOnsiteNote}
+                  onChange={(event) => setSoldOnsiteNote(event.target.value)}
+                  placeholder="onsite"
+                  disabled={isSoldOnsiteSubmitting}
+                />
+              </label>
+            </div>
+            {typeof selectedProduct.costEur !== 'number' ? (
+              <p className="form-status">Предупреждение: липсва себестойност — печалбата няма да е точна.</p>
+            ) : null}
+            <div className="admin-inline-actions">
+              <button
+                className="button button-primary"
+                type="button"
+                onClick={handleConfirmSoldOnsite}
+                disabled={isSoldOnsiteSubmitting}
+              >
+                {isSoldOnsiteSubmitting ? 'Запис...' : 'Потвърди продажба'}
+              </button>
+              <button
+                className="button button-secondary"
+                type="button"
+                onClick={closeSoldOnsiteDialog}
+                disabled={isSoldOnsiteSubmitting}
+              >
+                Отказ
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
