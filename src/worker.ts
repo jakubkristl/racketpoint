@@ -132,11 +132,20 @@ async function products(request: Request, env: Env) {
 	const id = text(url.searchParams.get('id'), 120) || `prd_${crypto.randomUUID()}`;
 	const title = text(body.title, 180);
 	if (!title) return fail('Product title is required.', 400);
+	const costPrice = Math.max(0, numeric(body.costPrice));
+	const sellingPrice = Math.max(0, numeric(body.sellingPrice));
+	const discountPrice = body.discountPrice == null ? null : Math.max(0, numeric(body.discountPrice));
+	if (costPrice > 0 && sellingPrice < costPrice) {
+		return fail(`Selling price (${sellingPrice.toFixed(2)} EUR) cannot be lower than cost (${costPrice.toFixed(2)} EUR).`, 400);
+	}
+	if (costPrice > 0 && discountPrice != null && discountPrice > 0 && discountPrice < costPrice) {
+		return fail(`Promo price (${discountPrice.toFixed(2)} EUR) cannot be lower than cost (${costPrice.toFixed(2)} EUR).`, 400);
+	}
 	const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || id;
 	await env.DB.prepare(`INSERT INTO products (id,title,slug,description,brand,sport,sub_category,cost_price,selling_price,discount_price,stock,images,attributes,sizes,weight_grams,balance,rating,created_at)
 		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
 		ON CONFLICT(id) DO UPDATE SET title=excluded.title,slug=excluded.slug,description=excluded.description,brand=excluded.brand,sport=excluded.sport,sub_category=excluded.sub_category,cost_price=excluded.cost_price,selling_price=excluded.selling_price,discount_price=excluded.discount_price,stock=excluded.stock,images=excluded.images,attributes=excluded.attributes,weight_grams=excluded.weight_grams,balance=excluded.balance,rating=excluded.rating`)
-		.bind(id, title, slug, text(body.description), text(body.brand), text(body.sport), text(body.subCategory), Math.max(0, numeric(body.costPrice)), Math.max(0, numeric(body.sellingPrice)), body.discountPrice == null ? null : Math.max(0, numeric(body.discountPrice)), Math.max(0, Math.trunc(numeric(body.stock))), JSON.stringify(body.imageArray ?? []), JSON.stringify(body.attributes ?? {}), '[]', body.weightGrams == null ? null : Math.trunc(numeric(body.weightGrams)), text(body.balance) || null, Math.max(0, numeric(body.rating, 4.5)), new Date().toISOString()).run();
+		.bind(id, title, slug, text(body.description), text(body.brand), text(body.sport), text(body.subCategory), costPrice, sellingPrice, discountPrice, Math.max(0, Math.trunc(numeric(body.stock))), JSON.stringify(body.imageArray ?? []), JSON.stringify(body.attributes ?? {}), '[]', body.weightGrams == null ? null : Math.trunc(numeric(body.weightGrams)), text(body.balance) || null, Math.max(0, numeric(body.rating, 4.5)), new Date().toISOString()).run();
 	return json({ id, ok: true }, request.method === 'POST' ? 201 : 200);
 }
 

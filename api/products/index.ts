@@ -60,6 +60,22 @@ function parseFilters(req: any) {
   };
 }
 
+function assertPricesAtOrAboveCost(costPrice: number, sellingPrice: number, discountPrice: number | null | undefined) {
+  if (!(costPrice > 0)) {
+    return null;
+  }
+
+  if (sellingPrice < costPrice) {
+    return `Selling price (${sellingPrice.toFixed(2)} EUR) cannot be lower than cost (${costPrice.toFixed(2)} EUR).`;
+  }
+
+  if (discountPrice != null && discountPrice > 0 && discountPrice < costPrice) {
+    return `Promo price (${discountPrice.toFixed(2)} EUR) cannot be lower than cost (${costPrice.toFixed(2)} EUR).`;
+  }
+
+  return null;
+}
+
 export default async function handler(req: any, res: any) {
   if (!['GET', 'POST', 'PUT', 'DELETE'].includes(req.method)) {
     methodNotAllowed(res);
@@ -97,6 +113,14 @@ export default async function handler(req: any, res: any) {
       const body = readBody<ProductPayload>(req);
       const id = `prd_${Date.now().toString(36)}`;
       const slug = normalizeSlug(body.slug || body.title);
+      const costPrice = toNumber(body.costPrice);
+      const sellingPrice = toNumber(body.sellingPrice);
+      const discountPrice = body.discountPrice == null ? null : toNumber(body.discountPrice);
+      const priceError = assertPricesAtOrAboveCost(costPrice, sellingPrice, discountPrice);
+      if (priceError) {
+        res.status(400).json({ error: priceError });
+        return;
+      }
 
       await sql`
         INSERT INTO products (
@@ -105,8 +129,8 @@ export default async function handler(req: any, res: any) {
           weight_grams, balance, rating
         ) VALUES (
           ${id}, ${body.title.trim()}, ${slug}, ${body.description.trim()}, ${body.brand.trim()},
-          ${body.sport.trim()}, ${body.subCategory.trim()}, ${toNumber(body.costPrice)}, ${toNumber(body.sellingPrice)},
-          ${body.discountPrice == null ? null : toNumber(body.discountPrice)}, ${Math.max(0, Math.trunc(toNumber(body.stock)))},
+          ${body.sport.trim()}, ${body.subCategory.trim()}, ${costPrice}, ${sellingPrice},
+          ${discountPrice}, ${Math.max(0, Math.trunc(toNumber(body.stock)))},
           ${JSON.stringify(body.imageArray ?? [])}::jsonb,
           ${JSON.stringify(body.attributes ?? {})}::jsonb,
           ${JSON.stringify(body.sizes ?? [])}::jsonb,
@@ -139,6 +163,18 @@ export default async function handler(req: any, res: any) {
       const row = existing.rows[0];
       const nextTitle = body.title?.trim() || row.title;
       const nextSlug = body.slug ? normalizeSlug(body.slug) : row.slug;
+      const nextCost = body.costPrice == null ? Number(row.cost_price) : toNumber(body.costPrice);
+      const nextSelling = body.sellingPrice == null ? Number(row.selling_price) : toNumber(body.sellingPrice);
+      const nextDiscount = body.discountPrice === undefined
+        ? (row.discount_price == null ? null : Number(row.discount_price))
+        : body.discountPrice == null
+          ? null
+          : toNumber(body.discountPrice);
+      const priceError = assertPricesAtOrAboveCost(nextCost, nextSelling, nextDiscount);
+      if (priceError) {
+        res.status(400).json({ error: priceError });
+        return;
+      }
 
       await sql`
         UPDATE products
@@ -149,9 +185,9 @@ export default async function handler(req: any, res: any) {
           brand = ${body.brand?.trim() || row.brand},
           sport = ${body.sport?.trim() || row.sport},
           sub_category = ${body.subCategory?.trim() || row.sub_category},
-          cost_price = ${body.costPrice == null ? row.cost_price : toNumber(body.costPrice)},
-          selling_price = ${body.sellingPrice == null ? row.selling_price : toNumber(body.sellingPrice)},
-          discount_price = ${body.discountPrice === undefined ? row.discount_price : body.discountPrice == null ? null : toNumber(body.discountPrice)},
+          cost_price = ${nextCost},
+          selling_price = ${nextSelling},
+          discount_price = ${nextDiscount},
           stock = ${body.stock == null ? row.stock : Math.max(0, Math.trunc(toNumber(body.stock)))},
           images = ${body.imageArray ? JSON.stringify(body.imageArray) : JSON.stringify(row.images ?? [])}::jsonb,
           attributes = ${body.attributes ? JSON.stringify(body.attributes) : JSON.stringify(row.attributes ?? {})}::jsonb,

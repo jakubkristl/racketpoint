@@ -94,7 +94,7 @@ function ProductRoute({
   onAddToCart: (sku: string) => void;
 }) {
   const { sku } = useParams();
-  const product = snapshot.products.find((item) => item.sku === sku);
+  const product = findProductBySku(snapshot.products, sku ?? '');
 
   if (!product) {
     return <Navigate replace to="/" />;

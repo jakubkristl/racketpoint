@@ -531,9 +531,158 @@ export function findProductBySku(products: Product[], sku: string) {
   }
 
   return products.find((product) => {
-    const tokens = [product.sku, product.attributes?.sourceSku];
+    const tokens = [
+      product.sku,
+      product.attributes?.sourceSku,
+      product.attributes?.articleCode,
+      product.attributes?.publicSku,
+      product.attributes?.internalDbId,
+    ];
     return tokens.some((token) => token && normalizeSkuToken(token) === needle);
   });
+}
+
+/** DB id for Admin create/update/delete (import/public SKU may differ after overlay). */
+export function resolveProductApiId(product: Pick<Product, 'sku' | 'attributes'>, fallbackSku?: string) {
+  const fromAttributes = product.attributes?.internalDbId?.trim();
+  if (fromAttributes) {
+    return fromAttributes;
+  }
+
+  return fallbackSku?.trim() || product.sku;
+}
+
+/**
+ * Reject list/promo below cost. Returns a Bulgarian ops message, or null when valid.
+ * Cost <= 0 means no floor (cost not set yet).
+ */
+export function validateProductPricesAgainstCost(
+  product: Pick<Product, 'priceEur' | 'salePriceEur' | 'costEur' | 'price'>,
+) {
+  const cost = typeof product.costEur === 'number' && Number.isFinite(product.costEur)
+    ? product.costEur
+    : 0;
+
+  if (cost <= 0) {
+    return null;
+  }
+
+  const listPrice = typeof product.priceEur === 'number' && Number.isFinite(product.priceEur)
+    ? product.priceEur
+    : Number(String(product.price ?? '').replace(/[^\d,.-]/g, '').replace(',', '.'));
+
+  if (Number.isFinite(listPrice) && listPrice < cost) {
+    return `Цената (${listPrice.toFixed(2)} EUR) не може да е по-ниска от себестойността (${cost.toFixed(2)} EUR).`;
+  }
+
+  if (
+    typeof product.salePriceEur === 'number'
+    && Number.isFinite(product.salePriceEur)
+    && product.salePriceEur > 0
+    && product.salePriceEur < cost
+  ) {
+    return `Промо цената (${product.salePriceEur.toFixed(2)} EUR) не може да е по-ниска от себестойността (${cost.toFixed(2)} EUR).`;
+  }
+
+  return null;
+}
+
+function collectProductIdentityKeys(product: Product) {
+  const keys = new Set<string>();
+  const sku = normalizeSkuToken(product.sku);
+  if (sku) {
+    keys.add(`id:${sku}`);
+    if (sku.startsWith('pos') && sku.length > 3) {
+      keys.add(`id:${sku.slice(3)}`);
+    }
+  }
+
+  for (const attrKey of ['sourceSku', 'articleCode', 'articlecode', 'publicSku', 'internalDbId'] as const) {
+    const raw = product.attributes?.[attrKey];
+    if (typeof raw === 'string' && raw.trim()) {
+      keys.add(`id:${normalizeSkuToken(raw)}`);
+    }
+  }
+
+  const brand = normalizeLookupValue(product.brand);
+  const name = normalizeLookupValue(product.name);
+  if (brand && name) {
+    keys.add(`name:${brand}|${name}`);
+  }
+
+  return [...keys];
+}
+
+/** Apply Admin/API sell, promo, cost, and stock onto a public/import product row. */
+function applyApiCommercialOverlay(base: Product, api: Product): Product {
+  return {
+    ...base,
+    priceEur: api.priceEur,
+    salePriceEur: api.salePriceEur,
+    originalPriceEur: api.originalPriceEur,
+    price: api.price,
+    costEur: api.costEur,
+    stock: api.stock,
+    badges: api.badges.length > 0 ? api.badges : base.badges,
+    attributes: {
+      ...base.attributes,
+      ...api.attributes,
+      internalDbId: api.sku,
+      publicSku: base.sku,
+    },
+  };
+}
+
+/**
+ * Import/JSON catalog keeps public URLs (e.g. /product/10326928).
+ * Admin/API rows often use different ids (e.g. POS-…). Overlay commercial fields by identity
+ * and dedupe so the shop shows Admin prices on the public PDP.
+ */
+export function mergeApiProductsOverReference(apiProducts: Product[], referenceCatalog: Product[]) {
+  if (referenceCatalog.length === 0) {
+    return [...apiProducts];
+  }
+
+  if (apiProducts.length === 0) {
+    return [...referenceCatalog];
+  }
+
+  const apiByIdentity = new Map<string, Product>();
+  for (const apiProduct of apiProducts) {
+    for (const key of collectProductIdentityKeys(apiProduct)) {
+      if (!apiByIdentity.has(key)) {
+        apiByIdentity.set(key, apiProduct);
+      }
+    }
+  }
+
+  const usedApiSkus = new Set<string>();
+  const combined: Product[] = [];
+
+  for (const reference of referenceCatalog) {
+    let matched: Product | undefined;
+    for (const key of collectProductIdentityKeys(reference)) {
+      matched = apiByIdentity.get(key);
+      if (matched) {
+        break;
+      }
+    }
+
+    if (matched) {
+      usedApiSkus.add(matched.sku);
+      combined.push(applyApiCommercialOverlay(reference, matched));
+    } else {
+      combined.push(reference);
+    }
+  }
+
+  for (const apiProduct of apiProducts) {
+    if (!usedApiSkus.has(apiProduct.sku)) {
+      combined.push(apiProduct);
+    }
+  }
+
+  return combined;
 }
 
 function mapTypeToSubCategory(type: Product['type']) {
@@ -739,15 +888,8 @@ export async function fetchProducts() {
   ]);
 
   if (referenceCatalog.length > 0) {
-    const overrideBySku = new Map(mapped.map((product) => [product.sku, product] as const));
-    const combined = referenceCatalog.map((product) => overrideBySku.get(product.sku) ?? product);
-
-    for (const product of mapped) {
-      if (!referenceCatalog.some((reference) => reference.sku === product.sku)) {
-        combined.push(product);
-      }
-    }
-
+    // Prefer Admin/API commercial fields even when public SKU ≠ DB id (e.g. 10326928 vs POS-…).
+    const combined = mergeApiProductsOverReference(mapped, referenceCatalog);
     const normalized = mergeWithDefaultCatalog(combined, referenceCatalog);
     productCache = normalized;
     return normalized;
@@ -987,6 +1129,11 @@ export async function updateOrderStatus(reference: string, status: OrderRecord['
 }
 
 export async function createProductApi(product: Product) {
+  const priceError = validateProductPricesAgainstCost(product);
+  if (priceError) {
+    throw new Error(priceError);
+  }
+
   const response = await fetch('/api/products', {
     method: 'POST',
     headers: {
@@ -1004,10 +1151,7 @@ export async function createProductApi(product: Product) {
       discountPrice: product.salePriceEur ?? null,
       stock: product.stock ?? 0,
       imageArray: [product.imageUrl],
-      attributes: {
-        color: product.color,
-        headShape: product.headShape,
-      },
+      attributes: buildProductAttributesPayload(product),
       sizes: [],
       weightGrams: product.weightGrams ?? null,
       balance: product.balance ?? null,
@@ -1016,11 +1160,44 @@ export async function createProductApi(product: Product) {
   });
 
   await parseResponse<any>(response);
+  productCache = null;
   return loadStoreSnapshot();
 }
 
+function buildProductAttributesPayload(product: Product) {
+  const attributes: Record<string, string> = {};
+
+  if (product.attributes) {
+    for (const [key, value] of Object.entries(product.attributes)) {
+      if (typeof value === 'string' && value.trim() && key !== 'tags') {
+        attributes[key] = value;
+      }
+    }
+  }
+
+  if (product.color) {
+    attributes.color = product.color;
+  }
+
+  if (product.headShape) {
+    attributes.headShape = product.headShape;
+  }
+
+  if (product.badges.length > 0) {
+    attributes.tags = product.badges.join(',');
+  }
+
+  return attributes;
+}
+
 export async function updateProductApi(productSku: string, nextProduct: Product) {
-  const response = await fetch(`/api/products?id=${encodeURIComponent(productSku)}`, {
+  const priceError = validateProductPricesAgainstCost(nextProduct);
+  if (priceError) {
+    throw new Error(priceError);
+  }
+
+  const apiId = resolveProductApiId(nextProduct, productSku);
+  const response = await fetch(`/api/products?id=${encodeURIComponent(apiId)}`, {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json',
@@ -1038,11 +1215,7 @@ export async function updateProductApi(productSku: string, nextProduct: Product)
       discountPrice: nextProduct.salePriceEur ?? null,
       stock: nextProduct.stock ?? 0,
       imageArray: [nextProduct.imageUrl],
-      attributes: {
-        color: nextProduct.color,
-        headShape: nextProduct.headShape,
-        tags: nextProduct.badges,
-      },
+      attributes: buildProductAttributesPayload(nextProduct),
       weightGrams: nextProduct.weightGrams ?? null,
       balance: nextProduct.balance ?? null,
       rating: 4.5,
@@ -1050,16 +1223,20 @@ export async function updateProductApi(productSku: string, nextProduct: Product)
   });
 
   await parseResponse<any>(response);
-  return updateProduct(productSku, nextProduct);
+  productCache = null;
+  return loadStoreSnapshot();
 }
 
 export async function deleteProductApi(productSku: string) {
-  const response = await fetch(`/api/products?id=${encodeURIComponent(productSku)}`, {
+  const product = (productCache ?? loadSnapshot().products).find((item) => item.sku === productSku);
+  const apiId = product ? resolveProductApiId(product, productSku) : productSku;
+  const response = await fetch(`/api/products?id=${encodeURIComponent(apiId)}`, {
     method: 'DELETE',
     headers: getAuthHeaders(),
   });
 
   await parseResponse<{ ok: boolean }>(response);
+  productCache = null;
   return loadStoreSnapshot();
 }
 
