@@ -157,6 +157,52 @@ button {
   max-width: 44ch;
 }
 
+.category-intro-with-mood {
+  position: relative;
+  overflow: hidden;
+  border-radius: 18px;
+  border: 1px solid rgba(242, 194, 0, 0.28);
+  min-height: 0;
+  padding: 18px 20px;
+  isolation: isolate;
+}
+
+.category-intro-mood {
+  position: absolute;
+  inset: 0;
+  background-position: center;
+  background-size: cover;
+  background-repeat: no-repeat;
+  z-index: 0;
+}
+
+.category-intro-mood::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(105deg, rgba(9, 20, 33, 0.88) 12%, rgba(9, 20, 33, 0.62) 55%, rgba(9, 20, 33, 0.34));
+}
+
+.category-intro-copy {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 4px;
+}
+
+.category-intro-with-mood .eyebrow {
+  margin: 0;
+  color: rgba(241, 247, 255, 0.92);
+}
+
+.category-intro-with-mood h1 {
+  margin: 0;
+  color: #ffffff;
+  font-size: clamp(1.55rem, 3.2vw, 2.35rem);
+  line-height: 1.08;
+  letter-spacing: -0.02em;
+}
+
 .compact-contact-layout {
   display: grid;
   grid-template-columns: 1.2fr 0.8fr;
@@ -2904,6 +2950,15 @@ button {
 
   .category-mood-overlay {
     padding: 18px;
+  }
+
+  .category-intro-with-mood {
+    padding: 14px 16px;
+    border-radius: 14px;
+  }
+
+  .category-intro-with-mood h1 {
+    font-size: clamp(1.35rem, 7vw, 1.85rem);
   }
 
   .catalog-filters {

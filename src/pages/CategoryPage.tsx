@@ -4,6 +4,7 @@ import { type BalanceProfile, type Brand, type Category, type Product } from '..
 import { getFavoriteSkus, isFavoriteSku, toggleFavoriteSku } from '../data/favorites';
 import { getAvailabilityClassName, getStockLabel, isMadeToOrder, MADE_TO_ORDER_DELIVERY_NOTE } from '../data/inventory';
 import { getProductCardFacts } from '../data/publicCatalog';
+import { productMatchesQuery } from '../data/productSearch';
 import { getSubcategoriesForProducts, getSubcategoryByParam, getSubcategoriesForSport } from '../data/subcategories';
 
 type CategoryPageProps = {
@@ -47,7 +48,6 @@ const categoryMoodBySlug: Record<string, { primary: string; fallback: string }> 
 };
 
 const categoryMoodDefaultPrimary = '/branding/category/mood/top-strip.webp';
-const categoryMoodDefaultFallback = 'https://images.pexels.com/photos/274422/pexels-photo-274422.jpeg?auto=compress&cs=tinysrgb&w=1800';
 
 function getPriceValue(product: Product) {
   if (typeof product.priceEur === 'number') {
@@ -159,7 +159,8 @@ function CategoryPage({ category, products, brands, onAddToCart }: CategoryPageP
   const selectedSubcategory = requestedSub === 'all' ? undefined : getSubcategoryByParam(requestedSub);
 
   useEffect(() => {
-    if (requestedSub === 'all') {
+    const shouldScrollToResults = requestedSub !== 'all' || Boolean(requestedQuery.trim());
+    if (!shouldScrollToResults) {
       return;
     }
 
@@ -169,7 +170,7 @@ function CategoryPage({ category, products, brands, onAddToCart }: CategoryPageP
     }
 
     catalog.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }, [requestedSub, category.slug]);
+  }, [requestedSub, requestedQuery, category.slug]);
 
   const availableBalances = useMemo(
     () => Array.from(new Set(products.map((item) => item.balance).filter((item): item is BalanceProfile => Boolean(item)))),
@@ -193,7 +194,6 @@ function CategoryPage({ category, products, brands, onAddToCart }: CategoryPageP
   const filteredProducts = useMemo(() => {
     return products.filter((product) => {
       const productPrice = getPriceValue(product);
-      const queryText = `${product.name} ${product.details} ${product.brand}`.toLowerCase();
 
       if (selectedSubcategory && !selectedSubcategory.productTypes.includes(product.type)) {
         return false;
@@ -237,7 +237,7 @@ function CategoryPage({ category, products, brands, onAddToCart }: CategoryPageP
         return false;
       }
 
-      if (requestedQuery && !queryText.includes(requestedQuery.toLowerCase())) {
+      if (requestedQuery && !productMatchesQuery(product, requestedQuery)) {
         return false;
       }
 
@@ -257,7 +257,7 @@ function CategoryPage({ category, products, brands, onAddToCart }: CategoryPageP
   ]);
   const categoryMood = categoryMoodBySlug[category.slug] ?? {
     primary: categoryMoodDefaultPrimary,
-    fallback: categoryMoodDefaultFallback,
+    fallback: categoryMoodBySlug.squash.fallback,
   };
 
   function setParam(key: string, value: string) {
@@ -291,32 +291,16 @@ function CategoryPage({ category, products, brands, onAddToCart }: CategoryPageP
   return (
     <div className="page-shell">
       <main>
-        <section className="section compact-page-intro">
-          <p className="eyebrow">Категория</p>
-          <h1>{categoryLabelBySlug[category.slug] ?? category.name}</h1>
-        </section>
-
-        <section className="section category-mood-banner">
-          <img
-            src={categoryMood.primary}
-            alt={`${category.name} banner`}
-            loading="lazy"
-            onError={(event) => {
-              const target = event.currentTarget;
-              if (target.src.endsWith('/branding/logo-fallback.png')) {
-                return;
-              }
-              if (target.src.endsWith(categoryMoodDefaultPrimary)) {
-                target.src = categoryMoodDefaultFallback;
-                return;
-              }
-              if (target.src === categoryMood.fallback) {
-                target.src = categoryMoodDefaultPrimary;
-                return;
-              }
-              target.src = categoryMood.fallback;
-            }}
+        <section className="section compact-page-intro category-intro-with-mood">
+          <div
+            className="category-intro-mood"
+            aria-hidden="true"
+            style={{ backgroundImage: `url("${categoryMood.primary}")` }}
           />
+          <div className="category-intro-copy">
+            <p className="eyebrow">Категория</p>
+            <h1>{categoryLabelBySlug[category.slug] ?? category.name}</h1>
+          </div>
         </section>
 
         <section className="section" id="products">
@@ -433,15 +417,15 @@ function CategoryPage({ category, products, brands, onAddToCart }: CategoryPageP
 
             <div className="product-grid">
               {filteredProducts.length > 0 ? (
-                filteredProducts.map((product) => (
-                  (() => {
+                filteredProducts.map((product, productIndex) => {
                     const isFavorite = favoriteSkus.includes(product.sku) || isFavoriteSku(product.sku);
                     const cardFacts = getProductCardFacts(product);
+                    const pricing = getPricePresentation(product);
 
                     return (
                       <article
                         className="product-card clickable-card product-card-compact"
-                        key={product.sku}
+                        key={`${product.sku}::${productIndex}`}
                         onClick={() => openProduct(product.sku)}
                         role="link"
                         tabIndex={0}
@@ -467,18 +451,11 @@ function CategoryPage({ category, products, brands, onAddToCart }: CategoryPageP
 
                           <div className="product-footer">
                             <div className="price-stack">
-                              {(() => {
-                                const pricing = getPricePresentation(product);
-                                return (
-                                  <>
-                                    {pricing.isOnSale && pricing.original ? (
-                                      <p className="price-original">{pricing.original}</p>
-                                    ) : null}
-                                    <strong className={pricing.isOnSale ? 'price-sale' : ''}>{pricing.sale}</strong>
-                                    <p className="price-tax-note">ДДС включено</p>
-                                  </>
-                                );
-                              })()}
+                              {pricing.isOnSale && pricing.original ? (
+                                <p className="price-original">{pricing.original}</p>
+                              ) : null}
+                              <strong className={pricing.isOnSale ? 'price-sale' : ''}>{pricing.sale}</strong>
+                              <p className="price-tax-note">ДДС включено</p>
                             </div>
                             <div className="product-action-stack">
                               <button
@@ -512,8 +489,7 @@ function CategoryPage({ category, products, brands, onAddToCart }: CategoryPageP
                         </div>
                       </article>
                     );
-                  })()
-                ))
+                })
               ) : (
                 <article className="empty-state">
                   <h3>No products match the current filters.</h3>
