@@ -1,4 +1,4 @@
-import { type FormEvent, type ReactNode, useEffect, useState } from 'react';
+import { type FormEvent, type KeyboardEvent, type ReactNode, useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import BrandLogo from './BrandLogo';
 import { getFavoriteSkus } from '../data/favorites';
@@ -51,16 +51,29 @@ function StoreHeader({ activeSportSlug }: StoreHeaderProps) {
     window.dispatchEvent(new CustomEvent('racketpoint:open-cart'));
   }
 
-  function handleSearchSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  function runProductSearch() {
     const baseSport = activeSportSlug || 'squash';
     const trimmedQuery = searchValue.trim();
 
     navigate(
       trimmedQuery
-        ? `/category/${baseSport}?q=${encodeURIComponent(trimmedQuery)}`
+        ? `/category/${baseSport}?q=${encodeURIComponent(trimmedQuery)}#catalog-results`
         : `/category/${baseSport}`,
     );
+  }
+
+  function handleSearchSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    runProductSearch();
+  }
+
+  function handleSearchKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+    if (event.key !== 'Enter') {
+      return;
+    }
+
+    event.preventDefault();
+    runProductSearch();
   }
 
   return (
@@ -128,13 +141,17 @@ function StoreHeader({ activeSportSlug }: StoreHeaderProps) {
           })}
         </nav>
 
-        <form className="store-search" onSubmit={handleSearchSubmit}>
+        <form className="store-search" role="search" onSubmit={handleSearchSubmit}>
           <input
             type="search"
+            name="q"
             value={searchValue}
             onChange={(event) => setSearchValue(event.target.value)}
+            onKeyDown={handleSearchKeyDown}
             placeholder="Търсене..."
             aria-label="Търсене на продукти"
+            enterKeyHint="search"
+            autoComplete="off"
           />
           <button className="header-icon-btn" type="submit" title="Търсене на продукти">
             Търси
