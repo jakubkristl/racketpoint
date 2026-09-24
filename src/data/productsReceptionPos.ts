@@ -6,8 +6,9 @@ import { unsquashableProducts } from './productsUnsquashable';
  * Never point at reception-pos / Cloudflare Access /kiosk paths — those load as blank 0×0 images.
  */
 const PUBLIC_IMAGE_BY_ID: Record<string, string> = {
+  // Real ONE20 Limited Edition photo (not the SPEZIAL 110 stand-in).
   'unsquashable-miguel-rodriguez-one20':
-    'https://cdn.shopify.com/s/files/1/0510/5264/2502/files/04-UNSQUASHABLEMIGUELRODRIGUEZSPEZIAL110SquashRacket-2600x4000.jpg?v=1758593935&width=900',
+    'https://cdn.shopify.com/s/files/1/0510/5264/2502/files/04_-_Miguel_Rodriguez_Limited_edition_racket-2600x4000.jpg?v=1767114304&width=900',
   'unsquashable-miguel-rodriguez-autograph':
     'https://cdn.shopify.com/s/files/1/0510/5264/2502/files/UNSQUASHABLEMIGUELRODRIGUEZAUTOGRAPHSquashRacket-04-2600x4000.jpg?v=1770894571&width=900',
   'unsquashable-nick-wall-125-limited-edition':
@@ -32,6 +33,10 @@ const PUBLIC_IMAGE_BY_ID: Record<string, string> = {
     'https://cdn.shopify.com/s/files/1/0510/5264/2502/products/Y-TECracket-Shopify-IMG001.jpg?v=1724404534&width=900',
   'unsquashable-sam-gerrits-autograph':
     'https://cdn.shopify.com/s/files/1/0510/5264/2502/files/04-SAMGERRITSracket-2600x4000.jpg?v=1728657391&width=900',
+  'saxon-aerox-125':
+    '/imports/club-shop/saxon-aerox-125.jpg',
+  'prince-vortex-pro-650':
+    '/imports/club-shop/prince-vortex-pro-650.webp',
   'dunlop-sonic-core-ultimate-132':
     'https://cdn.webshopapp.com/shops/40033/files/417558576/dunlop-sonic-core-ultimate-132.jpg',
   'tecnifibre-carboflex-125-airshaft':
@@ -50,6 +55,28 @@ const PUBLIC_IMAGE_BY_ID: Record<string, string> = {
     'https://cdn.shopify.com/s/files/1/0510/5264/2502/products/UNSQUASHABLETOUR-TECPRODeluxeRacketBag2angle.jpg?v=1724404422&width=900',
   'unsquashable-tour-tec-pro-pu-grip-6-pack':
     'https://cdn.shopify.com/s/files/1/0648/8322/8918/files/karakal-pu-super-grip-pack-of-two-02.webp?v=1784548209&width=900',
+  'unsquashable-cross-tec-black-shoe':
+    '/imports/club-shop/unsquashable-cross-tec-black-shoe.webp',
+  'unsquashable-fast-tec-pro-shoe':
+    '/imports/club-shop/unsquashable-fast-tec-pro-shoe.webp',
+  'unsquashable-tour-tec-pro-string-reel':
+    '/imports/club-shop/unsquashable-tour-tec-pro-string-reel.webp',
+  'dunlop-pro-ball-12-pack':
+    '/imports/club-shop/dunlop-pro-ball.jpg',
+  'dunlop-junior-protective-eyewear':
+    '/imports/club-shop/dunlop-junior-protective-eyewear.jpg',
+  'dunlop-mens-indoor-crew-socks':
+    '/imports/club-shop/dunlop-mens-indoor-crew-socks.webp',
+  'tecnifibre-tech-socks':
+    '/imports/club-shop/tecnifibre-tech-socks.jpg',
+  'tecnifibre-classic-socks':
+    '/imports/club-shop/tecnifibre-classic-socks.jpg',
+  'tecnifibre-wristband-xl':
+    '/imports/club-shop/tecnifibre-wristband-xl.jpg',
+  'tecnifibre-team-tech-tee':
+    '/imports/club-shop/tecnifibre-team-tech-tee.avif',
+  'tecnifibre-team-cotton-tee':
+    '/imports/club-shop/tecnifibre-team-cotton-tee.jpg',
 };
 
 type ReceptionPosSeed = {

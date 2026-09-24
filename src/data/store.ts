@@ -750,11 +750,21 @@ function retagCatalogProducts(products: Product[]) {
 }
 
 function mergeWithDefaultCatalog(base: Product[], references: Product[]) {
-  const receptionBySku = new Map(
-    defaultProducts
-      .filter((product) => product.attributes?.source === 'reception-pos')
-      .map((product) => [product.sku, product] as const),
-  );
+  const receptionBySku = new Map<string, Product>();
+  for (const product of defaultProducts) {
+    if (product.attributes?.source !== 'reception-pos') {
+      continue;
+    }
+    receptionBySku.set(product.sku, product);
+    if (product.sku.startsWith('POS-')) {
+      receptionBySku.set(product.sku.slice(4), product);
+    }
+    const sourceSku = product.attributes?.sourceSku;
+    if (sourceSku) {
+      receptionBySku.set(sourceSku, product);
+      receptionBySku.set(`POS-${sourceSku}`, product);
+    }
+  }
 
   // API/DB can still hold legacy workers.dev /kiosk URLs — prefer the public catalog photo.
   const patchedBase = base.map((product) => {
