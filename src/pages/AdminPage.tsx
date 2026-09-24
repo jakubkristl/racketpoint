@@ -1031,6 +1031,10 @@ function AdminPage({ snapshot, onSnapshotChange, isAuthenticated, onAuthChange }
                   <button className="button button-primary" type="button" onClick={handleSaveSelectedProduct}>Запази</button>
                   <button className="button button-secondary" type="button" onClick={handleDeleteProduct}>Изтрий</button>
                 </div>
+                <p className="full-width support-copy">
+                  Цена, промо цена, себестойност и наличност се записват в RacketPoint (източник на истина за retail).
+                  Продажните цени се отразяват на клуба на doubleyellowsquash.com/store. Reception POS държи само F&amp;B / корт услуги — без retail sync.
+                </p>
               </div>
             ) : (
               <p className="admin-empty">Избери продукт.</p>

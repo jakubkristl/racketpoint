@@ -1,4 +1,5 @@
 import { requireAdmin } from '../_lib/auth';
+import { notifyClubSiteCatalogChanged } from '../_lib/clubSiteSync';
 import { ensureSchema, sql } from '../_lib/db';
 import { methodNotAllowed, normalizeSlug, readBody } from '../_lib/http';
 
@@ -235,6 +236,8 @@ export default async function handler(req: any, res: any) {
     }
 
     const totalResult = await sql`SELECT COUNT(*)::int AS count FROM products`;
+
+    void notifyClubSiteCatalogChanged('catalog_sync');
 
     res.status(200).json({
       ok: true,

@@ -1,6 +1,7 @@
 import { ensureSchema, sql } from '../_lib/db';
 import { methodNotAllowed, normalizeSlug, readBody, toNumber } from '../_lib/http';
-import { requireAdmin } from '../_lib/auth';
+import { getSessionUser, requireAdmin } from '../_lib/auth';
+import { notifyClubSiteCatalogChanged } from '../_lib/clubSiteSync';
 
 type ProductPayload = {
   title: string;
@@ -21,8 +22,8 @@ type ProductPayload = {
   rating?: number;
 };
 
-function mapProduct(row: any) {
-  return {
+function mapProduct(row: any, includeCost: boolean) {
+  const product: Record<string, unknown> = {
     id: row.id,
     title: row.title,
     slug: row.slug,
@@ -30,7 +31,6 @@ function mapProduct(row: any) {
     brand: row.brand,
     sport: row.sport,
     subCategory: row.sub_category,
-    costPrice: Number(row.cost_price),
     sellingPrice: Number(row.selling_price),
     discountPrice: row.discount_price == null ? null : Number(row.discount_price),
     stock: Number(row.stock),
@@ -42,6 +42,12 @@ function mapProduct(row: any) {
     rating: Number(row.rating ?? 0),
     createdAt: row.created_at,
   };
+
+  if (includeCost) {
+    product.costPrice = Number(row.cost_price);
+  }
+
+  return product;
 }
 
 function parseFilters(req: any) {
@@ -65,6 +71,8 @@ export default async function handler(req: any, res: any) {
 
     if (req.method === 'GET') {
       const filters = parseFilters(req);
+      const session = getSessionUser(req);
+      const includeCost = session?.role === 'ADMIN';
 
       const result = await sql`
         SELECT * FROM products
@@ -76,7 +84,7 @@ export default async function handler(req: any, res: any) {
         ORDER BY created_at DESC
       `;
 
-      res.status(200).json(result.rows.map(mapProduct));
+      res.status(200).json(result.rows.map((row) => mapProduct(row, includeCost)));
       return;
     }
 
@@ -109,7 +117,8 @@ export default async function handler(req: any, res: any) {
       `;
 
       const created = await sql`SELECT * FROM products WHERE id = ${id} LIMIT 1`;
-      res.status(201).json(mapProduct(created.rows[0]));
+      void notifyClubSiteCatalogChanged('product_create');
+      res.status(201).json(mapProduct(created.rows[0], true));
       return;
     }
 
@@ -154,7 +163,8 @@ export default async function handler(req: any, res: any) {
       `;
 
       const updated = await sql`SELECT * FROM products WHERE id = ${id} LIMIT 1`;
-      res.status(200).json(mapProduct(updated.rows[0]));
+      void notifyClubSiteCatalogChanged('product_update');
+      res.status(200).json(mapProduct(updated.rows[0], true));
       return;
     }
 
@@ -165,6 +175,7 @@ export default async function handler(req: any, res: any) {
     }
 
     await sql`DELETE FROM products WHERE id = ${id}`;
+    void notifyClubSiteCatalogChanged('product_delete');
     res.status(200).json({ ok: true });
   } catch (error) {
     res.status(500).json({ error: error instanceof Error ? error.message : 'Products API failure.' });
