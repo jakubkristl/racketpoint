@@ -52,16 +52,16 @@ function AccountPage() {
       }
 
       try {
-        const [profile, orders] = await Promise.all([
-          refreshProfile(),
-          fetchOrders(),
-        ]);
-
+        const profile = await refreshProfile();
         if (canceled) {
           return;
         }
-
         setSessionUser(profile);
+
+        const orders = await fetchOrders().catch(() => [] as OrderRecord[]);
+        if (canceled) {
+          return;
+        }
         setUserOrders(orders);
       } catch (error) {
         if (canceled) {
