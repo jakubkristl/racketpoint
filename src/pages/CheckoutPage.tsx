@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import type { Product } from '../data/catalog';
-import { findProductBySku, submitOrderRequest } from '../data/store';
+import { findProductBySku, getProductUnitPriceEur, submitOrderRequest } from '../data/store';
 import { savePendingBoricaOrder } from '../data/paymentSession';
 
 type CartLine = {
@@ -80,7 +80,7 @@ function CheckoutPage({ products, lines, onIncrement, onDecrement, onRemove, onC
       if (!product) {
         continue;
       }
-      const price = product.priceEur || parsePrice(product.price || '0');
+      const price = getProductUnitPriceEur(product) || parsePrice(product.price || '0');
       items.push({
         sku: product.sku,
         quantity: line.quantity,
@@ -136,7 +136,7 @@ function CheckoutPage({ products, lines, onIncrement, onDecrement, onRemove, onC
       items: cartItems.map((item) => ({
         sku: item.sku,
         quantity: item.quantity,
-        priceEur: item.product.priceEur,
+        priceEur: getProductUnitPriceEur(item.product),
       })),
       billingAddress: { city, address, phone },
       paymentMethod,
@@ -231,7 +231,7 @@ function CheckoutPage({ products, lines, onIncrement, onDecrement, onRemove, onC
                   <div>
                     <p className="product-category">{item.product.brand}</p>
                     <h3>{item.product.name}</h3>
-                    <p className="support-copy">{formatCurrency(item.product.priceEur || parsePrice(item.product.price || '0'))}</p>
+                    <p className="support-copy">{formatCurrency(getProductUnitPriceEur(item.product) || parsePrice(item.product.price || '0'))}</p>
                   </div>
                 </div>
                 <div className="checkout-line-controls">

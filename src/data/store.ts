@@ -568,11 +568,32 @@ function mapTypeToSubCategory(type: Product['type']) {
   return 'Rackets';
 }
 
+/** List/sell unit price for cart + checkout (promo wins when set). */
+export function getProductUnitPriceEur(product: Pick<Product, 'priceEur' | 'salePriceEur' | 'price'>) {
+  if (typeof product.salePriceEur === 'number' && Number.isFinite(product.salePriceEur)) {
+    return product.salePriceEur;
+  }
+
+  if (typeof product.priceEur === 'number' && Number.isFinite(product.priceEur)) {
+    return product.priceEur;
+  }
+
+  const fromLabel = Number(String(product.price ?? '').replace(/[^\d,.-]/g, '').replace(',', '.'));
+  return Number.isFinite(fromLabel) ? fromLabel : 0;
+}
+
 function mapApiProductToCatalogProduct(item: any): Product {
-  const priceEur = Number(item.sellingPrice ?? item.selling_price ?? 0);
+  // Keep list (selling) and promo (discount) separate so Admin edits stay correct.
+  const listPrice = Number(item.sellingPrice ?? item.selling_price ?? 0);
   const discountRaw = item.discountPrice ?? item.discount_price;
-  const discountPrice = discountRaw == null ? null : Number(discountRaw);
-  const effectivePrice = discountPrice != null ? discountPrice : priceEur;
+  const discountPrice = discountRaw == null || discountRaw === '' ? null : Number(discountRaw);
+  const hasPromo =
+    discountPrice != null
+    && Number.isFinite(discountPrice)
+    && Number.isFinite(listPrice)
+    && discountPrice > 0
+    && discountPrice < listPrice;
+  const displayPrice = hasPromo ? discountPrice! : listPrice;
   const imageArray = Array.isArray(item.imageArray)
     ? item.imageArray
     : Array.isArray(item.images)
@@ -587,14 +608,14 @@ function mapApiProductToCatalogProduct(item: any): Product {
     categorySlug: mapSportToSlug(item.sport ?? item.categorySlug),
     type: resolveProductType(item),
     brand: String(item.brand ?? 'Racketpoint'),
-    priceEur: Number.isFinite(effectivePrice) ? effectivePrice : 0,
-    salePriceEur: discountPrice != null && Number.isFinite(discountPrice) ? discountPrice : undefined,
-    originalPriceEur: discountPrice != null && Number.isFinite(priceEur) ? priceEur : undefined,
-    price: `EUR ${Number.isFinite(effectivePrice) ? effectivePrice.toFixed(2) : '0.00'}`,
+    priceEur: Number.isFinite(listPrice) ? listPrice : 0,
+    salePriceEur: hasPromo ? discountPrice! : undefined,
+    originalPriceEur: hasPromo ? listPrice : undefined,
+    price: `EUR ${Number.isFinite(displayPrice) ? displayPrice.toFixed(2) : '0.00'}`,
     costEur: Number(item.costPrice ?? item.cost_price ?? 0),
     stock: Number(item.stock ?? 0),
     details: String(item.description ?? ''),
-    badges: [],
+    badges: hasPromo ? ['SALE'] : [],
     imageUrl: bestImageUrl || 'https://via.placeholder.com/1200x800?text=Racketpoint',
     weightGrams: item.weightGrams == null ? undefined : Number(item.weightGrams),
     balance: typeof item.balance === 'string' ? item.balance as Product['balance'] : undefined,
@@ -671,7 +692,10 @@ async function requestCatalogSeed() {
 }
 
 async function fetchProductsFromApi() {
-  const response = await fetch('/api/products');
+  // Send auth when present so Admin receives costPrice (omitted on anonymous GET).
+  const response = await fetch('/api/products', {
+    headers: getAuthHeaders(),
+  });
   const payload = await parseResponse<any[]>(response);
   return payload.map(mapApiProductToCatalogProduct);
 }
@@ -977,7 +1001,7 @@ export async function createProductApi(product: Product) {
       subCategory: mapTypeToSubCategory(product.type),
       costPrice: product.costEur ?? 0,
       sellingPrice: product.priceEur ?? 0,
-      discountPrice: null,
+      discountPrice: product.salePriceEur ?? null,
       stock: product.stock ?? 0,
       imageArray: [product.imageUrl],
       attributes: {
@@ -1009,6 +1033,7 @@ export async function updateProductApi(productSku: string, nextProduct: Product)
       sport: nextProduct.categorySlug,
       subCategory: mapTypeToSubCategory(nextProduct.type),
       costPrice: nextProduct.costEur ?? 0,
+      // priceEur is always the list/selling price; salePriceEur is the optional promo.
       sellingPrice: nextProduct.priceEur ?? 0,
       discountPrice: nextProduct.salePriceEur ?? null,
       stock: nextProduct.stock ?? 0,

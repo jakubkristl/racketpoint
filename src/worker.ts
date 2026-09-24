@@ -92,19 +92,37 @@ async function isAdmin(request: Request, env: Env) {
 	return Boolean(session);
 }
 
-function productRow(row: Record<string, unknown>) {
-	return {
+function productRow(row: Record<string, unknown>, includeCost = false) {
+	const product: Record<string, unknown> = {
 		id: row.id, title: row.title, slug: row.slug, description: row.description, brand: row.brand, sport: row.sport,
-		subCategory: row.sub_category, costPrice: row.cost_price, sellingPrice: row.selling_price, discountPrice: row.discount_price,
+		subCategory: row.sub_category, sellingPrice: row.selling_price, discountPrice: row.discount_price,
 		stock: row.stock, imageArray: JSON.parse(String(row.images ?? '[]')), attributes: JSON.parse(String(row.attributes ?? '{}')),
 		sizes: JSON.parse(String(row.sizes ?? '[]')), weightGrams: row.weight_grams, balance: row.balance, rating: row.rating, createdAt: row.created_at,
+	};
+	if (includeCost) {
+		product.costPrice = row.cost_price;
+	}
+	return product;
+}
+
+function publicProductRow(row: Record<string, unknown>) {
+	const attributes = JSON.parse(String(row.attributes ?? '{}')) as Record<string, unknown>;
+	return {
+		id: row.id,
+		slug: row.slug,
+		title: row.title,
+		sellingPrice: row.selling_price,
+		discountPrice: row.discount_price,
+		stock: row.stock,
+		sourceSku: typeof attributes.sourceSku === 'string' ? attributes.sourceSku : null,
 	};
 }
 
 async function products(request: Request, env: Env) {
 	if (request.method === 'GET') {
+		const includeCost = await isAdmin(request, env);
 		const rows = await env.DB.prepare('SELECT * FROM products ORDER BY created_at DESC').all<Record<string, unknown>>();
-		return json(rows.results.map(productRow));
+		return json(rows.results.map((row) => productRow(row, includeCost)));
 	}
 
 	if (request.method !== 'PUT' && request.method !== 'POST') return fail('Method not allowed.', 405);
@@ -149,6 +167,11 @@ export default {
 			if (path === '/api/products') {
 				await env.DB.exec(schema);
 				return products(request, env);
+			}
+			if (path === '/api/catalog/public' && request.method === 'GET') {
+				await env.DB.exec(schema);
+				const rows = await env.DB.prepare('SELECT id,slug,title,selling_price,discount_price,stock,attributes FROM products ORDER BY created_at DESC').all<Record<string, unknown>>();
+				return json(rows.results.map(publicProductRow));
 			}
 			return env.ASSETS.fetch(request);
 		} catch (error) {
