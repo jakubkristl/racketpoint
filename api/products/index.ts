@@ -1,6 +1,7 @@
 import { ensureSchema, sql } from '../_lib/db';
 import { methodNotAllowed, normalizeSlug, readBody, toNumber } from '../_lib/http';
-import { requireAdmin } from '../_lib/auth';
+import { getSessionUser, requireAdmin } from '../_lib/auth';
+import { notifyClubSiteCatalogChanged } from '../_lib/clubSiteSync';
 
 type ProductPayload = {
   title: string;
@@ -21,8 +22,8 @@ type ProductPayload = {
   rating?: number;
 };
 
-function mapProduct(row: any) {
-  return {
+function mapProduct(row: any, includeCost: boolean) {
+  const product: Record<string, unknown> = {
     id: row.id,
     title: row.title,
     slug: row.slug,
@@ -30,7 +31,6 @@ function mapProduct(row: any) {
     brand: row.brand,
     sport: row.sport,
     subCategory: row.sub_category,
-    costPrice: Number(row.cost_price),
     sellingPrice: Number(row.selling_price),
     discountPrice: row.discount_price == null ? null : Number(row.discount_price),
     stock: Number(row.stock),
@@ -42,6 +42,12 @@ function mapProduct(row: any) {
     rating: Number(row.rating ?? 0),
     createdAt: row.created_at,
   };
+
+  if (includeCost) {
+    product.costPrice = Number(row.cost_price);
+  }
+
+  return product;
 }
 
 function parseFilters(req: any) {
@@ -52,6 +58,22 @@ function parseFilters(req: any) {
     brand: typeof req.query.brand === 'string' ? req.query.brand : '',
     search: typeof req.query.search === 'string' ? req.query.search : '',
   };
+}
+
+function assertPricesAtOrAboveCost(costPrice: number, sellingPrice: number, discountPrice: number | null | undefined) {
+  if (!(costPrice > 0)) {
+    return null;
+  }
+
+  if (sellingPrice < costPrice) {
+    return `Selling price (${sellingPrice.toFixed(2)} EUR) cannot be lower than cost (${costPrice.toFixed(2)} EUR).`;
+  }
+
+  if (discountPrice != null && discountPrice > 0 && discountPrice < costPrice) {
+    return `Promo price (${discountPrice.toFixed(2)} EUR) cannot be lower than cost (${costPrice.toFixed(2)} EUR).`;
+  }
+
+  return null;
 }
 
 export default async function handler(req: any, res: any) {
@@ -65,6 +87,8 @@ export default async function handler(req: any, res: any) {
 
     if (req.method === 'GET') {
       const filters = parseFilters(req);
+      const session = getSessionUser(req);
+      const includeCost = session?.role === 'ADMIN';
 
       const result = await sql`
         SELECT * FROM products
@@ -76,7 +100,7 @@ export default async function handler(req: any, res: any) {
         ORDER BY created_at DESC
       `;
 
-      res.status(200).json(result.rows.map(mapProduct));
+      res.status(200).json(result.rows.map((row) => mapProduct(row, includeCost)));
       return;
     }
 
@@ -89,6 +113,14 @@ export default async function handler(req: any, res: any) {
       const body = readBody<ProductPayload>(req);
       const id = `prd_${Date.now().toString(36)}`;
       const slug = normalizeSlug(body.slug || body.title);
+      const costPrice = toNumber(body.costPrice);
+      const sellingPrice = toNumber(body.sellingPrice);
+      const discountPrice = body.discountPrice == null ? null : toNumber(body.discountPrice);
+      const priceError = assertPricesAtOrAboveCost(costPrice, sellingPrice, discountPrice);
+      if (priceError) {
+        res.status(400).json({ error: priceError });
+        return;
+      }
 
       await sql`
         INSERT INTO products (
@@ -97,8 +129,8 @@ export default async function handler(req: any, res: any) {
           weight_grams, balance, rating
         ) VALUES (
           ${id}, ${body.title.trim()}, ${slug}, ${body.description.trim()}, ${body.brand.trim()},
-          ${body.sport.trim()}, ${body.subCategory.trim()}, ${toNumber(body.costPrice)}, ${toNumber(body.sellingPrice)},
-          ${body.discountPrice == null ? null : toNumber(body.discountPrice)}, ${Math.max(0, Math.trunc(toNumber(body.stock)))},
+          ${body.sport.trim()}, ${body.subCategory.trim()}, ${costPrice}, ${sellingPrice},
+          ${discountPrice}, ${Math.max(0, Math.trunc(toNumber(body.stock)))},
           ${JSON.stringify(body.imageArray ?? [])}::jsonb,
           ${JSON.stringify(body.attributes ?? {})}::jsonb,
           ${JSON.stringify(body.sizes ?? [])}::jsonb,
@@ -109,7 +141,8 @@ export default async function handler(req: any, res: any) {
       `;
 
       const created = await sql`SELECT * FROM products WHERE id = ${id} LIMIT 1`;
-      res.status(201).json(mapProduct(created.rows[0]));
+      void notifyClubSiteCatalogChanged('product_create');
+      res.status(201).json(mapProduct(created.rows[0], true));
       return;
     }
 
@@ -130,6 +163,18 @@ export default async function handler(req: any, res: any) {
       const row = existing.rows[0];
       const nextTitle = body.title?.trim() || row.title;
       const nextSlug = body.slug ? normalizeSlug(body.slug) : row.slug;
+      const nextCost = body.costPrice == null ? Number(row.cost_price) : toNumber(body.costPrice);
+      const nextSelling = body.sellingPrice == null ? Number(row.selling_price) : toNumber(body.sellingPrice);
+      const nextDiscount = body.discountPrice === undefined
+        ? (row.discount_price == null ? null : Number(row.discount_price))
+        : body.discountPrice == null
+          ? null
+          : toNumber(body.discountPrice);
+      const priceError = assertPricesAtOrAboveCost(nextCost, nextSelling, nextDiscount);
+      if (priceError) {
+        res.status(400).json({ error: priceError });
+        return;
+      }
 
       await sql`
         UPDATE products
@@ -140,9 +185,9 @@ export default async function handler(req: any, res: any) {
           brand = ${body.brand?.trim() || row.brand},
           sport = ${body.sport?.trim() || row.sport},
           sub_category = ${body.subCategory?.trim() || row.sub_category},
-          cost_price = ${body.costPrice == null ? row.cost_price : toNumber(body.costPrice)},
-          selling_price = ${body.sellingPrice == null ? row.selling_price : toNumber(body.sellingPrice)},
-          discount_price = ${body.discountPrice === undefined ? row.discount_price : body.discountPrice == null ? null : toNumber(body.discountPrice)},
+          cost_price = ${nextCost},
+          selling_price = ${nextSelling},
+          discount_price = ${nextDiscount},
           stock = ${body.stock == null ? row.stock : Math.max(0, Math.trunc(toNumber(body.stock)))},
           images = ${body.imageArray ? JSON.stringify(body.imageArray) : JSON.stringify(row.images ?? [])}::jsonb,
           attributes = ${body.attributes ? JSON.stringify(body.attributes) : JSON.stringify(row.attributes ?? {})}::jsonb,
@@ -154,7 +199,8 @@ export default async function handler(req: any, res: any) {
       `;
 
       const updated = await sql`SELECT * FROM products WHERE id = ${id} LIMIT 1`;
-      res.status(200).json(mapProduct(updated.rows[0]));
+      void notifyClubSiteCatalogChanged('product_update');
+      res.status(200).json(mapProduct(updated.rows[0], true));
       return;
     }
 
@@ -165,6 +211,7 @@ export default async function handler(req: any, res: any) {
     }
 
     await sql`DELETE FROM products WHERE id = ${id}`;
+    void notifyClubSiteCatalogChanged('product_delete');
     res.status(200).json({ ok: true });
   } catch (error) {
     res.status(500).json({ error: error instanceof Error ? error.message : 'Products API failure.' });

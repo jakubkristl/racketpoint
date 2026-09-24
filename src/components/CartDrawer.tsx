@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import type { Product } from '../data/catalog';
-import { findProductBySku } from '../data/store';
+import { findProductBySku, getProductUnitPriceEur } from '../data/store';
 
 type CartLine = {
   sku: string;
@@ -51,7 +51,7 @@ function CartDrawer({
         continue;
       }
 
-      const unitPrice = product.priceEur || parsePrice(product.price || '0');
+      const unitPrice = getProductUnitPriceEur(product) || parsePrice(product.price || '0');
       items.push({
         sku: product.sku,
         quantity: line.quantity,
@@ -107,7 +107,7 @@ function CartDrawer({
                   <div>
                     <p className="product-category">{item.product.brand}</p>
                     <h3>{item.product.name}</h3>
-                    <p className="support-copy">Единична цена: {formatCurrency(item.product.priceEur || parsePrice(item.product.price || '0'))}</p>
+                    <p className="support-copy">Единична цена: {formatCurrency(getProductUnitPriceEur(item.product) || parsePrice(item.product.price || '0'))}</p>
                     <p className="cart-line-total">Общо за реда: {formatCurrency(item.lineTotal)}</p>
                   </div>
                 </div>

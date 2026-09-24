@@ -2,7 +2,7 @@ import type { Product } from './catalog';
 
 const SOURCE_LINE_PATTERN = /(?:^|\s)(source|supplier|vendor)\s*:\s*https?:\/\/\S+/gi;
 const URL_PATTERN = /https?:\/\/\S+/gi;
-const HIDDEN_ATTRIBUTE_KEY_PATTERN = /(source|supplier|vendor|article\s*code|articlecode|cost|margin|wholesale|internal|sourcesku)/i;
+const HIDDEN_ATTRIBUTE_KEY_PATTERN = /(source|supplier|vendor|article\s*code|articlecode|cost|margin|wholesale|internal|sourcesku|publicsku|dbid)/i;
 
 const ATTRIBUTE_LABELS: Record<string, string> = {
   productType: 'Тип продукт',
