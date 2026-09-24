@@ -999,6 +999,53 @@ button {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.admin-onsite-sale-row {
+  display: grid;
+  gap: 8px;
+  align-content: start;
+  padding-top: 4px;
+}
+
+.admin-onsite-sale-hint {
+  color: var(--muted);
+  font-size: 0.86rem;
+  line-height: 1.35;
+}
+
+.admin-confirm-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(10, 10, 10, 0.42);
+}
+
+.admin-confirm-dialog {
+  width: min(440px, 100%);
+  display: grid;
+  gap: 14px;
+  padding: 22px;
+  border-radius: 24px;
+  border: 1px solid var(--border);
+  background: #fdf9f4;
+  box-shadow: 0 24px 60px rgba(26, 17, 9, 0.22);
+}
+
+.admin-confirm-dialog h2 {
+  margin: 0;
+  font-size: 1.35rem;
+  letter-spacing: -0.03em;
+}
+
+.admin-confirm-copy {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.95rem;
+  line-height: 1.45;
+}
+
 .admin-stats-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
