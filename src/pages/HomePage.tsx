@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import ProductImage from '../components/ProductImage';
 import type { Category, Product } from '../data/catalog';
 import { getAvailabilityClassName, getStockLabel, isMadeToOrder, MADE_TO_ORDER_DELIVERY_NOTE } from '../data/inventory';
 import { getPublicShortDetails } from '../data/publicCatalog';
@@ -17,7 +18,7 @@ const sportVisuals = [
     slug: 'squash',
     sport: 'Скуош',
     caption: '',
-    imageUrl: 'https://images.pexels.com/photos/7648269/pexels-photo-7648269.jpeg?auto=compress&cs=tinysrgb&w=1200',
+    imageUrl: '/branding/navigation/thumbnails/squash.png',
     fallbackImageUrl: 'https://images.pexels.com/photos/14629511/pexels-photo-14629511.jpeg?auto=compress&cs=tinysrgb&w=1200',
     href: '/category/squash',
   },
@@ -25,7 +26,7 @@ const sportVisuals = [
     slug: 'badminton',
     sport: 'Бадминтон',
     caption: '',
-    imageUrl: 'https://images.pexels.com/photos/2202685/pexels-photo-2202685.jpeg?auto=compress&cs=tinysrgb&w=1200',
+    imageUrl: '/branding/navigation/thumbnails/badminton.png',
     fallbackImageUrl: 'https://images.pexels.com/photos/3660204/pexels-photo-3660204.jpeg?auto=compress&cs=tinysrgb&w=1200',
     href: '/category/badminton',
   },
@@ -33,7 +34,7 @@ const sportVisuals = [
     slug: 'padel',
     sport: 'Падел',
     caption: '',
-    imageUrl: 'https://images.pexels.com/photos/35248332/pexels-photo-35248332.jpeg?auto=compress&cs=tinysrgb&w=1200',
+    imageUrl: '/branding/navigation/thumbnails/padel.png',
     fallbackImageUrl: 'https://images.pexels.com/photos/35248374/pexels-photo-35248374.jpeg?auto=compress&cs=tinysrgb&w=1200',
     href: '/category/padel',
   },
@@ -41,7 +42,7 @@ const sportVisuals = [
     slug: 'table-tennis',
     sport: 'Тенис на маса',
     caption: '',
-    imageUrl: 'https://images.pexels.com/photos/709134/pexels-photo-709134.jpeg?auto=compress&cs=tinysrgb&w=1200',
+    imageUrl: '/branding/navigation/thumbnails/table-tennis.png',
     fallbackImageUrl: 'https://images.pexels.com/photos/4080060/pexels-photo-4080060.jpeg?auto=compress&cs=tinysrgb&w=1200',
     href: '/category/table-tennis',
   },
@@ -49,7 +50,7 @@ const sportVisuals = [
     slug: 'tennis',
     sport: 'Тенис',
     caption: '',
-    imageUrl: 'https://images.pexels.com/photos/209977/pexels-photo-209977.jpeg?auto=compress&cs=tinysrgb&w=1200',
+    imageUrl: '/branding/navigation/thumbnails/tennis.png',
     fallbackImageUrl: 'https://images.pexels.com/photos/5739115/pexels-photo-5739115.jpeg?auto=compress&cs=tinysrgb&w=1200',
     href: '/category/tennis',
   },
@@ -223,7 +224,7 @@ function HomePage({ categories, products, onAddToCart }: HomePageProps) {
             {featuredProducts.map((product) => (
               <article className="product-card" key={product.sku}>
                 <Link to={`/product/${encodeURIComponent(product.sku)}`}>
-                  <img className="product-image" src={product.imageUrl} alt={product.name} loading="lazy" />
+                  <ProductImage className="product-image" product={product} loading="lazy" />
                 </Link>
                 <div className="product-body">
                   <div>
