@@ -634,9 +634,9 @@ function applyApiCommercialOverlay(base: Product, api: Product): Product {
 }
 
 /**
- * Import/JSON catalog keeps public URLs (e.g. /product/10326928).
- * Admin/API rows often use different ids (e.g. POS-…). Overlay commercial fields by identity
- * and dedupe so the shop shows Admin prices on the public PDP.
+ * Import/JSON catalog keeps public URLs (numeric/article SKUs).
+ * Admin/API rows often use different ids (e.g. POS-…, prd_…). Overlay commercial fields by identity
+ * and dedupe so the shop shows Admin prices on the public PDP for every matched product.
  */
 export function mergeApiProductsOverReference(apiProducts: Product[], referenceCatalog: Product[]) {
   if (referenceCatalog.length === 0) {
@@ -888,7 +888,7 @@ export async function fetchProducts() {
   ]);
 
   if (referenceCatalog.length > 0) {
-    // Prefer Admin/API commercial fields even when public SKU ≠ DB id (e.g. 10326928 vs POS-…).
+    // Prefer Admin/API commercial fields even when public SKU ≠ DB id (import article vs Admin id).
     const combined = mergeApiProductsOverReference(mapped, referenceCatalog);
     const normalized = mergeWithDefaultCatalog(combined, referenceCatalog);
     productCache = normalized;
