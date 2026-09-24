@@ -14,6 +14,7 @@ import {
   type StoreSnapshot,
   updateOrderStatus,
   updateProductApi,
+  validateProductPricesAgainstCost,
   createBrand,
   createCategory,
   deleteBrand,
@@ -573,9 +574,18 @@ function AdminPage({ snapshot, onSnapshotChange, isAuthenticated, onAuthChange }
       return;
     }
 
+    const confirmed = window.confirm(
+      `Изтриване на „${selectedProduct.name}“?\n\nПродуктът ще бъде премахнат от Admin каталога и от магазина. Това действие не може да се отмени лесно.`,
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
     try {
       const nextSnapshot = await deleteProductApi(selectedProduct.sku);
       onSnapshotChange(nextSnapshot);
+      setSelectedProductSku(nextSnapshot.products[0]?.sku ?? '');
       setMessage('Продуктът е изтрит.');
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Изтриването не успя.');
@@ -619,9 +629,23 @@ function AdminPage({ snapshot, onSnapshotChange, isAuthenticated, onAuthChange }
       return;
     }
 
+    const priceError = validateProductPricesAgainstCost(selectedProduct);
+    if (priceError) {
+      setMessage(priceError);
+      return;
+    }
+
     try {
       const nextSnapshot = await updateProductApi(selectedProduct.sku, selectedProduct);
       onSnapshotChange(nextSnapshot);
+      setSelectedProductSku(
+        nextSnapshot.products.find((product) => (
+          product.sku === selectedProduct.sku
+          || product.attributes?.internalDbId === selectedProduct.attributes?.internalDbId
+          || product.attributes?.internalDbId === selectedProduct.sku
+          || product.sku === selectedProduct.attributes?.publicSku
+        ))?.sku ?? selectedProduct.sku,
+      );
       setMessage('Продуктът е обновен.');
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Записът не успя.');
@@ -1031,6 +1055,11 @@ function AdminPage({ snapshot, onSnapshotChange, isAuthenticated, onAuthChange }
                   <button className="button button-primary" type="button" onClick={handleSaveSelectedProduct}>Запази</button>
                   <button className="button button-secondary" type="button" onClick={handleDeleteProduct}>Изтрий</button>
                 </div>
+                <p className="full-width support-copy">
+                  Цена, промо цена, себестойност и наличност се записват в RacketPoint (източник на истина за retail).
+                  Продажните цени се отразяват в публичния магазин и на клуба на doubleyellowsquash.com/store.
+                  Цена и промо не могат да са по-ниски от себестойността. Reception POS държи само F&amp;B / корт услуги — без retail sync.
+                </p>
               </div>
             ) : (
               <p className="admin-empty">Избери продукт.</p>

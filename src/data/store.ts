@@ -8,6 +8,16 @@ import {
   type CategorySlug,
 } from './catalog';
 import { getAuthHeaders, getSessionUser } from './accountStore';
+import {
+  buildIdentityKeySet,
+  collectProductIdentityKeys,
+  dedupeProductsByIdentity,
+  filterProductsBySuppressedKeys,
+  normalizeLookupValue,
+  normalizeSkuToken,
+  productMatchesIdentityKeys,
+  scoreCanonicalProduct,
+} from './productIdentity';
 
 export type OrderInput = {
   fullName: string;
@@ -65,6 +75,7 @@ export type CatalogSyncResult = {
   updated: number;
   processed: number;
   totalProducts: number;
+  skippedSuppressed?: number;
 };
 
 export type CmsCollection = 'categories' | 'brands' | 'products';
@@ -201,15 +212,6 @@ function pickBestImageUrlFromCandidates(images: string[]) {
   }
 
   return images.find((imageUrl) => hasUsableProductImage(imageUrl));
-}
-
-function normalizeLookupValue(value: string) {
-  return value
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, ' ')
-    .trim();
 }
 
 function tokenizeLookupValue(value: string) {
@@ -515,10 +517,6 @@ function resolveProductType(item: {
   return 'Racket';
 }
 
-function normalizeSkuToken(value: string) {
-  return value.toLowerCase().replace(/^prd_/, '').replace(/[^a-z0-9]/g, '');
-}
-
 export function findProductBySku(products: Product[], sku: string) {
   const exact = products.find((product) => product.sku === sku);
   if (exact) {
@@ -531,9 +529,165 @@ export function findProductBySku(products: Product[], sku: string) {
   }
 
   return products.find((product) => {
-    const tokens = [product.sku, product.attributes?.sourceSku];
+    const tokens = [
+      product.sku,
+      product.attributes?.sourceSku,
+      product.attributes?.articleCode,
+      product.attributes?.publicSku,
+      product.attributes?.internalDbId,
+    ];
     return tokens.some((token) => token && normalizeSkuToken(token) === needle);
   });
+}
+
+/** DB id for Admin create/update/delete (import/public SKU may differ after overlay). */
+export function resolveProductApiId(product: Pick<Product, 'sku' | 'attributes'>, fallbackSku?: string) {
+  const fromAttributes = product.attributes?.internalDbId?.trim();
+  if (fromAttributes) {
+    return fromAttributes;
+  }
+
+  return fallbackSku?.trim() || product.sku;
+}
+
+/**
+ * Reject list/promo below cost. Returns a Bulgarian ops message, or null when valid.
+ * Cost <= 0 means no floor (cost not set yet).
+ */
+export function validateProductPricesAgainstCost(
+  product: Pick<Product, 'priceEur' | 'salePriceEur' | 'costEur' | 'price'>,
+) {
+  const cost = typeof product.costEur === 'number' && Number.isFinite(product.costEur)
+    ? product.costEur
+    : 0;
+
+  if (cost <= 0) {
+    return null;
+  }
+
+  const listPrice = typeof product.priceEur === 'number' && Number.isFinite(product.priceEur)
+    ? product.priceEur
+    : Number(String(product.price ?? '').replace(/[^\d,.-]/g, '').replace(',', '.'));
+
+  if (Number.isFinite(listPrice) && listPrice < cost) {
+    return `Цената (${listPrice.toFixed(2)} EUR) не може да е по-ниска от себестойността (${cost.toFixed(2)} EUR).`;
+  }
+
+  if (
+    typeof product.salePriceEur === 'number'
+    && Number.isFinite(product.salePriceEur)
+    && product.salePriceEur > 0
+    && product.salePriceEur < cost
+  ) {
+    return `Промо цената (${product.salePriceEur.toFixed(2)} EUR) не може да е по-ниска от себестойността (${cost.toFixed(2)} EUR).`;
+  }
+
+  return null;
+}
+
+/** Apply Admin/API sell, promo, cost, and stock onto a public/import product row. */
+function applyApiCommercialOverlay(base: Product, api: Product): Product {
+  return {
+    ...base,
+    priceEur: api.priceEur,
+    salePriceEur: api.salePriceEur,
+    originalPriceEur: api.originalPriceEur,
+    price: api.price,
+    costEur: api.costEur,
+    stock: api.stock,
+    badges: api.badges.length > 0 ? api.badges : base.badges,
+    attributes: {
+      ...base.attributes,
+      ...api.attributes,
+      internalDbId: api.sku,
+      publicSku: base.sku,
+    },
+  };
+}
+
+function markApiSkusSharingIdentity(
+  apiProducts: Product[],
+  identityKeys: Set<string>,
+  usedApiSkus: Set<string>,
+) {
+  for (const apiProduct of apiProducts) {
+    if (usedApiSkus.has(apiProduct.sku)) {
+      continue;
+    }
+
+    if (productMatchesIdentityKeys(apiProduct, identityKeys)) {
+      usedApiSkus.add(apiProduct.sku);
+    }
+  }
+}
+
+/**
+ * Import/JSON catalog keeps public URLs (numeric/article SKUs).
+ * Admin/API rows often use different ids (e.g. POS-…, prd_…). Overlay commercial fields by identity
+ * and dedupe so the shop shows Admin prices on the public PDP for every matched product.
+ */
+export function mergeApiProductsOverReference(apiProducts: Product[], referenceCatalog: Product[]) {
+  if (referenceCatalog.length === 0) {
+    return dedupeProductsByIdentity(apiProducts);
+  }
+
+  if (apiProducts.length === 0) {
+    return [...referenceCatalog];
+  }
+
+  const apiByIdentity = new Map<string, Product>();
+  for (const apiProduct of apiProducts) {
+    for (const key of collectProductIdentityKeys(apiProduct)) {
+      const existing = apiByIdentity.get(key);
+      if (!existing || scoreCanonicalProduct(apiProduct) > scoreCanonicalProduct(existing)) {
+        apiByIdentity.set(key, apiProduct);
+      }
+    }
+  }
+
+  const usedApiSkus = new Set<string>();
+  const combined: Product[] = [];
+
+  for (const reference of referenceCatalog) {
+    let matched: Product | undefined;
+    for (const key of collectProductIdentityKeys(reference)) {
+      matched = apiByIdentity.get(key);
+      if (matched) {
+        break;
+      }
+    }
+
+    if (matched) {
+      const identityKeys = new Set([
+        ...collectProductIdentityKeys(reference),
+        ...collectProductIdentityKeys(matched),
+      ]);
+      markApiSkusSharingIdentity(apiProducts, identityKeys, usedApiSkus);
+      usedApiSkus.add(matched.sku);
+      combined.push(applyApiCommercialOverlay(reference, matched));
+    } else {
+      combined.push(reference);
+    }
+  }
+
+  const combinedKeys = buildIdentityKeySet(combined);
+  for (const apiProduct of apiProducts) {
+    if (usedApiSkus.has(apiProduct.sku)) {
+      continue;
+    }
+
+    if (productMatchesIdentityKeys(apiProduct, combinedKeys)) {
+      usedApiSkus.add(apiProduct.sku);
+      continue;
+    }
+
+    combined.push(apiProduct);
+    for (const key of collectProductIdentityKeys(apiProduct)) {
+      combinedKeys.add(key);
+    }
+  }
+
+  return combined;
 }
 
 function mapTypeToSubCategory(type: Product['type']) {
@@ -568,11 +722,32 @@ function mapTypeToSubCategory(type: Product['type']) {
   return 'Rackets';
 }
 
+/** List/sell unit price for cart + checkout (promo wins when set). */
+export function getProductUnitPriceEur(product: Pick<Product, 'priceEur' | 'salePriceEur' | 'price'>) {
+  if (typeof product.salePriceEur === 'number' && Number.isFinite(product.salePriceEur)) {
+    return product.salePriceEur;
+  }
+
+  if (typeof product.priceEur === 'number' && Number.isFinite(product.priceEur)) {
+    return product.priceEur;
+  }
+
+  const fromLabel = Number(String(product.price ?? '').replace(/[^\d,.-]/g, '').replace(',', '.'));
+  return Number.isFinite(fromLabel) ? fromLabel : 0;
+}
+
 function mapApiProductToCatalogProduct(item: any): Product {
-  const priceEur = Number(item.sellingPrice ?? item.selling_price ?? 0);
+  // Keep list (selling) and promo (discount) separate so Admin edits stay correct.
+  const listPrice = Number(item.sellingPrice ?? item.selling_price ?? 0);
   const discountRaw = item.discountPrice ?? item.discount_price;
-  const discountPrice = discountRaw == null ? null : Number(discountRaw);
-  const effectivePrice = discountPrice != null ? discountPrice : priceEur;
+  const discountPrice = discountRaw == null || discountRaw === '' ? null : Number(discountRaw);
+  const hasPromo =
+    discountPrice != null
+    && Number.isFinite(discountPrice)
+    && Number.isFinite(listPrice)
+    && discountPrice > 0
+    && discountPrice < listPrice;
+  const displayPrice = hasPromo ? discountPrice! : listPrice;
   const imageArray = Array.isArray(item.imageArray)
     ? item.imageArray
     : Array.isArray(item.images)
@@ -587,14 +762,14 @@ function mapApiProductToCatalogProduct(item: any): Product {
     categorySlug: mapSportToSlug(item.sport ?? item.categorySlug),
     type: resolveProductType(item),
     brand: String(item.brand ?? 'Racketpoint'),
-    priceEur: Number.isFinite(effectivePrice) ? effectivePrice : 0,
-    salePriceEur: discountPrice != null && Number.isFinite(discountPrice) ? discountPrice : undefined,
-    originalPriceEur: discountPrice != null && Number.isFinite(priceEur) ? priceEur : undefined,
-    price: `EUR ${Number.isFinite(effectivePrice) ? effectivePrice.toFixed(2) : '0.00'}`,
+    priceEur: Number.isFinite(listPrice) ? listPrice : 0,
+    salePriceEur: hasPromo ? discountPrice! : undefined,
+    originalPriceEur: hasPromo ? listPrice : undefined,
+    price: `EUR ${Number.isFinite(displayPrice) ? displayPrice.toFixed(2) : '0.00'}`,
     costEur: Number(item.costPrice ?? item.cost_price ?? 0),
     stock: Number(item.stock ?? 0),
     details: String(item.description ?? ''),
-    badges: [],
+    badges: hasPromo ? ['SALE'] : [],
     imageUrl: bestImageUrl || 'https://via.placeholder.com/1200x800?text=Racketpoint',
     weightGrams: item.weightGrams == null ? undefined : Number(item.weightGrams),
     balance: typeof item.balance === 'string' ? item.balance as Product['balance'] : undefined,
@@ -671,7 +846,10 @@ async function requestCatalogSeed() {
 }
 
 async function fetchProductsFromApi() {
-  const response = await fetch('/api/products');
+  // Send auth when present so Admin receives costPrice (omitted on anonymous GET).
+  const response = await fetch('/api/products', {
+    headers: getAuthHeaders(),
+  });
   const payload = await parseResponse<any[]>(response);
   return payload.map(mapApiProductToCatalogProduct);
 }
@@ -701,30 +879,96 @@ function retagCatalogProducts(products: Product[]) {
 
 function mergeWithDefaultCatalog(base: Product[], references: Product[]) {
   const existingSkus = new Set(base.map((product) => product.sku));
-  const extras = defaultProducts.filter((product) => !existingSkus.has(product.sku));
+  const existingIdentityKeys = buildIdentityKeySet(base);
+  const extras = defaultProducts.filter((product) => {
+    if (existingSkus.has(product.sku)) {
+      return false;
+    }
+
+    // Skip seed/POS twins of import or Admin rows (same brand+name or alias SKU).
+    if (productMatchesIdentityKeys(product, existingIdentityKeys)) {
+      return false;
+    }
+
+    return true;
+  });
   const receptionPosExtras = extras.filter((product) => product.attributes?.source === 'reception-pos');
   const otherExtras = extras.filter((product) => product.attributes?.source !== 'reception-pos');
 
   return retagCatalogProducts(hydrateProductImages([...receptionPosExtras, ...base, ...otherExtras], references));
 }
 
-export async function fetchProducts() {
-  const [mapped, referenceCatalog] = await Promise.all([
-    fetchProductsFromApi().catch(() => [] as Product[]),
-    fetchImportedSquashpointProducts().catch(() => [] as Product[]),
-  ]);
+const hiddenProductKeysStorage = 'racketpoint-hidden-product-keys-v1';
 
-  if (referenceCatalog.length > 0) {
-    const overrideBySku = new Map(mapped.map((product) => [product.sku, product] as const));
-    const combined = referenceCatalog.map((product) => overrideBySku.get(product.sku) ?? product);
+function loadLocalSuppressedIdentityKeys() {
+  const raw = readJson<string[]>(hiddenProductKeysStorage);
+  return new Set(Array.isArray(raw) ? raw.filter((value) => typeof value === 'string') : []);
+}
 
-    for (const product of mapped) {
-      if (!referenceCatalog.some((reference) => reference.sku === product.sku)) {
-        combined.push(product);
+function saveLocalSuppressedIdentityKeys(keys: Set<string>) {
+  writeJson(hiddenProductKeysStorage, [...keys]);
+}
+
+export function suppressProductLocally(product: Product) {
+  const keys = loadLocalSuppressedIdentityKeys();
+  for (const key of collectProductIdentityKeys(product)) {
+    keys.add(key);
+  }
+  saveLocalSuppressedIdentityKeys(keys);
+  return keys;
+}
+
+async function fetchSuppressedIdentityKeys() {
+  const local = loadLocalSuppressedIdentityKeys();
+
+  try {
+    const response = await fetch('/api/products/suppressions', {
+      headers: getAuthHeaders(),
+    });
+
+    if (!response.ok) {
+      return local;
+    }
+
+    const payload = await response.json().catch(() => null) as { keys?: string[] } | string[] | null;
+    const remoteKeys = Array.isArray(payload)
+      ? payload
+      : Array.isArray(payload?.keys)
+        ? payload.keys
+        : [];
+
+    for (const key of remoteKeys) {
+      if (typeof key === 'string' && key.trim()) {
+        local.add(key.trim());
       }
     }
 
-    const normalized = mergeWithDefaultCatalog(combined, referenceCatalog);
+    saveLocalSuppressedIdentityKeys(local);
+  } catch {
+    // Offline / older deploy: local suppressions still apply.
+  }
+
+  return local;
+}
+
+function finalizeCatalogProducts(products: Product[], suppressedKeys: Set<string>) {
+  return filterProductsBySuppressedKeys(products, suppressedKeys);
+}
+
+export async function fetchProducts() {
+  const [mapped, referenceCatalog, suppressedKeys] = await Promise.all([
+    fetchProductsFromApi().catch(() => [] as Product[]),
+    fetchImportedSquashpointProducts().catch(() => [] as Product[]),
+    fetchSuppressedIdentityKeys().catch(() => loadLocalSuppressedIdentityKeys()),
+  ]);
+
+  if (referenceCatalog.length > 0) {
+    // Prefer Admin/API commercial fields even when public SKU ≠ DB id (import article vs Admin id).
+    const combined = mergeApiProductsOverReference(mapped, referenceCatalog);
+    const normalized = finalizeCatalogProducts(
+      mergeWithDefaultCatalog(combined, referenceCatalog),
+      suppressedKeys,
+    );
     productCache = normalized;
     return normalized;
   }
@@ -735,7 +979,10 @@ export async function fetchProducts() {
     if (seeded) {
       const retry = await fetchProductsFromApi().catch(() => [] as Product[]);
       if (retry.length > 0) {
-        const normalized = mergeWithDefaultCatalog(retry, referenceCatalog);
+        const normalized = finalizeCatalogProducts(
+          mergeWithDefaultCatalog(retry, referenceCatalog),
+          suppressedKeys,
+        );
         productCache = normalized;
         return normalized;
       }
@@ -743,14 +990,20 @@ export async function fetchProducts() {
 
     const localStarterCatalog = loadSnapshot().products;
     if (localStarterCatalog.length > 0) {
-      const normalized = mergeWithDefaultCatalog(localStarterCatalog, referenceCatalog);
+      const normalized = finalizeCatalogProducts(
+        mergeWithDefaultCatalog(localStarterCatalog, referenceCatalog),
+        suppressedKeys,
+      );
       productCache = normalized;
       return normalized;
     }
 
     const imported = referenceCatalog;
     if (imported.length > 0) {
-      const normalized = mergeWithDefaultCatalog(imported, imported);
+      const normalized = finalizeCatalogProducts(
+        mergeWithDefaultCatalog(imported, imported),
+        suppressedKeys,
+      );
       productCache = normalized;
       return normalized;
     }
@@ -758,7 +1011,10 @@ export async function fetchProducts() {
     return [];
   }
 
-  const normalized = mergeWithDefaultCatalog(mapped, referenceCatalog);
+  const normalized = finalizeCatalogProducts(
+    mergeWithDefaultCatalog(mapped, referenceCatalog),
+    suppressedKeys,
+  );
   productCache = normalized;
   return normalized;
 }
@@ -963,6 +1219,11 @@ export async function updateOrderStatus(reference: string, status: OrderRecord['
 }
 
 export async function createProductApi(product: Product) {
+  const priceError = validateProductPricesAgainstCost(product);
+  if (priceError) {
+    throw new Error(priceError);
+  }
+
   const response = await fetch('/api/products', {
     method: 'POST',
     headers: {
@@ -977,13 +1238,10 @@ export async function createProductApi(product: Product) {
       subCategory: mapTypeToSubCategory(product.type),
       costPrice: product.costEur ?? 0,
       sellingPrice: product.priceEur ?? 0,
-      discountPrice: null,
+      discountPrice: product.salePriceEur ?? null,
       stock: product.stock ?? 0,
       imageArray: [product.imageUrl],
-      attributes: {
-        color: product.color,
-        headShape: product.headShape,
-      },
+      attributes: buildProductAttributesPayload(product),
       sizes: [],
       weightGrams: product.weightGrams ?? null,
       balance: product.balance ?? null,
@@ -992,11 +1250,44 @@ export async function createProductApi(product: Product) {
   });
 
   await parseResponse<any>(response);
+  productCache = null;
   return loadStoreSnapshot();
 }
 
+function buildProductAttributesPayload(product: Product) {
+  const attributes: Record<string, string> = {};
+
+  if (product.attributes) {
+    for (const [key, value] of Object.entries(product.attributes)) {
+      if (typeof value === 'string' && value.trim() && key !== 'tags') {
+        attributes[key] = value;
+      }
+    }
+  }
+
+  if (product.color) {
+    attributes.color = product.color;
+  }
+
+  if (product.headShape) {
+    attributes.headShape = product.headShape;
+  }
+
+  if (product.badges.length > 0) {
+    attributes.tags = product.badges.join(',');
+  }
+
+  return attributes;
+}
+
 export async function updateProductApi(productSku: string, nextProduct: Product) {
-  const response = await fetch(`/api/products?id=${encodeURIComponent(productSku)}`, {
+  const priceError = validateProductPricesAgainstCost(nextProduct);
+  if (priceError) {
+    throw new Error(priceError);
+  }
+
+  const apiId = resolveProductApiId(nextProduct, productSku);
+  const response = await fetch(`/api/products?id=${encodeURIComponent(apiId)}`, {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json',
@@ -1009,15 +1300,12 @@ export async function updateProductApi(productSku: string, nextProduct: Product)
       sport: nextProduct.categorySlug,
       subCategory: mapTypeToSubCategory(nextProduct.type),
       costPrice: nextProduct.costEur ?? 0,
+      // priceEur is always the list/selling price; salePriceEur is the optional promo.
       sellingPrice: nextProduct.priceEur ?? 0,
       discountPrice: nextProduct.salePriceEur ?? null,
       stock: nextProduct.stock ?? 0,
       imageArray: [nextProduct.imageUrl],
-      attributes: {
-        color: nextProduct.color,
-        headShape: nextProduct.headShape,
-        tags: nextProduct.badges,
-      },
+      attributes: buildProductAttributesPayload(nextProduct),
       weightGrams: nextProduct.weightGrams ?? null,
       balance: nextProduct.balance ?? null,
       rating: 4.5,
@@ -1025,16 +1313,66 @@ export async function updateProductApi(productSku: string, nextProduct: Product)
   });
 
   await parseResponse<any>(response);
-  return updateProduct(productSku, nextProduct);
+  productCache = null;
+  return loadStoreSnapshot();
 }
 
 export async function deleteProductApi(productSku: string) {
-  const response = await fetch(`/api/products?id=${encodeURIComponent(productSku)}`, {
+  const product = (productCache ?? loadSnapshot().products).find((item) => item.sku === productSku)
+    ?? (productCache ?? loadSnapshot().products).find((item) => (
+      item.attributes?.publicSku === productSku
+      || item.attributes?.internalDbId === productSku
+      || item.attributes?.sourceSku === productSku
+    ));
+
+  if (product) {
+    suppressProductLocally(product);
+  } else {
+    suppressProductLocally({
+      sku: productSku,
+      name: productSku,
+      brand: '',
+      categorySlug: 'squash',
+      type: 'Racket',
+      details: '',
+      badges: [],
+      imageUrl: '',
+    });
+  }
+
+  const apiId = product ? resolveProductApiId(product, productSku) : productSku;
+  const identityKeys = product
+    ? collectProductIdentityKeys(product)
+    : [`id:${normalizeSkuToken(productSku)}`];
+
+  const response = await fetch(`/api/products?id=${encodeURIComponent(apiId)}`, {
     method: 'DELETE',
-    headers: getAuthHeaders(),
+    headers: {
+      'Content-Type': 'application/json',
+      ...getAuthHeaders(),
+    },
+    body: JSON.stringify({ identityKeys }),
   });
 
-  await parseResponse<{ ok: boolean }>(response);
+  // Product may only exist in import/defaults (no DB row). Still treat as deleted after suppress.
+  if (!response.ok && response.status !== 404) {
+    await parseResponse<{ ok: boolean }>(response);
+  }
+
+  try {
+    await fetch('/api/products/suppressions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...getAuthHeaders(),
+      },
+      body: JSON.stringify({ keys: identityKeys }),
+    });
+  } catch {
+    // Local suppressions already recorded.
+  }
+
+  productCache = null;
   return loadStoreSnapshot();
 }
 
