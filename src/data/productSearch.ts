@@ -21,15 +21,15 @@ export function tokenizeSearchQuery(query: string): string[] {
 
 type SearchableProduct = {
   name: string;
-  details?: string;
   brand?: string;
-  description?: string;
   sku?: string;
 };
 
 /**
  * Match when every query token appears in the product haystack
  * (substring), so "miguel rodri" finds "MIGUEL RODRÍGUEZ ONE20".
+ * Uses name/brand/sku only — not long details/description copy —
+ * so collaboration mentions do not create false hits.
  */
 export function productMatchesSearchQuery(product: SearchableProduct, query: string): boolean {
   const tokens = tokenizeSearchQuery(query);
@@ -38,7 +38,7 @@ export function productMatchesSearchQuery(product: SearchableProduct, query: str
   }
 
   const haystack = normalizeSearchText(
-    [product.name, product.details, product.brand, product.description, product.sku]
+    [product.name, product.brand, product.sku]
       .filter(Boolean)
       .join(' '),
   );
