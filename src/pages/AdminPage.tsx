@@ -24,6 +24,7 @@ import type { Brand, Category, Product, CategorySlug, ProductType } from '../dat
 import { signInAdmin, signOutAdmin } from '../data/adminAuth';
 import type { ChangeEvent, FormEvent } from 'react';
 import BrandLogo from '../components/BrandLogo';
+import AdminOverview from '../components/AdminOverview';
 import { getAuthHeaders, getSessionUser } from '../data/accountStore';
 
 type AdminPageProps = {
@@ -228,7 +229,7 @@ function AdminPage({ snapshot, onSnapshotChange, isAuthenticated, onAuthChange }
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoggingIn, setIsLoggingIn] = useState(false);
-  const [adminTab, setAdminTab] = useState<'dashboard' | 'products' | 'orders' | 'catalog'>('products');
+  const [adminTab, setAdminTab] = useState<'dashboard' | 'products' | 'orders' | 'catalog'>('dashboard');
   const [productQuery, setProductQuery] = useState('');
   const [selectedProductSku, setSelectedProductSku] = useState(snapshot.products[0]?.sku ?? '');
   const [selectedCategorySlug, setSelectedCategorySlug] = useState(snapshot.categories[0]?.slug ?? '');
@@ -765,7 +766,7 @@ function AdminPage({ snapshot, onSnapshotChange, isAuthenticated, onAuthChange }
         <div className="topbar">
           <div>
             <BrandLogo compact subtitle="Админ" />
-            <h1>Управление на магазина</h1>
+            <h1>P&amp;L, магазин и операции</h1>
           </div>
           <a className="nav-cta" href="/">
             Към магазина
@@ -773,10 +774,10 @@ function AdminPage({ snapshot, onSnapshotChange, isAuthenticated, onAuthChange }
         </div>
 
         <nav className="admin-tabs" aria-label="Админ раздели">
+          <button className={adminTab === 'dashboard' ? 'admin-tab active' : 'admin-tab'} type="button" onClick={() => setAdminTab('dashboard')}>P&amp;L / Stats</button>
           <button className={adminTab === 'products' ? 'admin-tab active' : 'admin-tab'} type="button" onClick={() => setAdminTab('products')}>Продукти</button>
           <button className={adminTab === 'orders' ? 'admin-tab active' : 'admin-tab'} type="button" onClick={() => setAdminTab('orders')}>Поръчки</button>
           <button className={adminTab === 'catalog' ? 'admin-tab active' : 'admin-tab'} type="button" onClick={() => setAdminTab('catalog')}>Каталог</button>
-          <button className={adminTab === 'dashboard' ? 'admin-tab active' : 'admin-tab'} type="button" onClick={() => setAdminTab('dashboard')}>Табло</button>
         </nav>
 
         <div className="admin-actions">
@@ -1185,93 +1186,14 @@ function AdminPage({ snapshot, onSnapshotChange, isAuthenticated, onAuthChange }
             </div>
           </article>
 
-          <article className="admin-panel admin-pane-dashboard">
-            <p className="eyebrow">Статистика на продажбите</p>
-            {adminStats ? (
-              <div className="admin-stats-grid">
-                <article className="admin-stat-card">
-                  <h3>Users (API)</h3>
-                  <strong>{adminStats.users}</strong>
-                </article>
-                <article className="admin-stat-card">
-                  <h3>Products (API)</h3>
-                  <strong>{adminStats.products}</strong>
-                </article>
-                <article className="admin-stat-card">
-                  <h3>Orders (API)</h3>
-                  <strong>{adminStats.orders}</strong>
-                </article>
-                <article className="admin-stat-card">
-                  <h3>Revenue (API)</h3>
-                  <strong>{formatEur(adminStats.revenueEur)}</strong>
-                </article>
-              </div>
-            ) : null}
-
-            <div className="admin-stats-grid">
-              <article className="admin-stat-card">
-                <h3>Items sold</h3>
-                <strong>{salesStats.itemsSold}</strong>
-              </article>
-              <article className="admin-stat-card">
-                <h3>Revenue</h3>
-                <strong>{formatEur(salesStats.revenue)}</strong>
-              </article>
-              <article className="admin-stat-card">
-                <h3>Cost</h3>
-                <strong>{formatEur(salesStats.cost)}</strong>
-              </article>
-              <article className="admin-stat-card">
-                <h3>Profit</h3>
-                <strong>{formatEur(salesStats.profit)}</strong>
-              </article>
-            </div>
-
-            <div className="admin-stats-grid">
-              <article className="admin-stat-card">
-                <h3>BORICA approved</h3>
-                <strong>{paymentStats.approvedCardOrders}</strong>
-              </article>
-              <article className="admin-stat-card">
-                <h3>BORICA volume</h3>
-                <strong>{formatEur(paymentStats.approvedVolume)}</strong>
-              </article>
-              <article className="admin-stat-card">
-                <h3>Cash on delivery</h3>
-                <strong>{paymentStats.cashOnDeliveryOrders}</strong>
-              </article>
-            </div>
-
-            <div className="admin-stats-grid">
-              <article className="admin-stat-card">
-                <h3>Bestsellers</h3>
-                {salesStats.bestsellers.length > 0 ? (
-                  <ul className="admin-stat-list">
-                    {salesStats.bestsellers.map((item) => (
-                      <li key={item.sku}>{item.name} ({item.quantity})</li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="admin-empty">Няма достатъчно данни.</p>
-                )}
-              </article>
-              <article className="admin-stat-card">
-                <h3>Monthly profit</h3>
-                {salesStats.monthlyProfit.length > 0 ? (
-                  <ul className="admin-stat-list">
-                    {salesStats.monthlyProfit.map((item) => (
-                      <li key={item.month}>{item.month}: {formatEur(item.profit)}</li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="admin-empty">Няма месечни продажби.</p>
-                )}
-              </article>
-            </div>
-
-            {salesStats.soldWithoutCost > 0 ? (
-              <p className="form-status">{salesStats.soldWithoutCost} продадени артикула са без въведена себестойност и изкривяват печалбата.</p>
-            ) : null}
+          <article className="admin-panel admin-pane-dashboard admin-pane-overview">
+            <AdminOverview
+              adminStats={adminStats}
+              salesStats={salesStats}
+              paymentStats={paymentStats}
+              stockMovements={stockMovements}
+              formatEur={formatEur}
+            />
           </article>
 
           <article className="admin-panel admin-pane-catalog">
@@ -1346,26 +1268,6 @@ function AdminPage({ snapshot, onSnapshotChange, isAuthenticated, onAuthChange }
             )}
           </article>
 
-          <article className="admin-panel admin-pane-dashboard">
-            <p className="eyebrow">Движения по склад</p>
-            {stockMovements.length > 0 ? (
-              <div className="admin-order-list">
-                {stockMovements.slice(0, 30).map((movement) => (
-                  <article className="admin-order-card" key={movement.id}>
-                    <h3>{movement.productTitle || movement.sku}</h3>
-                    <p>SKU: {movement.sku}</p>
-                    <p>Delta: {movement.deltaQuantity > 0 ? `+${movement.deltaQuantity}` : movement.deltaQuantity}</p>
-                    <p>Reason: {movement.reason}</p>
-                    <p>Order: {movement.orderId || 'n/a'}</p>
-                    <p>Actor: {movement.actor || 'system'}</p>
-                    <p>{new Date(movement.createdAt).toLocaleString()}</p>
-                  </article>
-                ))}
-              </div>
-            ) : (
-              <p className="admin-empty">No stock movements yet.</p>
-            )}
-          </article>
         </section>
       </main>
     </div>
