@@ -417,15 +417,15 @@ function CategoryPage({ category, products, brands, onAddToCart }: CategoryPageP
 
             <div className="product-grid">
               {filteredProducts.length > 0 ? (
-                filteredProducts.map((product) => (
-                  (() => {
+                filteredProducts.map((product, productIndex) => {
                     const isFavorite = favoriteSkus.includes(product.sku) || isFavoriteSku(product.sku);
                     const cardFacts = getProductCardFacts(product);
+                    const pricing = getPricePresentation(product);
 
                     return (
                       <article
                         className="product-card clickable-card product-card-compact"
-                        key={product.sku}
+                        key={`${product.sku}::${productIndex}`}
                         onClick={() => openProduct(product.sku)}
                         role="link"
                         tabIndex={0}
@@ -451,18 +451,11 @@ function CategoryPage({ category, products, brands, onAddToCart }: CategoryPageP
 
                           <div className="product-footer">
                             <div className="price-stack">
-                              {(() => {
-                                const pricing = getPricePresentation(product);
-                                return (
-                                  <>
-                                    {pricing.isOnSale && pricing.original ? (
-                                      <p className="price-original">{pricing.original}</p>
-                                    ) : null}
-                                    <strong className={pricing.isOnSale ? 'price-sale' : ''}>{pricing.sale}</strong>
-                                    <p className="price-tax-note">ДДС включено</p>
-                                  </>
-                                );
-                              })()}
+                              {pricing.isOnSale && pricing.original ? (
+                                <p className="price-original">{pricing.original}</p>
+                              ) : null}
+                              <strong className={pricing.isOnSale ? 'price-sale' : ''}>{pricing.sale}</strong>
+                              <p className="price-tax-note">ДДС включено</p>
                             </div>
                             <div className="product-action-stack">
                               <button
@@ -496,8 +489,7 @@ function CategoryPage({ category, products, brands, onAddToCart }: CategoryPageP
                         </div>
                       </article>
                     );
-                  })()
-                ))
+                })
               ) : (
                 <article className="empty-state">
                   <h3>No products match the current filters.</h3>
