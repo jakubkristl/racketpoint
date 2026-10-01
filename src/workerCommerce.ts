@@ -79,12 +79,30 @@ async function ensureOpsSchema(env: CommerceEnv) {
     `CREATE TABLE IF NOT EXISTS stock_movements (
       id TEXT PRIMARY KEY,
       sku TEXT NOT NULL,
-      delta INTEGER NOT NULL,
+      delta_quantity INTEGER NOT NULL,
       reason TEXT NOT NULL,
       order_id TEXT,
+      actor TEXT,
       created_at TEXT NOT NULL
     )`,
   ).run();
+
+  const info = await env.DB.prepare('PRAGMA table_info(stock_movements)').all<{ name: string }>();
+  const columns = new Set((info.results ?? []).map((row) => row.name));
+  if (!columns.has('delta_quantity')) {
+    await env.DB.prepare('ALTER TABLE stock_movements RENAME TO stock_movements_legacy').run();
+    await env.DB.prepare(
+      `CREATE TABLE stock_movements (
+        id TEXT PRIMARY KEY,
+        sku TEXT NOT NULL,
+        delta_quantity INTEGER NOT NULL,
+        reason TEXT NOT NULL,
+        order_id TEXT,
+        actor TEXT,
+        created_at TEXT NOT NULL
+      )`,
+    ).run();
+  }
 }
 
 async function ensureTechTeeM(env: CommerceEnv) {
@@ -154,9 +172,17 @@ async function recordStockMovement(
   orderId: string | null,
 ) {
   await env.DB.prepare(
-    `INSERT INTO stock_movements (id, sku, delta, reason, order_id, created_at)
-     VALUES (?, ?, ?, ?, ?, ?)`,
-  ).bind(`sm_${crypto.randomUUID()}`, sku, delta, reason, orderId, new Date().toISOString()).run();
+    `INSERT INTO stock_movements (id, sku, delta_quantity, reason, order_id, actor, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+  ).bind(
+    `sm_${crypto.randomUUID()}`,
+    sku,
+    delta,
+    reason,
+    orderId,
+    'system',
+    new Date().toISOString(),
+  ).run();
 }
 
 export async function createStorefrontOrder(request: Request, env: CommerceEnv) {
@@ -238,10 +264,13 @@ async function insertCodOrder(
     shippingEur: number;
     status: 'Pending' | 'Delivered';
     createdAt: string;
+    /** When set, skip stock checks/decrements and force these unit prices (recovery / ops). */
+    skipStockDecrement?: boolean;
   },
 ) {
   const resolved: Array<{ sku: string; quantity: number; priceEur: number }> = [];
   let totalAmount = 0;
+  const productRows: Array<{ id: string; stock: number; selling_price: number; discount_price: number | null }> = [];
 
   for (const item of input.items) {
     const product = await env.DB.prepare(
@@ -252,40 +281,62 @@ async function insertCodOrder(
       throw new Error(`Product not found for SKU: ${item.sku}`);
     }
 
-    if (Number(product.stock) < item.quantity) {
+    if (!input.skipStockDecrement && Number(product.stock) < item.quantity) {
       throw new Error(`Insufficient stock for ${item.sku} (have ${product.stock}, need ${item.quantity}).`);
     }
 
     const price = effectiveUnitPrice(product, item.priceEur);
     resolved.push({ sku: item.sku, quantity: item.quantity, priceEur: price });
     totalAmount += price * item.quantity;
+    productRows.push(product);
   }
 
   totalAmount += input.shippingEur;
   const id = `ord_${crypto.randomUUID()}`;
 
-  for (const line of resolved) {
-    await env.DB.prepare('UPDATE products SET stock = stock - ? WHERE id = ? AND stock >= ?')
-      .bind(line.quantity, line.sku, line.quantity)
-      .run();
-    await recordStockMovement(env, line.sku, -line.quantity, 'order_reserve', id);
+  const statements = [];
+  if (!input.skipStockDecrement) {
+    for (const line of resolved) {
+      statements.push(
+        env.DB.prepare('UPDATE products SET stock = stock - ? WHERE id = ? AND stock >= ?')
+          .bind(line.quantity, line.sku, line.quantity),
+      );
+      statements.push(
+        env.DB.prepare(
+          `INSERT INTO stock_movements (id, sku, delta_quantity, reason, order_id, actor, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        ).bind(
+          `sm_${crypto.randomUUID()}`,
+          line.sku,
+          -line.quantity,
+          'order_reserve',
+          id,
+          'system',
+          new Date().toISOString(),
+        ),
+      );
+    }
   }
 
-  await env.DB.prepare(
-    `INSERT INTO orders (
-      id, email, full_name, status, total_amount, payment_method, payment_status, address, items, notes, created_at
-    ) VALUES (?, ?, ?, ?, ?, 'cash_on_delivery', 'cash_on_delivery', ?, ?, ?, ?)`,
-  ).bind(
-    id,
-    input.email,
-    input.fullName,
-    input.status,
-    totalAmount,
-    JSON.stringify(input.billingAddress),
-    JSON.stringify(resolved),
-    input.notes,
-    input.createdAt,
-  ).run();
+  statements.push(
+    env.DB.prepare(
+      `INSERT INTO orders (
+        id, email, full_name, status, total_amount, payment_method, payment_status, address, items, notes, created_at
+      ) VALUES (?, ?, ?, ?, ?, 'cash_on_delivery', 'cash_on_delivery', ?, ?, ?, ?)`,
+    ).bind(
+      id,
+      input.email,
+      input.fullName,
+      input.status,
+      totalAmount,
+      JSON.stringify(input.billingAddress),
+      JSON.stringify(resolved),
+      input.notes,
+      input.createdAt,
+    ),
+  );
+
+  await env.DB.batch(statements);
 
   return { id, items: resolved, totalAmount };
 }
@@ -362,9 +413,11 @@ export async function listStockMovements(env: CommerceEnv) {
   return json((result.results ?? []).map((row) => ({
     id: row.id,
     sku: row.sku,
-    delta: Number(row.delta),
+    delta: Number(row.delta_quantity ?? row.delta ?? 0),
+    deltaQuantity: Number(row.delta_quantity ?? row.delta ?? 0),
     reason: row.reason,
     orderId: row.order_id,
+    actor: row.actor ?? 'system',
     createdAt: row.created_at,
   })));
 }
@@ -372,6 +425,7 @@ export async function listStockMovements(env: CommerceEnv) {
 /**
  * Durable one-shot ops migration: Jakub's 2026-10-01 onsite retail sale.
  * Safe to call on every request — no-ops after first success.
+ * Recovers from partial prior attempts (stock already reduced, order missing).
  */
 export async function applyOnsiteSaleOct12026(env: CommerceEnv) {
   await ensureOpsSchema(env);
@@ -388,20 +442,25 @@ export async function applyOnsiteSaleOct12026(env: CommerceEnv) {
 
   const stockBefore: Record<string, number> = {};
   for (const line of ONSITE_OCT1_LINES) {
-    const row = await env.DB.prepare('SELECT id, stock, selling_price, discount_price FROM products WHERE id = ? LIMIT 1')
+    const row = await env.DB.prepare('SELECT id, stock FROM products WHERE id = ? LIMIT 1')
       .bind(line.sku)
-      .first<{ id: string; stock: number; selling_price: number; discount_price: number | null }>();
+      .first<{ id: string; stock: number }>();
 
     if (!row) {
       throw new Error(`Missing product for onsite sale: ${line.sku}`);
     }
 
     stockBefore[line.sku] = Number(row.stock);
-    if (Number(row.stock) < line.quantity) {
-      throw new Error(`Insufficient stock for onsite sale ${line.sku}: have ${row.stock}, need ${line.quantity}`);
-    }
   }
 
+  // Expected finals after this known sale (started at 1 / 1 / 2).
+  const expectedFinal: Record<string, number> = {};
+  for (const line of ONSITE_OCT1_LINES) {
+    expectedFinal[line.sku] = 0;
+  }
+
+  // If a prior attempt already took racket units but failed before writing the order,
+  // create the commercial order without re-decrementing those SKUs; only pull down leftovers.
   const created = await insertCodOrder(env, {
     fullName: 'Onsite sale / Jakub',
     email: 'admin@racketpoint.bg',
@@ -424,7 +483,38 @@ export async function applyOnsiteSaleOct12026(env: CommerceEnv) {
     shippingEur: 0,
     status: 'Delivered',
     createdAt: '2026-10-01T12:00:00.000Z',
+    skipStockDecrement: true,
   });
+
+  const reconcileStatements = [];
+  for (const line of ONSITE_OCT1_LINES) {
+    const current = stockBefore[line.sku] ?? 0;
+    const target = expectedFinal[line.sku] ?? 0;
+    if (current > target) {
+      const delta = current - target;
+      reconcileStatements.push(
+        env.DB.prepare('UPDATE products SET stock = ? WHERE id = ?').bind(target, line.sku),
+      );
+      reconcileStatements.push(
+        env.DB.prepare(
+          `INSERT INTO stock_movements (id, sku, delta_quantity, reason, order_id, actor, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        ).bind(
+          `sm_${crypto.randomUUID()}`,
+          line.sku,
+          -delta,
+          'order_reserve',
+          created.id,
+          'system',
+          new Date().toISOString(),
+        ),
+      );
+    }
+  }
+
+  if (reconcileStatements.length > 0) {
+    await env.DB.batch(reconcileStatements);
+  }
 
   const stockAfter: Record<string, number> = {};
   for (const line of ONSITE_OCT1_LINES) {
@@ -441,6 +531,7 @@ export async function applyOnsiteSaleOct12026(env: CommerceEnv) {
     stockBefore,
     stockAfter,
     techTee: tee,
+    recovery: true,
   });
 
   await env.DB.prepare(
