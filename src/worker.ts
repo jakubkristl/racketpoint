@@ -187,8 +187,12 @@ export default {
 			}
 			if (path === '/api/orders/create' && request.method === 'POST') {
 				await env.DB.exec(schema);
-				await maybeApplyOnsiteSale(env);
-				return createStorefrontOrder(request, env);
+				try {
+					await maybeApplyOnsiteSale(env);
+					return await createStorefrontOrder(request, env);
+				} catch (error) {
+					return fail(error instanceof Error ? error.message : 'Order create failed.', 500);
+				}
 			}
 			if (path === '/api/orders' && request.method === 'GET') {
 				await env.DB.exec(schema);
@@ -215,8 +219,12 @@ export default {
 			}
 			if (path === '/api/admin/onsite-sale-oct1' && request.method === 'GET') {
 				await env.DB.exec(schema);
-				await maybeApplyOnsiteSale(env);
-				return onsiteSaleOct1Status(env);
+				try {
+					await maybeApplyOnsiteSale(env);
+					return await onsiteSaleOct1Status(env);
+				} catch (error) {
+					return fail(error instanceof Error ? error.message : 'Onsite sale status failed.', 500);
+				}
 			}
 			if (path === '/api/admin/onsite-sale-oct1' && request.method === 'POST') {
 				await env.DB.exec(schema);
