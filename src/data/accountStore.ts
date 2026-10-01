@@ -50,12 +50,24 @@ function writeSession(user: AccountUser | null, token?: string | null) {
     return;
   }
 
-  window.sessionStorage.setItem(sessionKey, JSON.stringify(user));
-  window.localStorage.removeItem(sessionKey);
+  // Dual-write so SPA navigations and full reloads keep the same session.
+  // sessionStorage alone was cleared/unavailable after hard navigations from /account.
+  const serialized = JSON.stringify(user);
+  window.sessionStorage.setItem(sessionKey, serialized);
+  window.localStorage.setItem(sessionKey, serialized);
 
   if (token) {
     window.sessionStorage.setItem(sessionTokenKey, token);
-    window.localStorage.removeItem(sessionTokenKey);
+    window.localStorage.setItem(sessionTokenKey, token);
+  }
+}
+
+function mirrorStorageValue(key: string, raw: string, hasSession: boolean, hasLocal: boolean) {
+  if (!hasSession) {
+    window.sessionStorage.setItem(key, raw);
+  }
+  if (!hasLocal) {
+    window.localStorage.setItem(key, raw);
   }
 }
 
@@ -73,11 +85,11 @@ function readStoredSessionUser() {
 
   try {
     const parsed = JSON.parse(raw) as AccountUser;
-    if (fromLocal && !fromSession) {
-      window.sessionStorage.setItem(sessionKey, fromLocal);
-      window.localStorage.removeItem(sessionKey);
+    if (parsed?.email) {
+      mirrorStorageValue(sessionKey, raw, Boolean(fromSession), Boolean(fromLocal));
+      return parsed;
     }
-    return parsed && parsed.email ? parsed : null;
+    return null;
   } catch {
     return null;
   }
@@ -89,18 +101,14 @@ export function getSessionToken() {
   }
 
   const fromSession = window.sessionStorage.getItem(sessionTokenKey);
-  if (fromSession) {
-    return fromSession;
-  }
-
   const fromLocal = window.localStorage.getItem(sessionTokenKey);
-  if (fromLocal) {
-    window.sessionStorage.setItem(sessionTokenKey, fromLocal);
-    window.localStorage.removeItem(sessionTokenKey);
-    return fromLocal;
+  const raw = fromSession || fromLocal;
+  if (!raw) {
+    return null;
   }
 
-  return null;
+  mirrorStorageValue(sessionTokenKey, raw, Boolean(fromSession), Boolean(fromLocal));
+  return raw;
 }
 
 export function getAuthHeaders(extra?: Record<string, string>) {
