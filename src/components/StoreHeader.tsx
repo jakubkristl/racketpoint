@@ -1,4 +1,4 @@
-import { type FormEvent, type ReactNode, useEffect, useState } from 'react';
+import { type FormEvent, type KeyboardEvent, type ReactNode, useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import BrandLogo from './BrandLogo';
 import { getFavoriteSkus } from '../data/favorites';
@@ -51,16 +51,30 @@ function StoreHeader({ activeSportSlug }: StoreHeaderProps) {
     window.dispatchEvent(new CustomEvent('racketpoint:open-cart'));
   }
 
+  function runProductSearch(rawQuery = searchValue) {
+    const baseSport = activeSportSlug || 'squash';
+    const trimmedQuery = rawQuery.trim();
+    const target = trimmedQuery
+      ? `/category/${baseSport}?q=${encodeURIComponent(trimmedQuery)}#catalog-results`
+      : `/category/${baseSport}`;
+
+    navigate(target);
+  }
+
   function handleSearchSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const baseSport = activeSportSlug || 'squash';
-    const trimmedQuery = searchValue.trim();
+    runProductSearch();
+  }
 
-    navigate(
-      trimmedQuery
-        ? `/category/${baseSport}?q=${encodeURIComponent(trimmedQuery)}`
-        : `/category/${baseSport}`,
-    );
+  function handleSearchKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+    if (event.key !== 'Enter') {
+      return;
+    }
+
+    // Ensure Enter always submits the same way as the Търси button,
+    // including browsers that treat type="search" inconsistently.
+    event.preventDefault();
+    runProductSearch(event.currentTarget.value);
   }
 
   return (
@@ -128,13 +142,17 @@ function StoreHeader({ activeSportSlug }: StoreHeaderProps) {
           })}
         </nav>
 
-        <form className="store-search" onSubmit={handleSearchSubmit}>
+        <form className="store-search" role="search" onSubmit={handleSearchSubmit}>
           <input
             type="search"
+            name="q"
             value={searchValue}
             onChange={(event) => setSearchValue(event.target.value)}
+            onKeyDown={handleSearchKeyDown}
             placeholder="Търсене..."
             aria-label="Търсене на продукти"
+            enterKeyHint="search"
+            autoComplete="off"
           />
           <button className="header-icon-btn" type="submit" title="Търсене на продукти">
             Търси
