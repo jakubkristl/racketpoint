@@ -67,21 +67,24 @@ export function paymentGatewaysResponse(_env: CommerceEnv) {
 }
 
 async function ensureOpsSchema(env: CommerceEnv) {
-  await env.DB.exec(`
-    CREATE TABLE IF NOT EXISTS ops_migrations (
+  // D1 exec is unreliable with multiple statements in one call — create separately.
+  await env.DB.prepare(
+    `CREATE TABLE IF NOT EXISTS ops_migrations (
       id TEXT PRIMARY KEY,
       applied_at TEXT NOT NULL,
       details TEXT
-    );
-    CREATE TABLE IF NOT EXISTS stock_movements (
+    )`,
+  ).run();
+  await env.DB.prepare(
+    `CREATE TABLE IF NOT EXISTS stock_movements (
       id TEXT PRIMARY KEY,
       sku TEXT NOT NULL,
       delta INTEGER NOT NULL,
       reason TEXT NOT NULL,
       order_id TEXT,
       created_at TEXT NOT NULL
-    );
-  `);
+    )`,
+  ).run();
 }
 
 async function ensureTechTeeM(env: CommerceEnv) {
