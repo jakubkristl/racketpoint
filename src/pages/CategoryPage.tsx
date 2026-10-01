@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { type BalanceProfile, type Brand, type Category, type Product } from '../data/catalog';
 import { getFavoriteSkus, isFavoriteSku, toggleFavoriteSku } from '../data/favorites';
 import { getAvailabilityClassName, getStockLabel, isMadeToOrder, MADE_TO_ORDER_DELIVERY_NOTE } from '../data/inventory';
+import { productMatchesSearchQuery } from '../data/productSearch';
 import { getProductCardFacts } from '../data/publicCatalog';
 import { getSubcategoriesForProducts, getSubcategoryByParam, getSubcategoriesForSport } from '../data/subcategories';
 
@@ -159,7 +160,8 @@ function CategoryPage({ category, products, brands, onAddToCart }: CategoryPageP
   const selectedSubcategory = requestedSub === 'all' ? undefined : getSubcategoryByParam(requestedSub);
 
   useEffect(() => {
-    if (requestedSub === 'all') {
+    const shouldFocusResults = requestedSub !== 'all' || Boolean(requestedQuery.trim());
+    if (!shouldFocusResults) {
       return;
     }
 
@@ -169,7 +171,7 @@ function CategoryPage({ category, products, brands, onAddToCart }: CategoryPageP
     }
 
     catalog.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }, [requestedSub, category.slug]);
+  }, [requestedSub, requestedQuery, category.slug]);
 
   const availableBalances = useMemo(
     () => Array.from(new Set(products.map((item) => item.balance).filter((item): item is BalanceProfile => Boolean(item)))),
@@ -193,7 +195,6 @@ function CategoryPage({ category, products, brands, onAddToCart }: CategoryPageP
   const filteredProducts = useMemo(() => {
     return products.filter((product) => {
       const productPrice = getPriceValue(product);
-      const queryText = `${product.name} ${product.details} ${product.brand}`.toLowerCase();
 
       if (selectedSubcategory && !selectedSubcategory.productTypes.includes(product.type)) {
         return false;
@@ -237,7 +238,7 @@ function CategoryPage({ category, products, brands, onAddToCart }: CategoryPageP
         return false;
       }
 
-      if (requestedQuery && !queryText.includes(requestedQuery.toLowerCase())) {
+      if (requestedQuery && !productMatchesSearchQuery(product, requestedQuery)) {
         return false;
       }
 
@@ -291,32 +292,38 @@ function CategoryPage({ category, products, brands, onAddToCart }: CategoryPageP
   return (
     <div className="page-shell">
       <main>
-        <section className="section compact-page-intro">
-          <p className="eyebrow">Категория</p>
-          <h1>{categoryLabelBySlug[category.slug] ?? category.name}</h1>
-        </section>
-
-        <section className="section category-mood-banner">
-          <img
-            src={categoryMood.primary}
-            alt={`${category.name} banner`}
-            loading="lazy"
-            onError={(event) => {
-              const target = event.currentTarget;
-              if (target.src.endsWith('/branding/logo-fallback.png')) {
-                return;
-              }
-              if (target.src.endsWith(categoryMoodDefaultPrimary)) {
-                target.src = categoryMoodDefaultFallback;
-                return;
-              }
-              if (target.src === categoryMood.fallback) {
-                target.src = categoryMoodDefaultPrimary;
-                return;
-              }
-              target.src = categoryMood.fallback;
-            }}
-          />
+        <section className="section category-page-header">
+          <div className="category-page-header-media" aria-hidden="true">
+            <img
+              src={categoryMood.primary}
+              alt=""
+              loading="lazy"
+              onError={(event) => {
+                const target = event.currentTarget;
+                if (target.src.endsWith('/branding/logo-fallback.png')) {
+                  return;
+                }
+                if (target.src.endsWith(categoryMoodDefaultPrimary)) {
+                  target.src = categoryMoodDefaultFallback;
+                  return;
+                }
+                if (target.src === categoryMood.fallback) {
+                  target.src = categoryMoodDefaultPrimary;
+                  return;
+                }
+                target.src = categoryMood.fallback;
+              }}
+            />
+          </div>
+          <div className="category-page-header-copy">
+            <p className="eyebrow">Категория</p>
+            <h1>{categoryLabelBySlug[category.slug] ?? category.name}</h1>
+            {requestedQuery.trim() ? (
+              <p className="category-page-header-meta">
+                Резултати за „{requestedQuery.trim()}“ · {filteredProducts.length}
+              </p>
+            ) : null}
+          </div>
         </section>
 
         <section className="section" id="products">
