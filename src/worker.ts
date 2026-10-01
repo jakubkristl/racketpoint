@@ -1,3 +1,13 @@
+import {
+	applyOnsiteSaleOct12026,
+	createStorefrontOrder,
+	listStockMovements,
+	listStorefrontOrders,
+	onsiteSaleOct1Status,
+	paymentGatewaysResponse,
+	updateStorefrontOrderStatus,
+} from './workerCommerce';
+
 type ProductPayload = {
 	title?: string;
 	description?: string;
@@ -15,14 +25,21 @@ type ProductPayload = {
 	rating?: number;
 };
 
-type WorkerEnvironment = Env & { ADMIN_EMAIL?: string; ADMIN_PASSWORD?: string };
+type WorkerEnvironment = Env & {
+	ADMIN_EMAIL?: string;
+	ADMIN_PASSWORD?: string;
+	BORICA_PRIVATE_KEY_PEM?: string;
+	BORICA_TERMINAL_ID?: string;
+};
 const encoder = new TextEncoder();
 let adminUserReady = false;
+let onsiteSaleOct1Attempted = false;
 
 const schema = `
 	CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, name TEXT NOT NULL, email TEXT UNIQUE NOT NULL, password_hash TEXT NOT NULL, role TEXT NOT NULL, addresses TEXT NOT NULL DEFAULT '[]', created_at TEXT NOT NULL);
 	CREATE TABLE IF NOT EXISTS sessions (token TEXT PRIMARY KEY, user_id TEXT NOT NULL, expires_at TEXT NOT NULL);
 	CREATE TABLE IF NOT EXISTS products (id TEXT PRIMARY KEY, title TEXT NOT NULL, slug TEXT UNIQUE NOT NULL, description TEXT NOT NULL, brand TEXT NOT NULL, sport TEXT NOT NULL, sub_category TEXT NOT NULL, cost_price REAL NOT NULL, selling_price REAL NOT NULL, discount_price REAL, stock INTEGER NOT NULL, images TEXT NOT NULL, attributes TEXT NOT NULL, sizes TEXT NOT NULL DEFAULT '[]', weight_grams INTEGER, balance TEXT, rating REAL NOT NULL DEFAULT 4.5, created_at TEXT NOT NULL);
+	CREATE TABLE IF NOT EXISTS orders (id TEXT PRIMARY KEY, email TEXT NOT NULL, full_name TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'Pending', total_amount REAL NOT NULL, payment_method TEXT NOT NULL, payment_status TEXT NOT NULL DEFAULT 'pending', address TEXT, items TEXT NOT NULL, notes TEXT, created_at TEXT NOT NULL);
 `;
 
 const json = (value: unknown, status = 200) => Response.json(value, { status, headers: { 'Cache-Control': 'no-store' } });
@@ -122,6 +139,20 @@ async function products(request: Request, env: Env) {
 	return json({ id, ok: true }, request.method === 'POST' ? 201 : 200);
 }
 
+async function maybeApplyOnsiteSale(env: WorkerEnvironment) {
+	if (onsiteSaleOct1Attempted) {
+		return;
+	}
+
+	onsiteSaleOct1Attempted = true;
+	try {
+		await applyOnsiteSaleOct12026(env);
+	} catch {
+		// Allow retry on a later isolate if stock/products were not ready yet.
+		onsiteSaleOct1Attempted = false;
+	}
+}
+
 const shopInbox = 'jakubkristl77@gmail.com';
 
 export default {
@@ -148,7 +179,58 @@ export default {
 			}
 			if (path === '/api/products') {
 				await env.DB.exec(schema);
+				await maybeApplyOnsiteSale(env);
 				return products(request, env);
+			}
+			if (path === '/api/payments/gateways' && request.method === 'GET') {
+				return paymentGatewaysResponse(env);
+			}
+			if (path === '/api/orders/create' && request.method === 'POST') {
+				await env.DB.exec(schema);
+				await maybeApplyOnsiteSale(env);
+				return createStorefrontOrder(request, env);
+			}
+			if (path === '/api/orders' && request.method === 'GET') {
+				await env.DB.exec(schema);
+				await maybeApplyOnsiteSale(env);
+				const includeAll = new URL(request.url).searchParams.get('all') === '1';
+				if (includeAll && !await isAdmin(request, env)) {
+					return fail('Admin role required.', 403);
+				}
+				return listStorefrontOrders(request, env);
+			}
+			if (path === '/api/orders/status' && request.method === 'PUT') {
+				await env.DB.exec(schema);
+				if (!await isAdmin(request, env)) {
+					return fail('Admin role required.', 403);
+				}
+				return updateStorefrontOrderStatus(request, env);
+			}
+			if (path === '/api/admin/stock-movements' && request.method === 'GET') {
+				await env.DB.exec(schema);
+				if (!await isAdmin(request, env)) {
+					return fail('Admin role required.', 403);
+				}
+				return listStockMovements(env);
+			}
+			if (path === '/api/admin/onsite-sale-oct1' && request.method === 'GET') {
+				await env.DB.exec(schema);
+				await maybeApplyOnsiteSale(env);
+				return onsiteSaleOct1Status(env);
+			}
+			if (path === '/api/admin/onsite-sale-oct1' && request.method === 'POST') {
+				await env.DB.exec(schema);
+				if (!await isAdmin(request, env)) {
+					return fail('Admin role required.', 403);
+				}
+				onsiteSaleOct1Attempted = false;
+				try {
+					const result = await applyOnsiteSaleOct12026(env);
+					onsiteSaleOct1Attempted = true;
+					return json(result);
+				} catch (error) {
+					return fail(error instanceof Error ? error.message : 'Onsite sale failed.', 500);
+				}
 			}
 			return env.ASSETS.fetch(request);
 		} catch (error) {
