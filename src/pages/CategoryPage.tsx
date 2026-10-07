@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import ProductImage from '../components/ProductImage';
 import { type BalanceProfile, type Brand, type Category, type Product } from '../data/catalog';
 import { getFavoriteSkus, isFavoriteSku, toggleFavoriteSku } from '../data/favorites';
 import { getAvailabilityClassName, getStockLabel, isMadeToOrder, MADE_TO_ORDER_DELIVERY_NOTE } from '../data/inventory';
@@ -301,6 +302,7 @@ function CategoryPage({ category, products, brands, onAddToCart }: CategoryPageP
             src={categoryMood.primary}
             alt={`${category.name} banner`}
             loading="lazy"
+            decoding="async"
             onError={(event) => {
               const target = event.currentTarget;
               if (target.src.endsWith('/branding/logo-fallback.png')) {
@@ -338,6 +340,7 @@ function CategoryPage({ category, products, brands, onAddToCart }: CategoryPageP
                         src={subCategory.imageUrl}
                         alt={`${subCategory.label} stock visual`}
                         loading="lazy"
+                        decoding="async"
                         onError={(event) => {
                           const target = event.currentTarget;
                           if (target.src.endsWith('/branding/logo-fallback.png')) {
@@ -452,7 +455,12 @@ function CategoryPage({ category, products, brands, onAddToCart }: CategoryPageP
                           }
                         }}
                       >
-                        <img className="product-image" src={product.imageUrl} alt={product.name} loading="lazy" />
+                        <ProductImage
+                          className="product-image"
+                          product={product}
+                          loading="lazy"
+                          sizes="(max-width: 720px) 100vw, (max-width: 1100px) 50vw, 25vw"
+                        />
                         <div className="product-body">
                           <h3 className={getProductTitleClass(product.name)}>{product.name}</h3>
                           {cardFacts.description ? <p className="product-card-copy">{cardFacts.description}</p> : null}
