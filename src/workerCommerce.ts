@@ -20,8 +20,32 @@ type ResolvedOrderLine = {
 
 const ONSITE_SALE_OCT1_ID = 'onsite-sale-2026-10-01';
 const SELLABLE_CATALOG_SYNC_ID = 'sellable-catalog-sync-v1';
+const SELLABLE_CATALOG_PROGRESS_ID = 'sellable-catalog-sync-v1-progress';
+const SELLABLE_CATALOG_CHUNK = 40;
 const AUDIT_COD_CANCEL_ID = 'cancel-audit-ord-cf478810';
 const AUDIT_COD_ORDER_ID = 'ord_cf478810-c17f-462e-99fa-f3b2eefe90df';
+
+type CatalogSeedRow = {
+  id: string;
+  title: string;
+  slug?: string;
+  description?: string;
+  brand?: string;
+  sport?: string;
+  sub_category?: string;
+  cost_price?: number;
+  selling_price?: number;
+  discount_price?: number | null;
+  stock?: number;
+  images?: string[];
+  attributes?: Record<string, unknown>;
+  sizes?: unknown[];
+  weight_grams?: number | null;
+  balance?: string | null;
+  rating?: number;
+};
+
+let cachedSellableRows: CatalogSeedRow[] | null = null;
 
 const TECH_TEE_M = {
   id: 'POS-tecnifibre-team-tech-tee-m',
@@ -607,26 +631,6 @@ export async function onsiteSaleOct1Status(env: CommerceEnv) {
   });
 }
 
-type CatalogSeedRow = {
-  id: string;
-  title: string;
-  slug?: string;
-  description?: string;
-  brand?: string;
-  sport?: string;
-  sub_category?: string;
-  cost_price?: number;
-  selling_price?: number;
-  discount_price?: number | null;
-  stock?: number;
-  images?: string[];
-  attributes?: Record<string, unknown>;
-  sizes?: unknown[];
-  weight_grams?: number | null;
-  balance?: string | null;
-  rating?: number;
-};
-
 function normalizeSlug(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'product';
 }
@@ -792,19 +796,9 @@ async function upsertCatalogRows(
   return { inserted, updated, processed: rows.length };
 }
 
-/**
- * One-shot: upsert import + club POS catalogs into D1 so storefront SKUs can create orders.
- * Preserves existing on-hand stock for products already in D1.
- */
-export async function applySellableCatalogSync(env: CommerceEnv) {
-  await ensureOpsSchema(env);
-
-  const already = await env.DB.prepare('SELECT id FROM ops_migrations WHERE id = ? LIMIT 1')
-    .bind(SELLABLE_CATALOG_SYNC_ID)
-    .first<{ id: string }>();
-
-  if (already?.id) {
-    return { applied: false as const, reason: 'already-applied' as const };
+async function loadSellableCatalogRows(env: CommerceEnv) {
+  if (cachedSellableRows) {
+    return cachedSellableRows;
   }
 
   const [importRows, clubRows] = await Promise.all([
@@ -821,26 +815,96 @@ export async function applySellableCatalogSync(env: CommerceEnv) {
     byId.set(row.id, row);
   }
 
-  const rows = [...byId.values()];
+  cachedSellableRows = [...byId.values()];
+  return cachedSellableRows;
+}
+
+/**
+ * Chunked catalog upsert so Worker CPU limits are not blown on one request.
+ * Preserves existing on-hand stock for products already in D1.
+ * Call repeatedly (or via waitUntil) until `done: true`.
+ */
+export async function applySellableCatalogSync(env: CommerceEnv) {
+  await ensureOpsSchema(env);
+
+  const already = await env.DB.prepare('SELECT id FROM ops_migrations WHERE id = ? LIMIT 1')
+    .bind(SELLABLE_CATALOG_SYNC_ID)
+    .first<{ id: string }>();
+
+  if (already?.id) {
+    return { applied: false as const, reason: 'already-applied' as const, done: true as const };
+  }
+
+  const rows = await loadSellableCatalogRows(env);
   if (rows.length === 0) {
     throw new Error('Sellable catalog seed assets were empty or unavailable.');
   }
 
-  const result = await upsertCatalogRows(env, rows, { overwriteStock: false });
-  const total = await env.DB.prepare('SELECT COUNT(*) AS count FROM products').first<{ count: number }>();
+  const progressRow = await env.DB.prepare('SELECT details FROM ops_migrations WHERE id = ? LIMIT 1')
+    .bind(SELLABLE_CATALOG_PROGRESS_ID)
+    .first<{ details: string | null }>();
 
-  await env.DB.prepare(
-    'INSERT INTO ops_migrations (id, applied_at, details) VALUES (?, ?, ?)',
-  ).bind(
-    SELLABLE_CATALOG_SYNC_ID,
-    new Date().toISOString(),
-    JSON.stringify({ ...result, totalProducts: Number(total?.count ?? 0) }),
-  ).run();
+  const progress = progressRow?.details
+    ? JSON.parse(progressRow.details) as { offset?: number; inserted?: number; updated?: number }
+    : { offset: 0, inserted: 0, updated: 0 };
+
+  const offset = Math.max(0, Math.trunc(Number(progress.offset ?? 0) || 0));
+  const chunk = rows.slice(offset, offset + SELLABLE_CATALOG_CHUNK);
+  const result = chunk.length > 0
+    ? await upsertCatalogRows(env, chunk, { overwriteStock: false })
+    : { inserted: 0, updated: 0, processed: 0 };
+
+  const nextOffset = offset + chunk.length;
+  const inserted = Number(progress.inserted ?? 0) + result.inserted;
+  const updated = Number(progress.updated ?? 0) + result.updated;
+  const done = nextOffset >= rows.length;
+
+  if (done) {
+    const total = await env.DB.prepare('SELECT COUNT(*) AS count FROM products').first<{ count: number }>();
+    await env.DB.prepare('DELETE FROM ops_migrations WHERE id = ?').bind(SELLABLE_CATALOG_PROGRESS_ID).run();
+    await env.DB.prepare(
+      'INSERT INTO ops_migrations (id, applied_at, details) VALUES (?, ?, ?)',
+    ).bind(
+      SELLABLE_CATALOG_SYNC_ID,
+      new Date().toISOString(),
+      JSON.stringify({
+        inserted,
+        updated,
+        processed: rows.length,
+        totalProducts: Number(total?.count ?? 0),
+        chunked: true,
+      }),
+    ).run();
+
+    return {
+      applied: true as const,
+      done: true as const,
+      inserted,
+      updated,
+      processed: rows.length,
+      totalProducts: Number(total?.count ?? 0),
+    };
+  }
+
+  const details = JSON.stringify({ offset: nextOffset, inserted, updated, total: rows.length });
+  if (progressRow) {
+    await env.DB.prepare('UPDATE ops_migrations SET details = ?, applied_at = ? WHERE id = ?')
+      .bind(details, new Date().toISOString(), SELLABLE_CATALOG_PROGRESS_ID)
+      .run();
+  } else {
+    await env.DB.prepare(
+      'INSERT INTO ops_migrations (id, applied_at, details) VALUES (?, ?, ?)',
+    ).bind(SELLABLE_CATALOG_PROGRESS_ID, new Date().toISOString(), details).run();
+  }
 
   return {
     applied: true as const,
-    ...result,
-    totalProducts: Number(total?.count ?? 0),
+    done: false as const,
+    offset: nextOffset,
+    inserted,
+    updated,
+    processed: nextOffset,
+    total: rows.length,
   };
 }
 
