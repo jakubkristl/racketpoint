@@ -37,8 +37,8 @@ type WorkerEnvironment = Env & {
 const encoder = new TextEncoder();
 let adminUserReady = false;
 let onsiteSaleOct1Attempted = false;
-let sellableCatalogSyncAttempted = false;
 let auditCodCancelAttempted = false;
+let sellableCatalogPumpRunning = false;
 
 const schema = `
 	CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, name TEXT NOT NULL, email TEXT UNIQUE NOT NULL, password_hash TEXT NOT NULL, role TEXT NOT NULL, addresses TEXT NOT NULL DEFAULT '[]', created_at TEXT NOT NULL);
@@ -158,19 +158,6 @@ async function maybeApplyOnsiteSale(env: WorkerEnvironment) {
 	}
 }
 
-async function maybeSyncSellableCatalog(env: WorkerEnvironment) {
-	if (sellableCatalogSyncAttempted) {
-		return;
-	}
-
-	sellableCatalogSyncAttempted = true;
-	try {
-		await applySellableCatalogSync(env);
-	} catch {
-		sellableCatalogSyncAttempted = false;
-	}
-}
-
 async function maybeCancelAuditCod(env: WorkerEnvironment) {
 	if (auditCodCancelAttempted) {
 		return;
@@ -184,10 +171,43 @@ async function maybeCancelAuditCod(env: WorkerEnvironment) {
 	}
 }
 
+/** Light migrations only — never block storefront reads on catalog seed. */
 async function maybeApplyOpsMigrations(env: WorkerEnvironment) {
 	await maybeApplyOnsiteSale(env);
-	await maybeSyncSellableCatalog(env);
 	await maybeCancelAuditCod(env);
+}
+
+/**
+ * Pump sellable catalog sync in the background (chunked) so /api/products stays fast.
+ * Each invocation advances several chunks until done or the isolate budget is used.
+ */
+function scheduleSellableCatalogSync(env: WorkerEnvironment, ctx?: ExecutionContext) {
+	if (sellableCatalogPumpRunning) {
+		return;
+	}
+
+	const pump = async () => {
+		sellableCatalogPumpRunning = true;
+		try {
+			for (let step = 0; step < 8; step += 1) {
+				const result = await applySellableCatalogSync(env);
+				if (!result.applied || result.done) {
+					break;
+				}
+			}
+		} catch {
+			// Retry on a later request/isolate.
+		} finally {
+			sellableCatalogPumpRunning = false;
+		}
+	};
+
+	if (ctx?.waitUntil) {
+		ctx.waitUntil(pump());
+		return;
+	}
+
+	void pump();
 }
 
 const shopInbox = 'jakubkristl77@gmail.com';
@@ -201,7 +221,7 @@ export default {
 
 		await message.forward(shopInbox);
 	},
-	async fetch(request, env: WorkerEnvironment) {
+	async fetch(request, env: WorkerEnvironment, ctx) {
 		try {
 			const path = new URL(request.url).pathname;
 			if (path === '/api/auth/register' && request.method === 'POST') {
@@ -217,6 +237,7 @@ export default {
 			if (path === '/api/products') {
 				await env.DB.exec(schema);
 				await maybeApplyOpsMigrations(env);
+				scheduleSellableCatalogSync(env, ctx);
 				return products(request, env);
 			}
 			if (path === '/api/payments/gateways' && request.method === 'GET') {
@@ -233,6 +254,7 @@ export default {
 				await env.DB.exec(schema);
 				try {
 					await maybeApplyOpsMigrations(env);
+					scheduleSellableCatalogSync(env, ctx);
 					return await createStorefrontOrder(request, env);
 				} catch (error) {
 					return fail(error instanceof Error ? error.message : 'Order create failed.', 500);
@@ -241,6 +263,7 @@ export default {
 			if (path === '/api/orders' && request.method === 'GET') {
 				await env.DB.exec(schema);
 				await maybeApplyOpsMigrations(env);
+				scheduleSellableCatalogSync(env, ctx);
 				const includeAll = new URL(request.url).searchParams.get('all') === '1';
 				if (includeAll && !await isAdmin(request, env)) {
 					return fail('Admin role required.', 403);
