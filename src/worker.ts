@@ -1,10 +1,13 @@
 import {
 	applyOnsiteSaleOct12026,
+	applySellableCatalogSync,
+	cancelAuditCodProbe,
 	createStorefrontOrder,
 	listStockMovements,
 	listStorefrontOrders,
 	onsiteSaleOct1Status,
 	paymentGatewaysResponse,
+	syncCatalogFromRequest,
 	updateStorefrontOrderStatus,
 } from './workerCommerce';
 
@@ -34,6 +37,8 @@ type WorkerEnvironment = Env & {
 const encoder = new TextEncoder();
 let adminUserReady = false;
 let onsiteSaleOct1Attempted = false;
+let sellableCatalogSyncAttempted = false;
+let auditCodCancelAttempted = false;
 
 const schema = `
 	CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, name TEXT NOT NULL, email TEXT UNIQUE NOT NULL, password_hash TEXT NOT NULL, role TEXT NOT NULL, addresses TEXT NOT NULL DEFAULT '[]', created_at TEXT NOT NULL);
@@ -153,6 +158,38 @@ async function maybeApplyOnsiteSale(env: WorkerEnvironment) {
 	}
 }
 
+async function maybeSyncSellableCatalog(env: WorkerEnvironment) {
+	if (sellableCatalogSyncAttempted) {
+		return;
+	}
+
+	sellableCatalogSyncAttempted = true;
+	try {
+		await applySellableCatalogSync(env);
+	} catch {
+		sellableCatalogSyncAttempted = false;
+	}
+}
+
+async function maybeCancelAuditCod(env: WorkerEnvironment) {
+	if (auditCodCancelAttempted) {
+		return;
+	}
+
+	auditCodCancelAttempted = true;
+	try {
+		await cancelAuditCodProbe(env);
+	} catch {
+		auditCodCancelAttempted = false;
+	}
+}
+
+async function maybeApplyOpsMigrations(env: WorkerEnvironment) {
+	await maybeApplyOnsiteSale(env);
+	await maybeSyncSellableCatalog(env);
+	await maybeCancelAuditCod(env);
+}
+
 const shopInbox = 'jakubkristl77@gmail.com';
 
 export default {
@@ -179,16 +216,23 @@ export default {
 			}
 			if (path === '/api/products') {
 				await env.DB.exec(schema);
-				await maybeApplyOnsiteSale(env);
+				await maybeApplyOpsMigrations(env);
 				return products(request, env);
 			}
 			if (path === '/api/payments/gateways' && request.method === 'GET') {
 				return paymentGatewaysResponse(env);
 			}
+			if (path === '/api/system/catalog-sync' && request.method === 'POST') {
+				await env.DB.exec(schema);
+				if (!await isAdmin(request, env)) {
+					return fail('Admin role required.', 403);
+				}
+				return syncCatalogFromRequest(request, env);
+			}
 			if (path === '/api/orders/create' && request.method === 'POST') {
 				await env.DB.exec(schema);
 				try {
-					await maybeApplyOnsiteSale(env);
+					await maybeApplyOpsMigrations(env);
 					return await createStorefrontOrder(request, env);
 				} catch (error) {
 					return fail(error instanceof Error ? error.message : 'Order create failed.', 500);
@@ -196,7 +240,7 @@ export default {
 			}
 			if (path === '/api/orders' && request.method === 'GET') {
 				await env.DB.exec(schema);
-				await maybeApplyOnsiteSale(env);
+				await maybeApplyOpsMigrations(env);
 				const includeAll = new URL(request.url).searchParams.get('all') === '1';
 				if (includeAll && !await isAdmin(request, env)) {
 					return fail('Admin role required.', 403);

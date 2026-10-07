@@ -1,5 +1,6 @@
 type CommerceEnv = {
   DB: D1Database;
+  ASSETS?: Fetcher;
 };
 
 export type OrderLineInput = {
@@ -8,7 +9,19 @@ export type OrderLineInput = {
   priceEur?: number;
 };
 
+type ResolvedOrderLine = {
+  sku: string;
+  quantity: number;
+  priceEur: number;
+  /** True when units were reserved from on-hand stock (restock on cancel). */
+  reserved: boolean;
+  fulfillment: 'stock' | 'made_to_order';
+};
+
 const ONSITE_SALE_OCT1_ID = 'onsite-sale-2026-10-01';
+const SELLABLE_CATALOG_SYNC_ID = 'sellable-catalog-sync-v1';
+const AUDIT_COD_CANCEL_ID = 'cancel-audit-ord-cf478810';
+const AUDIT_COD_ORDER_ID = 'ord_cf478810-c17f-462e-99fa-f3b2eefe90df';
 
 const TECH_TEE_M = {
   id: 'POS-tecnifibre-team-tech-tee-m',
@@ -243,7 +256,8 @@ export async function createStorefrontOrder(request: Request, env: CommerceEnv) 
         notes ?? '',
         idempotencyKey ? `idempotency:${idempotencyKey}` : '',
       ].filter(Boolean).join('\n') || null,
-      shippingEur: Math.max(0, Number(body.shippingEur ?? 0) || 0),
+      // Shipping is free for now (no Speedy/Econt rates).
+      shippingEur: 0,
       status: 'Pending',
       createdAt: new Date().toISOString(),
     });
@@ -268,9 +282,8 @@ async function insertCodOrder(
     skipStockDecrement?: boolean;
   },
 ) {
-  const resolved: Array<{ sku: string; quantity: number; priceEur: number }> = [];
+  const resolved: ResolvedOrderLine[] = [];
   let totalAmount = 0;
-  const productRows: Array<{ id: string; stock: number; selling_price: number; discount_price: number | null }> = [];
 
   for (const item of input.items) {
     const product = await env.DB.prepare(
@@ -281,14 +294,23 @@ async function insertCodOrder(
       throw new Error(`Product not found for SKU: ${item.sku}`);
     }
 
-    if (!input.skipStockDecrement && Number(product.stock) < item.quantity) {
+    const onHand = Number(product.stock);
+    const madeToOrder = !input.skipStockDecrement && onHand <= 0;
+
+    // Stocked items still require enough units. Stock 0 / made-to-order may order without decrement.
+    if (!input.skipStockDecrement && !madeToOrder && onHand < item.quantity) {
       throw new Error(`Insufficient stock for ${item.sku} (have ${product.stock}, need ${item.quantity}).`);
     }
 
     const price = effectiveUnitPrice(product, item.priceEur);
-    resolved.push({ sku: item.sku, quantity: item.quantity, priceEur: price });
+    resolved.push({
+      sku: item.sku,
+      quantity: item.quantity,
+      priceEur: price,
+      reserved: input.skipStockDecrement ? false : !madeToOrder,
+      fulfillment: madeToOrder ? 'made_to_order' : 'stock',
+    });
     totalAmount += price * item.quantity;
-    productRows.push(product);
   }
 
   totalAmount += input.shippingEur;
@@ -297,6 +319,10 @@ async function insertCodOrder(
   const statements = [];
   if (!input.skipStockDecrement) {
     for (const line of resolved) {
+      if (!line.reserved) {
+        continue;
+      }
+
       statements.push(
         env.DB.prepare('UPDATE products SET stock = stock - ? WHERE id = ? AND stock >= ?')
           .bind(line.quantity, line.sku, line.quantity),
@@ -385,18 +411,33 @@ export async function updateStorefrontOrderStatus(request: Request, env: Commerc
     return json({ error: 'Order not found.' }, 404);
   }
 
-  // Restock once on cancel/refund.
+  // Restock once on cancel/refund — only lines that reserved on-hand stock.
   if (
     (status === 'Cancelled' || status === 'Refunded')
     && existing.status !== 'Cancelled'
     && existing.status !== 'Refunded'
   ) {
-    const items = typeof existing.items === 'string' ? JSON.parse(existing.items) as Array<{ sku: string; quantity: number }> : [];
+    const items = typeof existing.items === 'string'
+      ? JSON.parse(existing.items) as Array<{
+        sku: string;
+        quantity: number;
+        reserved?: boolean;
+        fulfillment?: string;
+      }>
+      : [];
     for (const line of items) {
+      const qty = Math.max(1, Math.trunc(Number(line.quantity) || 1));
+      const shouldRestock = line.fulfillment === 'made_to_order'
+        ? false
+        : line.reserved !== false;
+      if (!shouldRestock) {
+        continue;
+      }
+
       await env.DB.prepare('UPDATE products SET stock = stock + ? WHERE id = ?')
-        .bind(Math.max(1, Math.trunc(Number(line.quantity) || 1)), line.sku)
+        .bind(qty, line.sku)
         .run();
-      await recordStockMovement(env, line.sku, Math.max(1, Math.trunc(Number(line.quantity) || 1)), 'order_restock', orderId);
+      await recordStockMovement(env, line.sku, qty, 'order_restock', orderId);
     }
   }
 
@@ -564,4 +605,348 @@ export async function onsiteSaleOct1Status(env: CommerceEnv) {
     appliedAt: row.applied_at,
     details: row.details ? JSON.parse(row.details) : null,
   });
+}
+
+type CatalogSeedRow = {
+  id: string;
+  title: string;
+  slug?: string;
+  description?: string;
+  brand?: string;
+  sport?: string;
+  sub_category?: string;
+  cost_price?: number;
+  selling_price?: number;
+  discount_price?: number | null;
+  stock?: number;
+  images?: string[];
+  attributes?: Record<string, unknown>;
+  sizes?: unknown[];
+  weight_grams?: number | null;
+  balance?: string | null;
+  rating?: number;
+};
+
+function normalizeSlug(value: string) {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'product';
+}
+
+function toSeedRow(raw: Record<string, unknown>): CatalogSeedRow | null {
+  const id = String(raw.id ?? raw.sku ?? '').trim();
+  const title = String(raw.title ?? raw.name ?? '').trim();
+  if (!id || !title) {
+    return null;
+  }
+
+  const images = Array.isArray(raw.images)
+    ? raw.images.filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+    : Array.isArray(raw.imageArray)
+      ? raw.imageArray.filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+      : typeof raw.imageUrl === 'string' && raw.imageUrl.trim()
+        ? [raw.imageUrl.trim()]
+        : [];
+
+  const originalPrice = Number(raw.originalPriceEur ?? raw.selling_price ?? raw.sellingPrice ?? NaN);
+  const salePrice = Number(raw.salePriceEur ?? raw.discount_price ?? raw.discountPrice ?? NaN);
+  const fallbackPrice = Number(raw.priceEur ?? 0) || 0;
+  const sellingPrice = Number.isFinite(originalPrice) && originalPrice > 0
+    ? originalPrice
+    : (Number.isFinite(salePrice) && salePrice > 0 ? salePrice : fallbackPrice);
+  const discountPrice = Number.isFinite(salePrice) && salePrice > 0 && salePrice < sellingPrice
+    ? salePrice
+    : (raw.discount_price == null && raw.discountPrice == null
+      ? null
+      : Number(raw.discount_price ?? raw.discountPrice));
+
+  return {
+    id,
+    title,
+    slug: typeof raw.slug === 'string' ? raw.slug : undefined,
+    description: String(raw.description ?? raw.details ?? title),
+    brand: String(raw.brand ?? 'Racketpoint'),
+    sport: String(raw.sport ?? raw.categorySlug ?? 'squash'),
+    sub_category: String(raw.sub_category ?? raw.subCategory ?? 'Rackets'),
+    cost_price: Number(raw.cost_price ?? raw.costPrice ?? raw.costEur ?? 0) || 0,
+    selling_price: sellingPrice,
+    discount_price: discountPrice == null || !Number.isFinite(Number(discountPrice))
+      ? null
+      : Number(discountPrice),
+    stock: Math.max(0, Math.trunc(Number(raw.stock ?? 0) || 0)),
+    images,
+    attributes: raw.attributes && typeof raw.attributes === 'object'
+      ? raw.attributes as Record<string, unknown>
+      : {},
+    sizes: Array.isArray(raw.sizes) ? raw.sizes : [],
+    weight_grams: raw.weight_grams == null && raw.weightGrams == null
+      ? null
+      : Math.trunc(Number(raw.weight_grams ?? raw.weightGrams)),
+    balance: typeof raw.balance === 'string' ? raw.balance : null,
+    rating: Number(raw.rating ?? 4.5) || 4.5,
+  };
+}
+
+async function fetchAssetJsonArray(env: CommerceEnv, path: string) {
+  if (!env.ASSETS) {
+    return [] as CatalogSeedRow[];
+  }
+
+  const response = await env.ASSETS.fetch(new Request(`https://assets.local${path}`));
+  if (!response.ok) {
+    return [] as CatalogSeedRow[];
+  }
+
+  const payload = await response.json().catch(() => null);
+  if (!Array.isArray(payload)) {
+    return [] as CatalogSeedRow[];
+  }
+
+  return payload
+    .map((entry) => toSeedRow(entry as Record<string, unknown>))
+    .filter((row): row is CatalogSeedRow => Boolean(row));
+}
+
+async function upsertCatalogRows(
+  env: CommerceEnv,
+  rows: CatalogSeedRow[],
+  options?: { overwriteStock?: boolean },
+) {
+  let inserted = 0;
+  let updated = 0;
+
+  for (const product of rows) {
+    const existing = await env.DB.prepare('SELECT id, stock FROM products WHERE id = ? LIMIT 1')
+      .bind(product.id)
+      .first<{ id: string; stock: number }>();
+
+    const slugBase = normalizeSlug(String(product.slug ?? product.title).replace(/\.html$/i, ''));
+    const slug = `${slugBase}-${product.id}`.slice(0, 180);
+    const incomingStock = Math.max(0, Math.trunc(Number(product.stock ?? 0) || 0));
+    const stock = options?.overwriteStock || !existing
+      ? incomingStock
+      : Number(existing.stock);
+
+    const values = [
+      product.id,
+      product.title,
+      slug,
+      product.description ?? product.title,
+      product.brand ?? 'Racketpoint',
+      product.sport ?? 'squash',
+      product.sub_category ?? 'Rackets',
+      Math.max(0, Number(product.cost_price ?? 0) || 0),
+      Math.max(0, Number(product.selling_price ?? 0) || 0),
+      product.discount_price == null ? null : Math.max(0, Number(product.discount_price) || 0),
+      stock,
+      JSON.stringify(product.images ?? []),
+      JSON.stringify(product.attributes ?? {}),
+      JSON.stringify(product.sizes ?? []),
+      product.weight_grams == null ? null : Math.trunc(Number(product.weight_grams)),
+      product.balance ?? null,
+      Math.max(0, Number(product.rating ?? 4.5) || 4.5),
+      new Date().toISOString(),
+    ] as const;
+
+    if (!existing) {
+      await env.DB.prepare(
+        `INSERT INTO products (
+          id, title, slug, description, brand, sport, sub_category,
+          cost_price, selling_price, discount_price, stock, images, attributes, sizes,
+          weight_grams, balance, rating, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ).bind(...values).run();
+      inserted += 1;
+      continue;
+    }
+
+    if (options?.overwriteStock) {
+      await env.DB.prepare(
+        `UPDATE products SET
+          title=?, slug=?, description=?, brand=?, sport=?, sub_category=?,
+          cost_price=?, selling_price=?, discount_price=?, stock=?, images=?, attributes=?,
+          sizes=?, weight_grams=?, balance=?, rating=?
+         WHERE id=?`,
+      ).bind(
+        values[1], values[2], values[3], values[4], values[5], values[6],
+        values[7], values[8], values[9], values[10], values[11], values[12],
+        values[13], values[14], values[15], values[16],
+        product.id,
+      ).run();
+    } else {
+      await env.DB.prepare(
+        `UPDATE products SET
+          title=?, slug=?, description=?, brand=?, sport=?, sub_category=?,
+          cost_price=?, selling_price=?, discount_price=?, images=?, attributes=?,
+          sizes=?, weight_grams=?, balance=?, rating=?
+         WHERE id=?`,
+      ).bind(
+        values[1], values[2], values[3], values[4], values[5], values[6],
+        values[7], values[8], values[9], values[11], values[12],
+        values[13], values[14], values[15], values[16],
+        product.id,
+      ).run();
+    }
+
+    updated += 1;
+  }
+
+  return { inserted, updated, processed: rows.length };
+}
+
+/**
+ * One-shot: upsert import + club POS catalogs into D1 so storefront SKUs can create orders.
+ * Preserves existing on-hand stock for products already in D1.
+ */
+export async function applySellableCatalogSync(env: CommerceEnv) {
+  await ensureOpsSchema(env);
+
+  const already = await env.DB.prepare('SELECT id FROM ops_migrations WHERE id = ? LIMIT 1')
+    .bind(SELLABLE_CATALOG_SYNC_ID)
+    .first<{ id: string }>();
+
+  if (already?.id) {
+    return { applied: false as const, reason: 'already-applied' as const };
+  }
+
+  const [importRows, clubRows] = await Promise.all([
+    fetchAssetJsonArray(env, '/imports/squashpoint-products.json'),
+    fetchAssetJsonArray(env, '/imports/club-pos-d1.json'),
+  ]);
+
+  const byId = new Map<string, CatalogSeedRow>();
+  for (const row of importRows) {
+    byId.set(row.id, row);
+  }
+  // Club POS overrides import when SKUs collide (club truth for onsite stocked SKUs).
+  for (const row of clubRows) {
+    byId.set(row.id, row);
+  }
+
+  const rows = [...byId.values()];
+  if (rows.length === 0) {
+    throw new Error('Sellable catalog seed assets were empty or unavailable.');
+  }
+
+  const result = await upsertCatalogRows(env, rows, { overwriteStock: false });
+  const total = await env.DB.prepare('SELECT COUNT(*) AS count FROM products').first<{ count: number }>();
+
+  await env.DB.prepare(
+    'INSERT INTO ops_migrations (id, applied_at, details) VALUES (?, ?, ?)',
+  ).bind(
+    SELLABLE_CATALOG_SYNC_ID,
+    new Date().toISOString(),
+    JSON.stringify({ ...result, totalProducts: Number(total?.count ?? 0) }),
+  ).run();
+
+  return {
+    applied: true as const,
+    ...result,
+    totalProducts: Number(total?.count ?? 0),
+  };
+}
+
+export async function syncCatalogFromRequest(request: Request, env: CommerceEnv) {
+  await ensureOpsSchema(env);
+
+  const body = await request.json<{ products?: unknown[]; overwriteStock?: boolean }>().catch(() => null);
+  if (!body || !Array.isArray(body.products) || body.products.length === 0) {
+    return json({ error: 'Payload must include a non-empty products array.' }, 400);
+  }
+
+  const rows = body.products
+    .map((entry) => toSeedRow(entry as Record<string, unknown>))
+    .filter((row): row is CatalogSeedRow => Boolean(row));
+
+  if (rows.length === 0) {
+    return json({ error: 'No valid products in payload.' }, 400);
+  }
+
+  const result = await upsertCatalogRows(env, rows, { overwriteStock: Boolean(body.overwriteStock) });
+  const total = await env.DB.prepare('SELECT COUNT(*) AS count FROM products').first<{ count: number }>();
+
+  return json({
+    ok: true,
+    ...result,
+    totalProducts: Number(total?.count ?? 0),
+  });
+}
+
+/** Cancel the checkout-audit COD probe and restock USQR24014 if still open. */
+export async function cancelAuditCodProbe(env: CommerceEnv) {
+  await ensureOpsSchema(env);
+
+  const already = await env.DB.prepare('SELECT id FROM ops_migrations WHERE id = ? LIMIT 1')
+    .bind(AUDIT_COD_CANCEL_ID)
+    .first<{ id: string }>();
+
+  if (already?.id) {
+    return { applied: false as const, reason: 'already-applied' as const };
+  }
+
+  const existing = await env.DB.prepare('SELECT id, status, items FROM orders WHERE id = ? LIMIT 1')
+    .bind(AUDIT_COD_ORDER_ID)
+    .first<{ id: string; status: string; items: string }>();
+
+  if (!existing) {
+    await env.DB.prepare(
+      'INSERT INTO ops_migrations (id, applied_at, details) VALUES (?, ?, ?)',
+    ).bind(
+      AUDIT_COD_CANCEL_ID,
+      new Date().toISOString(),
+      JSON.stringify({ orderId: AUDIT_COD_ORDER_ID, found: false }),
+    ).run();
+    return { applied: true as const, found: false as const, orderId: AUDIT_COD_ORDER_ID };
+  }
+
+  if (existing.status === 'Cancelled' || existing.status === 'Refunded') {
+    await env.DB.prepare(
+      'INSERT INTO ops_migrations (id, applied_at, details) VALUES (?, ?, ?)',
+    ).bind(
+      AUDIT_COD_CANCEL_ID,
+      new Date().toISOString(),
+      JSON.stringify({ orderId: AUDIT_COD_ORDER_ID, found: true, alreadyStatus: existing.status }),
+    ).run();
+    return {
+      applied: true as const,
+      found: true as const,
+      orderId: AUDIT_COD_ORDER_ID,
+      status: existing.status,
+      restocked: false as const,
+    };
+  }
+
+  const items = typeof existing.items === 'string'
+    ? JSON.parse(existing.items) as Array<{ sku: string; quantity: number; reserved?: boolean; fulfillment?: string }>
+    : [];
+
+  for (const line of items) {
+    const qty = Math.max(1, Math.trunc(Number(line.quantity) || 1));
+    const shouldRestock = line.fulfillment === 'made_to_order' ? false : line.reserved !== false;
+    if (!shouldRestock) {
+      continue;
+    }
+    await env.DB.prepare('UPDATE products SET stock = stock + ? WHERE id = ?')
+      .bind(qty, line.sku)
+      .run();
+    await recordStockMovement(env, line.sku, qty, 'order_restock', AUDIT_COD_ORDER_ID);
+  }
+
+  await env.DB.prepare('UPDATE orders SET status = ? WHERE id = ?')
+    .bind('Cancelled', AUDIT_COD_ORDER_ID)
+    .run();
+
+  await env.DB.prepare(
+    'INSERT INTO ops_migrations (id, applied_at, details) VALUES (?, ?, ?)',
+  ).bind(
+    AUDIT_COD_CANCEL_ID,
+    new Date().toISOString(),
+    JSON.stringify({ orderId: AUDIT_COD_ORDER_ID, found: true, status: 'Cancelled', restocked: true }),
+  ).run();
+
+  return {
+    applied: true as const,
+    found: true as const,
+    orderId: AUDIT_COD_ORDER_ID,
+    status: 'Cancelled' as const,
+    restocked: true as const,
+  };
 }
