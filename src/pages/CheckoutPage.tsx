@@ -3,7 +3,6 @@ import { Link, useLocation } from 'react-router-dom';
 import ProductImage from '../components/ProductImage';
 import type { Product } from '../data/catalog';
 import { findProductBySku, submitOrderRequest } from '../data/store';
-import { savePendingBoricaOrder } from '../data/paymentSession';
 
 type CartLine = {
   sku: string;
@@ -21,11 +20,16 @@ type CheckoutPageProps = {
 
 const deliveryChoices = [
   { value: 'pickup', title: 'Вземане от магазин', badge: 'София', note: 'Вземане от ул. „Любен Русев“ 6, 1113 София.' },
-  { value: 'courier', title: 'Куриер', badge: 'BG', note: 'Ще се свържем с вас за доставка след поръчката.' },
+  {
+    value: 'courier',
+    title: 'Куриер',
+    badge: 'Безплатно',
+    note: 'Безплатна доставка — ще се свържем с вас за адрес след поръчката.',
+  },
 ] as const;
 
+/** Card/BORICA stays disabled until Worker payment routes ship. COD is the only live path. */
 const paymentChoices = [
-  { value: 'card', title: 'Карта', badge: 'V/MC', note: 'Сигурно онлайн картово плащане.' },
   { value: 'cash_on_delivery', title: 'Наложен платеж', badge: 'COD', note: 'Плащане при получаване на поръчката.' },
 ] as const;
 
@@ -43,23 +47,6 @@ function formatCurrency(value: number) {
   }).format(value);
 }
 
-function postToGateway(actionUrl: string, fields: Record<string, string>) {
-  const form = document.createElement('form');
-  form.method = 'POST';
-  form.action = actionUrl;
-
-  for (const [key, value] of Object.entries(fields)) {
-    const input = document.createElement('input');
-    input.type = 'hidden';
-    input.name = key;
-    input.value = value;
-    form.appendChild(input);
-  }
-
-  document.body.appendChild(form);
-  form.submit();
-}
-
 function CheckoutPage({ products, lines, onIncrement, onDecrement, onRemove, onClear }: CheckoutPageProps) {
   const location = useLocation();
   const [fullName, setFullName] = useState('');
@@ -68,10 +55,11 @@ function CheckoutPage({ products, lines, onIncrement, onDecrement, onRemove, onC
   const [city, setCity] = useState('');
   const [address, setAddress] = useState('');
   const [deliveryOption, setDeliveryOption] = useState<'pickup' | 'courier'>('pickup');
-  const [paymentOption, setPaymentOption] = useState<'card' | 'cash_on_delivery'>('card');
+  const [paymentOption, setPaymentOption] = useState<'card' | 'cash_on_delivery'>('cash_on_delivery');
   const [notes, setNotes] = useState('');
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
+  const shippingEur = 0;
 
   const cartItems = useMemo(() => {
     const items: Array<{ sku: string; quantity: number; product: Product; lineTotal: number }> = [];
@@ -115,10 +103,9 @@ function CheckoutPage({ products, lines, onIncrement, onDecrement, onRemove, onC
       return;
     }
 
-    const deliveryLabel = deliveryOption === 'courier' ? 'Куриер' : 'Вземане от магазин';
-    const paymentLabel = paymentOption === 'cash_on_delivery' ? 'Наложен платеж' : 'Картово плащане';
-
-    const paymentMethod: 'card' | 'cash_on_delivery' = paymentOption === 'cash_on_delivery' ? 'cash_on_delivery' : 'card';
+    const deliveryLabel = deliveryOption === 'courier' ? 'Куриер (безплатна доставка)' : 'Вземане от магазин';
+    const paymentLabel = 'Наложен платеж';
+    const paymentMethod = 'cash_on_delivery' as const;
 
     const orderNotes = [
       `Телефон: ${phone}`,
@@ -126,27 +113,24 @@ function CheckoutPage({ products, lines, onIncrement, onDecrement, onRemove, onC
       `Адрес: ${address}`,
       `Опция за доставка: ${deliveryLabel}`,
       `Опция за плащане: ${paymentLabel}`,
+      `Доставка EUR: ${shippingEur.toFixed(2)}`,
       notes ? `Бележки: ${notes}` : '',
     ]
       .filter(Boolean)
       .join('\n');
 
-    const orderRequest = {
-      fullName,
-      email,
-      items: cartItems.map((item) => ({
-        sku: item.sku,
-        quantity: item.quantity,
-        priceEur: item.product.priceEur,
-      })),
-      billingAddress: { city, address, phone },
-      paymentMethod,
-      notes: orderNotes,
-    } as const;
-
-    if (paymentMethod === 'cash_on_delivery') {
+    try {
       const result = await submitOrderRequest({
-        ...orderRequest,
+        fullName,
+        email,
+        items: cartItems.map((item) => ({
+          sku: item.sku,
+          quantity: item.quantity,
+          priceEur: item.product.priceEur,
+        })),
+        billingAddress: { city, address, phone },
+        paymentMethod,
+        notes: orderNotes,
         payment: {
           status: 'cash_on_delivery',
         },
@@ -159,46 +143,11 @@ function CheckoutPage({ products, lines, onIncrement, onDecrement, onRemove, onC
       setAddress('');
       setNotes('');
       setDeliveryOption('pickup');
-      setPaymentOption('card');
+      setPaymentOption('cash_on_delivery');
+      setAcceptedTerms(false);
       onClear();
-      return;
-    }
-
-    try {
-      setStatus('Пренасочване към сигурно плащане...');
-
-      const response = await fetch('/api/payments/borica/init', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          amount: totalPrice,
-          currency: 'EUR',
-          fullName,
-          email,
-          phone,
-          city,
-          address,
-          orderDescription: `Поръчка от Racketpoint - ${cartItems.length} артикула`,
-        }),
-      });
-
-      const payload = (await response.json()) as {
-        actionUrl?: string;
-        fields?: Record<string, string>;
-        order?: string;
-        error?: string;
-      };
-
-      if (!response.ok || !payload.actionUrl || !payload.fields || !payload.order) {
-        throw new Error(payload.error || 'Неуспешно стартиране на плащането.');
-      }
-
-      savePendingBoricaOrder(payload.order, totalPrice, orderRequest);
-      postToGateway(payload.actionUrl, payload.fields);
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Неуспешно стартиране на плащането.';
+      const message = error instanceof Error ? error.message : 'Неуспешно създаване на поръчката.';
       setStatus(message);
     }
   }
@@ -255,8 +204,20 @@ function CheckoutPage({ products, lines, onIncrement, onDecrement, onRemove, onC
           </div>
 
           <div className="cart-total checkout-total-box">
-            <strong>Общо</strong>
-            <strong>{formatCurrency(totalPrice)}</strong>
+            <div className="checkout-total-lines">
+              <div className="checkout-total-row">
+                <span>Продукти</span>
+                <span>{formatCurrency(totalPrice)}</span>
+              </div>
+              <div className="checkout-total-row">
+                <span>Доставка</span>
+                <span>Безплатно</span>
+              </div>
+            </div>
+            <div className="checkout-total-row checkout-total-grand">
+              <strong>Общо</strong>
+              <strong>{formatCurrency(totalPrice + shippingEur)}</strong>
+            </div>
           </div>
         </section>
 

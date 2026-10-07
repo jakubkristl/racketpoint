@@ -2585,6 +2585,26 @@ button {
 
 .checkout-total-box {
   margin-top: 10px;
+  display: grid;
+  gap: 8px;
+}
+
+.checkout-total-lines {
+  display: grid;
+  gap: 4px;
+}
+
+.checkout-total-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 0.92rem;
+}
+
+.checkout-total-grand {
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
 }
 
 .cart-total {
@@ -2595,6 +2615,10 @@ button {
   border-radius: 14px;
   border: 1px solid var(--border);
   background: rgba(255, 255, 255, 0.86);
+}
+
+.cart-total.checkout-total-box {
+  display: grid;
 }
 
 .checkout-form {
