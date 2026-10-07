@@ -1583,15 +1583,24 @@ button {
 .product-image {
   display: block;
   width: 100%;
+  height: auto;
   object-fit: contain;
-  aspect-ratio: 16 / 9;
-  background: #fff;
-  padding: 8px;
-  transition: transform 240ms ease;
+  object-position: center;
+  /* Square tiles suit portrait racket/product shots better than 16:9. */
+  aspect-ratio: 1 / 1;
+  background: linear-gradient(180deg, #f7f8f9 0%, #ffffff 55%);
+  padding: 14px;
+  box-sizing: border-box;
+  opacity: 0;
+  transition: transform 240ms ease, opacity 220ms ease;
+}
+
+.product-image.is-loaded {
+  opacity: 1;
 }
 
 .product-card:hover .product-image {
-  transform: scale(1.04);
+  transform: scale(1.03);
 }
 
 .product-body {
@@ -1746,16 +1755,31 @@ button {
 
 .product-detail-gallery {
   padding: 16px;
+  background: linear-gradient(180deg, #f4f6f7 0%, #ffffff 48%);
+  border: 1px solid var(--border);
+  border-radius: 26px;
+  /* Reserve gallery height so PDP text does not jump while the photo loads. */
+  min-height: min(72vh, 560px);
+  display: grid;
+  place-items: center;
 }
 
 .product-detail-image {
   width: 100%;
   display: block;
   height: auto;
-  max-height: min(72vh, 780px);
+  max-height: min(68vh, 720px);
+  aspect-ratio: 4 / 5;
   object-fit: contain;
-  background: #fff;
-  border-radius: 20px;
+  object-position: center;
+  background: transparent;
+  border-radius: 16px;
+  opacity: 0;
+  transition: opacity 220ms ease;
+}
+
+.product-detail-image.is-loaded {
+  opacity: 1;
 }
 
 .product-detail-panel {
@@ -2403,9 +2427,16 @@ button {
   height: 74px;
   border-radius: 12px;
   object-fit: contain;
+  object-position: center;
   border: 1px solid var(--border);
   background: #fff;
   padding: 4px;
+  opacity: 0;
+  transition: opacity 180ms ease;
+}
+
+.cart-line-thumb.is-loaded {
+  opacity: 1;
 }
 
 .cart-line h3 {
@@ -2508,9 +2539,16 @@ button {
   height: 52px;
   border-radius: 8px;
   object-fit: contain;
+  object-position: center;
   background: #fff;
   border: 1px solid var(--border);
   padding: 3px;
+  opacity: 0;
+  transition: opacity 180ms ease;
+}
+
+.checkout-line-thumb.is-loaded {
+  opacity: 1;
 }
 
 .checkout-line-controls {

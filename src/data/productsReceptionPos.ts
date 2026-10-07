@@ -26,11 +26,11 @@ const PUBLIC_IMAGE_BY_ID: Record<string, string> = {
   'unsquashable-james-willstrop-signature':
     'https://cdn.shopify.com/s/files/1/0510/5264/2502/files/JAMESWILLSTROPAUTOGRAPH2600x4000-ANGLE4_ca3b55e0-10ba-44ca-bc15-ccb66b20dcb3.jpg?v=1724404460&width=900',
   'unsquashable-ultra-lite-120':
-    'https://cdn.shopify.com/s/files/1/0510/5264/2502/files/04_-_UNSQUASHABLE_THERMO-PRO_120_Squash_Racket_-_2600x4000_4f631c67-cdde-414a-b7c6-8bae42088fbf.jpg?v=1773047996&width=900',
+    '/imports/club-shop/unsquashable-ultra-lite-120.jpg',
   'unsquashable-ultra-lite-135':
-    'https://cdn.shopify.com/s/files/1/0510/5264/2502/files/04_-_UNSQUASHABLE_THERMO-PRO_120_Squash_Racket_-_2600x4000_4f631c67-cdde-414a-b7c6-8bae42088fbf.jpg?v=1773047996&width=900',
+    '/imports/club-shop/unsquashable-ultra-lite-135.webp',
   'unsquashable-syn-tec-125':
-    'https://cdn.shopify.com/s/files/1/0510/5264/2502/products/Y-TECracket-Shopify-IMG001.jpg?v=1724404534&width=900',
+    '/imports/club-shop/unsquashable-syn-tec-125.webp',
   'unsquashable-sam-gerrits-autograph':
     'https://cdn.shopify.com/s/files/1/0510/5264/2502/files/04-SAMGERRITSracket-2600x4000.jpg?v=1728657391&width=900',
   'saxon-aerox-125':
@@ -52,9 +52,9 @@ const PUBLIC_IMAGE_BY_ID: Record<string, string> = {
   'unsquashable-tour-tec-pro-deluxe-racket-bag':
     'https://cdn.shopify.com/s/files/1/0510/5264/2502/products/UNSQUASHABLETOUR-TECPRODeluxeRacketBag2angle.jpg?v=1724404422&width=900',
   'unsquashable-tour-tec-pro-backpack':
-    'https://cdn.shopify.com/s/files/1/0510/5264/2502/products/UNSQUASHABLETOUR-TECPRODeluxeRacketBag2angle.jpg?v=1724404422&width=900',
+    '/imports/club-shop/unsquashable-tour-tec-pro-backpack.webp',
   'unsquashable-tour-tec-pro-pu-grip-6-pack':
-    'https://cdn.shopify.com/s/files/1/0648/8322/8918/files/karakal-pu-super-grip-pack-of-two-02.webp?v=1784548209&width=900',
+    '/imports/club-shop/unsquashable-tour-tec-pro-pu-grip.webp',
   'unsquashable-cross-tec-black-shoe':
     '/imports/club-shop/unsquashable-cross-tec-black-shoe.webp',
   'unsquashable-fast-tec-pro-shoe':

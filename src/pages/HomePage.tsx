@@ -191,6 +191,7 @@ function HomePage({ categories, products, onAddToCart }: HomePageProps) {
                   src={visual.imageUrl}
                   alt={visual.sport}
                   loading="lazy"
+                  decoding="async"
                   onError={(event) => {
                     const target = event.currentTarget;
                     if (target.src.endsWith('/branding/logo-fallback.png')) {
@@ -224,7 +225,12 @@ function HomePage({ categories, products, onAddToCart }: HomePageProps) {
             {featuredProducts.map((product) => (
               <article className="product-card" key={product.sku}>
                 <Link to={`/product/${encodeURIComponent(product.sku)}`}>
-                  <ProductImage className="product-image" product={product} loading="lazy" />
+                  <ProductImage
+                    className="product-image"
+                    product={product}
+                    loading="lazy"
+                    sizes="(max-width: 720px) 100vw, (max-width: 1100px) 50vw, 25vw"
+                  />
                 </Link>
                 <div className="product-body">
                   <div>

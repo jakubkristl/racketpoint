@@ -61,7 +61,13 @@ function ProductDetailPage({ product, onAddToCart }: ProductDetailPageProps) {
 
         <section className="product-detail-grid">
           <article className="product-detail-gallery">
-            <ProductImage className="product-detail-image" product={product} />
+            <ProductImage
+              className="product-detail-image"
+              product={product}
+              loading="eager"
+              fetchPriority="high"
+              sizes="(max-width: 900px) 100vw, 52vw"
+            />
           </article>
 
           <article className="product-detail-panel">

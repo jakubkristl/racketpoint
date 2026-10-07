@@ -302,6 +302,7 @@ function CategoryPage({ category, products, brands, onAddToCart }: CategoryPageP
             src={categoryMood.primary}
             alt={`${category.name} banner`}
             loading="lazy"
+            decoding="async"
             onError={(event) => {
               const target = event.currentTarget;
               if (target.src.endsWith('/branding/logo-fallback.png')) {
@@ -339,6 +340,7 @@ function CategoryPage({ category, products, brands, onAddToCart }: CategoryPageP
                         src={subCategory.imageUrl}
                         alt={`${subCategory.label} stock visual`}
                         loading="lazy"
+                        decoding="async"
                         onError={(event) => {
                           const target = event.currentTarget;
                           if (target.src.endsWith('/branding/logo-fallback.png')) {
@@ -453,7 +455,12 @@ function CategoryPage({ category, products, brands, onAddToCart }: CategoryPageP
                           }
                         }}
                       >
-                        <ProductImage className="product-image" product={product} loading="lazy" />
+                        <ProductImage
+                          className="product-image"
+                          product={product}
+                          loading="lazy"
+                          sizes="(max-width: 720px) 100vw, (max-width: 1100px) 50vw, 25vw"
+                        />
                         <div className="product-body">
                           <h3 className={getProductTitleClass(product.name)}>{product.name}</h3>
                           {cardFacts.description ? <p className="product-card-copy">{cardFacts.description}</p> : null}

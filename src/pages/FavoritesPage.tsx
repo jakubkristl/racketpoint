@@ -102,7 +102,12 @@ function FavoritesPage({ products, onAddToCart }: FavoritesPageProps) {
                   }
                 }}
               >
-                <ProductImage className="product-image" product={product} loading="lazy" />
+                <ProductImage
+                  className="product-image"
+                  product={product}
+                  loading="lazy"
+                  sizes="(max-width: 720px) 100vw, (max-width: 1100px) 50vw, 25vw"
+                />
                 <div className="product-body">
                   <h3 className={getProductTitleClass(product.name)}>{product.name}</h3>
                   {cardFacts.description ? <p className="product-card-copy">{cardFacts.description}</p> : null}
