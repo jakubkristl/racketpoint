@@ -19,11 +19,23 @@ function joinClassNames(...parts: Array<string | false | null | undefined>) {
   return parts.filter(Boolean).join(' ');
 }
 
+function markLoadedFromElement(image: HTMLImageElement | null, setLoaded: (value: boolean) => void) {
+  if (!image) {
+    return;
+  }
+
+  // Cached images can be complete before React attaches onLoad — do not leave opacity at 0.
+  if (image.complete && image.naturalWidth > 0) {
+    setLoaded(true);
+  }
+}
+
 function ProductImage({ product, alt, className, onError, onLoad, decoding, ...props }: ProductImageProps) {
   const fallbackSrc = getFallbackImageForProduct(product);
   const [src, setSrc] = useState(() => resolveInitialSrc(product, fallbackSrc));
   const [isLoaded, setIsLoaded] = useState(false);
   const stageRef = useRef<'source' | 'sport' | 'logo'>('source');
+  const imgRef = useRef<HTMLImageElement | null>(null);
   const resolvedAlt = (alt ?? product.name ?? '').trim() || 'Продукт RacketPoint';
 
   useEffect(() => {
@@ -31,6 +43,10 @@ function ProductImage({ product, alt, className, onError, onLoad, decoding, ...p
     setIsLoaded(false);
     setSrc(resolveInitialSrc(product, fallbackSrc));
   }, [product.imageUrl, product.sku, product.categorySlug, product.type, fallbackSrc]);
+
+  useEffect(() => {
+    markLoadedFromElement(imgRef.current, setIsLoaded);
+  }, [src]);
 
   function advanceFallback(currentSrc: string) {
     if (stageRef.current === 'logo') {
@@ -52,6 +68,7 @@ function ProductImage({ product, alt, className, onError, onLoad, decoding, ...p
   return (
     <img
       {...props}
+      ref={imgRef}
       className={joinClassNames(className, isLoaded && 'is-loaded')}
       src={src}
       alt={resolvedAlt}
