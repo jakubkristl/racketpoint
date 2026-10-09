@@ -19,6 +19,7 @@ type ResolvedOrderLine = {
 };
 
 const ONSITE_SALE_OCT1_ID = 'onsite-sale-2026-10-01';
+const ONSITE_SALE_OCT9_ID = 'onsite-sale-2026-10-09';
 const SELLABLE_CATALOG_SYNC_ID = 'sellable-catalog-sync-v1';
 const SELLABLE_CATALOG_PROGRESS_ID = 'sellable-catalog-sync-v1-progress';
 const SELLABLE_CATALOG_CHUNK = 40;
@@ -75,6 +76,38 @@ const ONSITE_OCT1_LINES: Array<{ sku: string; quantity: number; expectedUnitPric
   { sku: 'POS-unsquashable-miguel-rodriguez-autograph', quantity: 1, expectedUnitPrice: 115 },
   { sku: 'POS-unsquashable-miguel-rodriguez-one20', quantity: 1, expectedUnitPrice: 115 },
   { sku: TECH_TEE_M.id, quantity: 2, expectedUnitPrice: 36 },
+];
+
+const OLAND_JERSEY_DY = {
+  id: 'POS-oland-jersey-double-yellow',
+  title: 'Oland Jersey Double Yellow',
+  slug: 'oland-jersey-double-yellow',
+  description: 'Oland Jersey Double Yellow. Onsite club stock (Double Yellow).',
+  brand: 'Oland',
+  sport: 'Squash',
+  subCategory: 'Apparel',
+  /** User-specified club cost / sell for 2026-10-09 onsite sale. */
+  costPrice: 13,
+  sellingPrice: 30,
+  discountPrice: null as number | null,
+  stock: 1,
+  images: [
+    'https://reception-pos.jakub-personal.workers.dev/kiosk/store/products/apparel/Oland%20Jersey%20Double%20Yellow.jpg',
+  ],
+  attributes: {
+    source: 'reception-pos',
+    sourceSku: 'oland-jersey-double-yellow-mr9iayg9',
+    onsiteSale: '2026-10-09',
+  },
+  sizes: [] as string[],
+};
+
+const FAST_TEC_PRO_SHOE_SKU = 'POS-unsquashable-fast-tec-pro-shoe';
+
+/** 2026-10-09 onsite: 1× FAST-TEC Pro shoe (live Admin €95) + 1× Oland DY jersey (€30). */
+const ONSITE_OCT9_LINES: Array<{ sku: string; quantity: number; expectedUnitPrice: number }> = [
+  { sku: FAST_TEC_PRO_SHOE_SKU, quantity: 1, expectedUnitPrice: 95 },
+  { sku: OLAND_JERSEY_DY.id, quantity: 1, expectedUnitPrice: 30 },
 ];
 
 function json(value: unknown, status = 200) {
@@ -621,6 +654,188 @@ export async function onsiteSaleOct1Status(env: CommerceEnv) {
 
   if (!row) {
     return json({ applied: false, id: ONSITE_SALE_OCT1_ID });
+  }
+
+  return json({
+    applied: true,
+    id: row.id,
+    appliedAt: row.applied_at,
+    details: row.details ? JSON.parse(row.details) : null,
+  });
+}
+
+async function ensureOlandJerseyDy(env: CommerceEnv) {
+  const existing = await env.DB.prepare(
+    'SELECT id, stock, cost_price, selling_price FROM products WHERE id = ? LIMIT 1',
+  )
+    .bind(OLAND_JERSEY_DY.id)
+    .first<{ id: string; stock: number; cost_price: number; selling_price: number }>();
+
+  if (!existing) {
+    await env.DB.prepare(
+      `INSERT INTO products (
+        id, title, slug, description, brand, sport, sub_category,
+        cost_price, selling_price, discount_price, stock, images, attributes, sizes,
+        weight_grams, balance, rating, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, 4.5, ?)`,
+    ).bind(
+      OLAND_JERSEY_DY.id,
+      OLAND_JERSEY_DY.title,
+      OLAND_JERSEY_DY.slug,
+      OLAND_JERSEY_DY.description,
+      OLAND_JERSEY_DY.brand,
+      OLAND_JERSEY_DY.sport,
+      OLAND_JERSEY_DY.subCategory,
+      OLAND_JERSEY_DY.costPrice,
+      OLAND_JERSEY_DY.sellingPrice,
+      OLAND_JERSEY_DY.discountPrice,
+      OLAND_JERSEY_DY.stock,
+      JSON.stringify(OLAND_JERSEY_DY.images),
+      JSON.stringify(OLAND_JERSEY_DY.attributes),
+      JSON.stringify(OLAND_JERSEY_DY.sizes),
+      new Date().toISOString(),
+    ).run();
+    return { created: true, stockBefore: OLAND_JERSEY_DY.stock };
+  }
+
+  // Lock user-specified price/cost; ensure at least 1 unit for this known sale.
+  const stockBefore = Math.max(1, Number(existing.stock) || 0);
+  await env.DB.prepare(
+    'UPDATE products SET cost_price = ?, selling_price = ?, discount_price = NULL, stock = ? WHERE id = ?',
+  )
+    .bind(OLAND_JERSEY_DY.costPrice, OLAND_JERSEY_DY.sellingPrice, stockBefore, OLAND_JERSEY_DY.id)
+    .run();
+
+  return {
+    created: false,
+    stockBefore,
+    toppedUpFrom: Number(existing.stock),
+  };
+}
+
+/**
+ * Durable one-shot ops migration: Jakub's 2026-10-09 onsite retail sale.
+ * Seeds Oland jersey if missing, then writes one Delivered COD order (stock −1 each).
+ */
+export async function applyOnsiteSaleOct92026(env: CommerceEnv) {
+  await ensureOpsSchema(env);
+
+  const already = await env.DB.prepare('SELECT id FROM ops_migrations WHERE id = ? LIMIT 1')
+    .bind(ONSITE_SALE_OCT9_ID)
+    .first<{ id: string }>();
+
+  if (already?.id) {
+    return { applied: false, reason: 'already-applied' as const };
+  }
+
+  const jersey = await ensureOlandJerseyDy(env);
+
+  const stockBefore: Record<string, number> = {};
+  for (const line of ONSITE_OCT9_LINES) {
+    const row = await env.DB.prepare(
+      'SELECT id, stock, selling_price, discount_price, cost_price FROM products WHERE id = ? LIMIT 1',
+    )
+      .bind(line.sku)
+      .first<{
+        id: string;
+        stock: number;
+        selling_price: number;
+        discount_price: number | null;
+        cost_price: number;
+      }>();
+
+    if (!row) {
+      throw new Error(`Missing product for onsite sale: ${line.sku}`);
+    }
+
+    const onHand = Number(row.stock);
+    if (onHand < line.quantity) {
+      throw new Error(
+        `Insufficient stock for onsite sale ${line.sku} (have ${onHand}, need ${line.quantity}).`,
+      );
+    }
+
+    stockBefore[line.sku] = onHand;
+  }
+
+  const created = await insertCodOrder(env, {
+    fullName: 'Onsite sale / Jakub',
+    email: 'admin@racketpoint.bg',
+    items: ONSITE_OCT9_LINES.map((line) => ({
+      sku: line.sku,
+      quantity: line.quantity,
+      priceEur: line.expectedUnitPrice,
+    })),
+    billingAddress: {
+      city: 'Sofia',
+      address: 'Onsite / Double Yellow',
+      phone: '-',
+    },
+    notes: [
+      'onsite',
+      ONSITE_SALE_OCT9_ID,
+      '1× Unsquashable FAST-TEC Pro shoe @ €95 + 1× Oland Jersey Double Yellow @ €30 = €125',
+      `idempotency:${ONSITE_SALE_OCT9_ID}`,
+    ].join('\n'),
+    shippingEur: 0,
+    status: 'Delivered',
+    createdAt: '2026-10-09T08:00:00.000Z',
+  });
+
+  const stockAfter: Record<string, number> = {};
+  const costs: Record<string, number> = {};
+  for (const line of ONSITE_OCT9_LINES) {
+    const row = await env.DB.prepare('SELECT stock, cost_price FROM products WHERE id = ? LIMIT 1')
+      .bind(line.sku)
+      .first<{ stock: number; cost_price: number }>();
+    stockAfter[line.sku] = Number(row?.stock ?? 0);
+    costs[line.sku] = Number(row?.cost_price ?? 0);
+  }
+
+  const revenue = created.totalAmount;
+  const costTotal = ONSITE_OCT9_LINES.reduce(
+    (sum, line) => sum + (costs[line.sku] ?? 0) * line.quantity,
+    0,
+  );
+
+  const details = JSON.stringify({
+    orderId: created.id,
+    totalAmount: created.totalAmount,
+    revenue,
+    costTotal,
+    profit: revenue - costTotal,
+    items: created.items,
+    stockBefore,
+    stockAfter,
+    costs,
+    olandJersey: jersey,
+  });
+
+  await env.DB.prepare(
+    'INSERT INTO ops_migrations (id, applied_at, details) VALUES (?, ?, ?)',
+  ).bind(ONSITE_SALE_OCT9_ID, new Date().toISOString(), details).run();
+
+  return {
+    applied: true as const,
+    orderId: created.id,
+    totalAmount: created.totalAmount,
+    revenue,
+    costTotal,
+    profit: revenue - costTotal,
+    stockBefore,
+    stockAfter,
+    items: created.items,
+  };
+}
+
+export async function onsiteSaleOct9Status(env: CommerceEnv) {
+  await ensureOpsSchema(env);
+  const row = await env.DB.prepare('SELECT id, applied_at, details FROM ops_migrations WHERE id = ? LIMIT 1')
+    .bind(ONSITE_SALE_OCT9_ID)
+    .first<{ id: string; applied_at: string; details: string | null }>();
+
+  if (!row) {
+    return json({ applied: false, id: ONSITE_SALE_OCT9_ID });
   }
 
   return json({
