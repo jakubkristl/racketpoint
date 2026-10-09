@@ -1,11 +1,13 @@
 import {
 	applyOnsiteSaleOct12026,
+	applyOnsiteSaleOct92026,
 	applySellableCatalogSync,
 	cancelAuditCodProbe,
 	createStorefrontOrder,
 	listStockMovements,
 	listStorefrontOrders,
 	onsiteSaleOct1Status,
+	onsiteSaleOct9Status,
 	paymentGatewaysResponse,
 	syncCatalogFromRequest,
 	updateStorefrontOrderStatus,
@@ -37,6 +39,7 @@ type WorkerEnvironment = Env & {
 const encoder = new TextEncoder();
 let adminUserReady = false;
 let onsiteSaleOct1Attempted = false;
+let onsiteSaleOct9Attempted = false;
 let auditCodCancelAttempted = false;
 let sellableCatalogPumpRunning = false;
 
@@ -158,6 +161,19 @@ async function maybeApplyOnsiteSale(env: WorkerEnvironment) {
 	}
 }
 
+async function maybeApplyOnsiteSaleOct9(env: WorkerEnvironment) {
+	if (onsiteSaleOct9Attempted) {
+		return;
+	}
+
+	onsiteSaleOct9Attempted = true;
+	try {
+		await applyOnsiteSaleOct92026(env);
+	} catch {
+		onsiteSaleOct9Attempted = false;
+	}
+}
+
 async function maybeCancelAuditCod(env: WorkerEnvironment) {
 	if (auditCodCancelAttempted) {
 		return;
@@ -174,6 +190,7 @@ async function maybeCancelAuditCod(env: WorkerEnvironment) {
 /** Light migrations only — never block storefront reads on catalog seed. */
 async function maybeApplyOpsMigrations(env: WorkerEnvironment) {
 	await maybeApplyOnsiteSale(env);
+	await maybeApplyOnsiteSaleOct9(env);
 	await maybeCancelAuditCod(env);
 }
 
@@ -302,6 +319,29 @@ export default {
 				try {
 					const result = await applyOnsiteSaleOct12026(env);
 					onsiteSaleOct1Attempted = true;
+					return json(result);
+				} catch (error) {
+					return fail(error instanceof Error ? error.message : 'Onsite sale failed.', 500);
+				}
+			}
+			if (path === '/api/admin/onsite-sale-oct9' && request.method === 'GET') {
+				await env.DB.exec(schema);
+				try {
+					await maybeApplyOnsiteSaleOct9(env);
+					return await onsiteSaleOct9Status(env);
+				} catch (error) {
+					return fail(error instanceof Error ? error.message : 'Onsite sale status failed.', 500);
+				}
+			}
+			if (path === '/api/admin/onsite-sale-oct9' && request.method === 'POST') {
+				await env.DB.exec(schema);
+				if (!await isAdmin(request, env)) {
+					return fail('Admin role required.', 403);
+				}
+				onsiteSaleOct9Attempted = false;
+				try {
+					const result = await applyOnsiteSaleOct92026(env);
+					onsiteSaleOct9Attempted = true;
 					return json(result);
 				} catch (error) {
 					return fail(error instanceof Error ? error.message : 'Onsite sale failed.', 500);
