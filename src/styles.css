@@ -494,6 +494,18 @@ button {
   box-shadow: inset 0 0 0 1px rgba(242, 194, 0, 0.38);
 }
 
+.retail-account-btn.is-logged-in {
+  border-color: #f2c200;
+  background: rgba(242, 194, 0, 0.18);
+  color: #f2c200;
+}
+
+.retail-account-btn.is-logged-in.active {
+  border-color: #f2c200;
+  box-shadow: inset 0 0 0 1px rgba(242, 194, 0, 0.55);
+  background: rgba(242, 194, 0, 0.28);
+}
+
 .retail-icon-badge {
   position: absolute;
   right: -8px;
@@ -511,6 +523,16 @@ button {
   align-items: center;
   justify-content: center;
   line-height: 1;
+}
+
+.retail-account-badge {
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  font-size: 0.62rem;
+  background: #f2c200;
+  color: #171b22;
+  border-color: #0f141d;
 }
 
 .retail-cart-btn {

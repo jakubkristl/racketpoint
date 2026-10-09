@@ -1,6 +1,7 @@
 import { type FormEvent, type ReactNode, useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import BrandLogo from './BrandLogo';
+import { getSessionUser, type AccountUser } from '../data/accountStore';
 import { getFavoriteSkus } from '../data/favorites';
 import { getSubcategoriesForSport } from '../data/subcategories';
 
@@ -26,13 +27,21 @@ function HeaderIcon({ children }: { children: ReactNode }) {
   return <span className="retail-icon-svg" aria-hidden="true">{children}</span>;
 }
 
+function accountInitial(user: AccountUser) {
+  const source = (user.name || user.email || '?').trim();
+  const first = source.charAt(0);
+  return first ? first.toUpperCase() : '?';
+}
+
 function StoreHeader({ activeSportSlug }: StoreHeaderProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const currentSearch = new URLSearchParams(location.search).get('q') ?? '';
   const [searchValue, setSearchValue] = useState(currentSearch);
   const [favoriteCount, setFavoriteCount] = useState(() => getFavoriteSkus().length);
+  const [sessionUser, setSessionUser] = useState<AccountUser | null>(() => getSessionUser());
   const [openSport, setOpenSport] = useState<string | null>(null);
+  const isLoggedIn = Boolean(sessionUser);
 
   useEffect(() => {
     setSearchValue(currentSearch);
@@ -45,6 +54,20 @@ function StoreHeader({ activeSportSlug }: StoreHeaderProps) {
 
     window.addEventListener('racketpoint:favorites-changed', handleFavoritesChanged as EventListener);
     return () => window.removeEventListener('racketpoint:favorites-changed', handleFavoritesChanged as EventListener);
+  }, []);
+
+  useEffect(() => {
+    function syncSessionUser() {
+      setSessionUser(getSessionUser());
+    }
+
+    syncSessionUser();
+    window.addEventListener('racketpoint:auth-changed', syncSessionUser as EventListener);
+    window.addEventListener('storage', syncSessionUser);
+    return () => {
+      window.removeEventListener('racketpoint:auth-changed', syncSessionUser as EventListener);
+      window.removeEventListener('storage', syncSessionUser);
+    };
   }, []);
 
   function handleOpenCart() {
@@ -163,13 +186,34 @@ function StoreHeader({ activeSportSlug }: StoreHeaderProps) {
             {favoriteCount > 0 ? <span className="retail-icon-badge">{favoriteCount > 99 ? '99+' : favoriteCount}</span> : null}
           </Link>
 
-          <Link className="retail-icon-btn" to="/account" aria-label="Потребителски профил" title="Профил">
+          <Link
+            className={[
+              'retail-icon-btn',
+              'retail-account-btn',
+              isLoggedIn ? 'is-logged-in' : '',
+              location.pathname.startsWith('/account') ? 'active' : '',
+            ].filter(Boolean).join(' ')}
+            to="/account"
+            aria-label={isLoggedIn ? `Влезли сте като ${sessionUser?.name || sessionUser?.email}` : 'Вход в профил'}
+            title={isLoggedIn ? `Профил · ${sessionUser?.name || sessionUser?.email}` : 'Вход'}
+          >
             <HeaderIcon>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M20 21a8 8 0 1 0-16 0" />
-                <circle cx="12" cy="7" r="4" />
-              </svg>
+              {isLoggedIn ? (
+                <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                  <path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm0 2c-4.42 0-8 2.24-8 5v1h16v-1c0-2.76-3.58-5-8-5z" />
+                </svg>
+              ) : (
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M20 21a8 8 0 1 0-16 0" />
+                  <circle cx="12" cy="7" r="4" />
+                </svg>
+              )}
             </HeaderIcon>
+            {isLoggedIn && sessionUser ? (
+              <span className="retail-icon-badge retail-account-badge" aria-hidden="true">
+                {accountInitial(sessionUser)}
+              </span>
+            ) : null}
           </Link>
 
           <button className="retail-cart-btn" type="button" onClick={handleOpenCart} aria-label="Отвори количката" title="Количка">
