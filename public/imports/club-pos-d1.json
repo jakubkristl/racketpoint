@@ -680,9 +680,9 @@
     "sport": "squash",
     "sub_category": "Apparel",
     "cost_price": 18.15,
-    "selling_price": 21,
+    "selling_price": 29,
     "discount_price": null,
-    "stock": 2,
+    "stock": 1,
     "images": [
       "/imports/club-shop/dunlop-junior-protective-eyewear.jpg"
     ],

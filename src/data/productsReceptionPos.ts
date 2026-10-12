@@ -323,10 +323,10 @@ const STORE_PRODUCTS: ReceptionPosSeed[] = [
   {
     id: 'dunlop-junior-protective-eyewear',
     name: 'Dunlop Junior Protective Eyewear',
-    price: 21,
+    price: 29,
     costPrice: 18.15,
     department: 'Apparel',
-    stockQty: 2,
+    stockQty: 1,
   },
   {
     id: 'dunlop-mens-indoor-crew-socks',
