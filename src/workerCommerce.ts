@@ -20,6 +20,7 @@ type ResolvedOrderLine = {
 
 const ONSITE_SALE_OCT1_ID = 'onsite-sale-2026-10-01';
 const ONSITE_SALE_OCT9_ID = 'onsite-sale-2026-10-09';
+const ONSITE_SALE_OCT12_ID = 'onsite-sale-2026-10-12';
 const SELLABLE_CATALOG_SYNC_ID = 'sellable-catalog-sync-v1';
 const SELLABLE_CATALOG_PROGRESS_ID = 'sellable-catalog-sync-v1-progress';
 const SELLABLE_CATALOG_CHUNK = 40;
@@ -108,6 +109,17 @@ const FAST_TEC_PRO_SHOE_SKU = 'POS-unsquashable-fast-tec-pro-shoe';
 const ONSITE_OCT9_LINES: Array<{ sku: string; quantity: number; expectedUnitPrice: number }> = [
   { sku: FAST_TEC_PRO_SHOE_SKU, quantity: 1, expectedUnitPrice: 95 },
   { sku: OLAND_JERSEY_DY.id, quantity: 1, expectedUnitPrice: 30 },
+];
+
+/** Club POS SKU for Dunlop Junior Protective Eyewear (not Squashpoint twin `10352187`). */
+const DUNLOP_JUNIOR_EYEWEAR_SKU = 'POS-dunlop-junior-protective-eyewear';
+/** User-specified onsite sell price 2026-10-12; catalog was €21 / cost €18.15. */
+const DUNLOP_JUNIOR_EYEWEAR_SELL_EUR = 29;
+const DUNLOP_JUNIOR_EYEWEAR_COST_EUR = 18.15;
+
+/** 2026-10-12 onsite: 1× Dunlop Junior Protective Eyewear @ €29. */
+const ONSITE_OCT12_LINES: Array<{ sku: string; quantity: number; expectedUnitPrice: number }> = [
+  { sku: DUNLOP_JUNIOR_EYEWEAR_SKU, quantity: 1, expectedUnitPrice: DUNLOP_JUNIOR_EYEWEAR_SELL_EUR },
 ];
 
 function json(value: unknown, status = 200) {
@@ -836,6 +848,171 @@ export async function onsiteSaleOct9Status(env: CommerceEnv) {
 
   if (!row) {
     return json({ applied: false, id: ONSITE_SALE_OCT9_ID });
+  }
+
+  return json({
+    applied: true,
+    id: row.id,
+    appliedAt: row.applied_at,
+    details: row.details ? JSON.parse(row.details) : null,
+  });
+}
+
+/**
+ * Lock club sell price to the onsite €29 before creating the COD line.
+ * Keeps known club cost; does not invent stock.
+ */
+async function ensureDunlopJuniorEyewearPrice(env: CommerceEnv) {
+  const existing = await env.DB.prepare(
+    'SELECT id, stock, cost_price, selling_price FROM products WHERE id = ? LIMIT 1',
+  )
+    .bind(DUNLOP_JUNIOR_EYEWEAR_SKU)
+    .first<{ id: string; stock: number; cost_price: number; selling_price: number }>();
+
+  if (!existing) {
+    throw new Error(`Missing product for onsite sale: ${DUNLOP_JUNIOR_EYEWEAR_SKU}`);
+  }
+
+  const cost = Number(existing.cost_price) > 0
+    ? Number(existing.cost_price)
+    : DUNLOP_JUNIOR_EYEWEAR_COST_EUR;
+
+  await env.DB.prepare(
+    'UPDATE products SET cost_price = ?, selling_price = ?, discount_price = NULL WHERE id = ?',
+  )
+    .bind(cost, DUNLOP_JUNIOR_EYEWEAR_SELL_EUR, DUNLOP_JUNIOR_EYEWEAR_SKU)
+    .run();
+
+  return {
+    stockBeforeUpdate: Number(existing.stock),
+    sellingBefore: Number(existing.selling_price),
+    cost,
+  };
+}
+
+/**
+ * Durable one-shot ops migration: Jakub's 2026-10-12 onsite Dunlop Junior Eyewear sale.
+ * Sets sell €29, then writes one Delivered COD order (stock −1).
+ */
+export async function applyOnsiteSaleOct122026(env: CommerceEnv) {
+  await ensureOpsSchema(env);
+
+  const already = await env.DB.prepare('SELECT id FROM ops_migrations WHERE id = ? LIMIT 1')
+    .bind(ONSITE_SALE_OCT12_ID)
+    .first<{ id: string }>();
+
+  if (already?.id) {
+    return { applied: false, reason: 'already-applied' as const };
+  }
+
+  const priceLock = await ensureDunlopJuniorEyewearPrice(env);
+
+  const stockBefore: Record<string, number> = {};
+  for (const line of ONSITE_OCT12_LINES) {
+    const row = await env.DB.prepare(
+      'SELECT id, stock, selling_price, discount_price, cost_price FROM products WHERE id = ? LIMIT 1',
+    )
+      .bind(line.sku)
+      .first<{
+        id: string;
+        stock: number;
+        selling_price: number;
+        discount_price: number | null;
+        cost_price: number;
+      }>();
+
+    if (!row) {
+      throw new Error(`Missing product for onsite sale: ${line.sku}`);
+    }
+
+    const onHand = Number(row.stock);
+    if (onHand < line.quantity) {
+      throw new Error(
+        `Insufficient stock for onsite sale ${line.sku} (have ${onHand}, need ${line.quantity}).`,
+      );
+    }
+
+    stockBefore[line.sku] = onHand;
+  }
+
+  const created = await insertCodOrder(env, {
+    fullName: 'Onsite sale / Jakub',
+    email: 'admin@racketpoint.bg',
+    items: ONSITE_OCT12_LINES.map((line) => ({
+      sku: line.sku,
+      quantity: line.quantity,
+      priceEur: line.expectedUnitPrice,
+    })),
+    billingAddress: {
+      city: 'Sofia',
+      address: 'Onsite / Double Yellow',
+      phone: '-',
+    },
+    notes: [
+      'onsite',
+      ONSITE_SALE_OCT12_ID,
+      '1× Dunlop Junior Protective Eyewear @ €29',
+      `idempotency:${ONSITE_SALE_OCT12_ID}`,
+    ].join('\n'),
+    shippingEur: 0,
+    status: 'Delivered',
+    createdAt: '2026-10-12T12:00:00.000Z',
+  });
+
+  const stockAfter: Record<string, number> = {};
+  const costs: Record<string, number> = {};
+  for (const line of ONSITE_OCT12_LINES) {
+    const row = await env.DB.prepare('SELECT stock, cost_price FROM products WHERE id = ? LIMIT 1')
+      .bind(line.sku)
+      .first<{ stock: number; cost_price: number }>();
+    stockAfter[line.sku] = Number(row?.stock ?? 0);
+    costs[line.sku] = Number(row?.cost_price ?? 0);
+  }
+
+  const revenue = created.totalAmount;
+  const costTotal = ONSITE_OCT12_LINES.reduce(
+    (sum, line) => sum + (costs[line.sku] ?? 0) * line.quantity,
+    0,
+  );
+
+  const details = JSON.stringify({
+    orderId: created.id,
+    totalAmount: created.totalAmount,
+    revenue,
+    costTotal,
+    profit: revenue - costTotal,
+    items: created.items,
+    stockBefore,
+    stockAfter,
+    costs,
+    priceLock,
+  });
+
+  await env.DB.prepare(
+    'INSERT INTO ops_migrations (id, applied_at, details) VALUES (?, ?, ?)',
+  ).bind(ONSITE_SALE_OCT12_ID, new Date().toISOString(), details).run();
+
+  return {
+    applied: true as const,
+    orderId: created.id,
+    totalAmount: created.totalAmount,
+    revenue,
+    costTotal,
+    profit: revenue - costTotal,
+    stockBefore,
+    stockAfter,
+    items: created.items,
+  };
+}
+
+export async function onsiteSaleOct12Status(env: CommerceEnv) {
+  await ensureOpsSchema(env);
+  const row = await env.DB.prepare('SELECT id, applied_at, details FROM ops_migrations WHERE id = ? LIMIT 1')
+    .bind(ONSITE_SALE_OCT12_ID)
+    .first<{ id: string; applied_at: string; details: string | null }>();
+
+  if (!row) {
+    return json({ applied: false, id: ONSITE_SALE_OCT12_ID });
   }
 
   return json({
