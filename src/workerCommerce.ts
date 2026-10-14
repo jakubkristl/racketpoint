@@ -21,11 +21,49 @@ type ResolvedOrderLine = {
 const ONSITE_SALE_OCT1_ID = 'onsite-sale-2026-10-01';
 const ONSITE_SALE_OCT9_ID = 'onsite-sale-2026-10-09';
 const ONSITE_SALE_OCT12_ID = 'onsite-sale-2026-10-12';
+/** Apply 10% Unsquashable racket promo (Bulgarian BF 13–16 Nov 2026 Sofia). */
+const BF_UNSQUASHABLE_APPLY_ID = 'bf-unsquashable-rackets-2026-11';
+/** Clear the same promo after Mon 16 Nov 2026 23:59 Sofia. */
+const BF_UNSQUASHABLE_CLEAR_ID = 'bf-unsquashable-rackets-2026-11-clear';
+/** Sale live Fri 13 Nov 00:00 Sofia (EET, UTC+2). Soft announce Wed 11 is marketing-only. */
+const BF_UNSQUASHABLE_START_MS = Date.parse('2026-11-13T00:00:00+02:00');
+/** Hard end Mon 16 Nov 2026 23:59:59.999 Sofia. */
+const BF_UNSQUASHABLE_END_MS = Date.parse('2026-11-16T23:59:59.999+02:00');
+/** All 13 live D1 Unsquashable racket SKUs (exclude shoes/bags/grips/string reel). */
+export const BF_UNSQUASHABLE_RACKET_SKUS = [
+  'POS-unsquashable-miguel-rodriguez-one20',
+  'POS-unsquashable-miguel-rodriguez-autograph',
+  'POS-unsquashable-nick-wall-125-limited-edition',
+  'POS-unsquashable-hero-pro-125-brazil',
+  'POS-unsquashable-y-tec-125',
+  'POS-unsquashable-y-tec-pro-125',
+  'POS-unsquashable-y-tec-pro-110',
+  'POS-unsquashable-tour-tec-pro-125',
+  'POS-unsquashable-james-willstrop-signature',
+  'POS-unsquashable-ultra-lite-120',
+  'POS-unsquashable-ultra-lite-135',
+  'POS-unsquashable-syn-tec-125',
+  'POS-unsquashable-sam-gerrits-autograph',
+] as const;
 const SELLABLE_CATALOG_SYNC_ID = 'sellable-catalog-sync-v1';
 const SELLABLE_CATALOG_PROGRESS_ID = 'sellable-catalog-sync-v1-progress';
 const SELLABLE_CATALOG_CHUNK = 40;
 const AUDIT_COD_CANCEL_ID = 'cancel-audit-ord-cf478810';
 const AUDIT_COD_ORDER_ID = 'ord_cf478810-c17f-462e-99fa-f3b2eefe90df';
+
+function roundMoneyEur(value: number) {
+  return Math.round(value * 100) / 100;
+}
+
+function blackFridayUnsquashableWindow(nowMs = Date.now()) {
+  if (nowMs < BF_UNSQUASHABLE_START_MS) {
+    return 'before' as const;
+  }
+  if (nowMs <= BF_UNSQUASHABLE_END_MS) {
+    return 'live' as const;
+  }
+  return 'after' as const;
+}
 
 type CatalogSeedRow = {
   id: string;
@@ -1020,6 +1058,224 @@ export async function onsiteSaleOct12Status(env: CommerceEnv) {
     id: row.id,
     appliedAt: row.applied_at,
     details: row.details ? JSON.parse(row.details) : null,
+  });
+}
+
+/**
+ * Bulgarian Black Friday: set discount_price = round(selling_price × 0.9, 2) on all 13
+ * Unsquashable racket SKUs. Leaves selling_price / cost_price unchanged.
+ * Date-gated to Fri 13 Nov 00:00 → Mon 16 Nov 23:59 Sofia unless `force`.
+ * Re-ensures prices while the apply migration is recorded and window is live
+ * (guards against catalog-sync wiping promo mid-sale).
+ */
+export async function applyBlackFridayUnsquashableDiscount(
+  env: CommerceEnv,
+  options?: { force?: boolean; nowMs?: number },
+) {
+  await ensureOpsSchema(env);
+
+  const nowMs = options?.nowMs ?? Date.now();
+  const window = blackFridayUnsquashableWindow(nowMs);
+  if (!options?.force && window === 'before') {
+    return { applied: false as const, reason: 'before-window' as const, window };
+  }
+  if (!options?.force && window === 'after') {
+    return { applied: false as const, reason: 'after-window' as const, window };
+  }
+
+  const clearRow = await env.DB.prepare('SELECT id FROM ops_migrations WHERE id = ? LIMIT 1')
+    .bind(BF_UNSQUASHABLE_CLEAR_ID)
+    .first<{ id: string }>();
+  if (clearRow?.id && !options?.force) {
+    return { applied: false as const, reason: 'already-cleared' as const, window };
+  }
+
+  const prices: Array<{
+    sku: string;
+    title: string;
+    sellingPrice: number;
+    discountBefore: number | null;
+    discountAfter: number;
+    updated: boolean;
+  }> = [];
+
+  for (const sku of BF_UNSQUASHABLE_RACKET_SKUS) {
+    const row = await env.DB.prepare(
+      'SELECT id, title, selling_price, discount_price FROM products WHERE id = ? LIMIT 1',
+    )
+      .bind(sku)
+      .first<{ id: string; title: string; selling_price: number; discount_price: number | null }>();
+
+    if (!row) {
+      throw new Error(`Missing product for Black Friday promo: ${sku}`);
+    }
+
+    const sellingPrice = Number(row.selling_price);
+    const discountAfter = roundMoneyEur(sellingPrice * 0.9);
+    const discountBefore = row.discount_price == null ? null : Number(row.discount_price);
+    const needsUpdate = discountBefore == null || Math.abs(discountBefore - discountAfter) > 0.001;
+
+    if (needsUpdate) {
+      await env.DB.prepare('UPDATE products SET discount_price = ? WHERE id = ?')
+        .bind(discountAfter, sku)
+        .run();
+    }
+
+    prices.push({
+      sku,
+      title: row.title,
+      sellingPrice,
+      discountBefore,
+      discountAfter,
+      updated: needsUpdate,
+    });
+  }
+
+  const already = await env.DB.prepare('SELECT id FROM ops_migrations WHERE id = ? LIMIT 1')
+    .bind(BF_UNSQUASHABLE_APPLY_ID)
+    .first<{ id: string }>();
+
+  const updatedCount = prices.filter((row) => row.updated).length;
+  const details = JSON.stringify({
+    window,
+    forced: Boolean(options?.force),
+    skus: [...BF_UNSQUASHABLE_RACKET_SKUS],
+    prices,
+    updatedCount,
+  });
+
+  if (!already?.id) {
+    await env.DB.prepare(
+      'INSERT INTO ops_migrations (id, applied_at, details) VALUES (?, ?, ?)',
+    ).bind(BF_UNSQUASHABLE_APPLY_ID, new Date().toISOString(), details).run();
+  } else if (updatedCount > 0) {
+    await env.DB.prepare('UPDATE ops_migrations SET details = ?, applied_at = ? WHERE id = ?')
+      .bind(details, new Date().toISOString(), BF_UNSQUASHABLE_APPLY_ID)
+      .run();
+  }
+
+  if (updatedCount === 0 && already?.id) {
+    return { applied: false as const, reason: 'already-applied' as const, window, prices };
+  }
+
+  return {
+    applied: true as const,
+    window,
+    updatedCount,
+    prices,
+  };
+}
+
+/**
+ * End of BF: clear discount_price on the same 13 Unsquashable racket SKUs.
+ * Runs automatically after Mon 16 Nov 23:59 Sofia, or immediately with `force`
+ * (ops rollback / Mon 16 end checklist).
+ */
+export async function clearBlackFridayUnsquashableDiscount(
+  env: CommerceEnv,
+  options?: { force?: boolean; nowMs?: number },
+) {
+  await ensureOpsSchema(env);
+
+  const nowMs = options?.nowMs ?? Date.now();
+  const window = blackFridayUnsquashableWindow(nowMs);
+  if (!options?.force && window !== 'after') {
+    return { applied: false as const, reason: 'still-in-or-before-window' as const, window };
+  }
+
+  const already = await env.DB.prepare('SELECT id FROM ops_migrations WHERE id = ? LIMIT 1')
+    .bind(BF_UNSQUASHABLE_CLEAR_ID)
+    .first<{ id: string }>();
+
+  if (already?.id && !options?.force) {
+    return { applied: false as const, reason: 'already-cleared' as const, window };
+  }
+
+  const cleared: Array<{
+    sku: string;
+    title: string;
+    sellingPrice: number;
+    discountBefore: number | null;
+  }> = [];
+
+  for (const sku of BF_UNSQUASHABLE_RACKET_SKUS) {
+    const row = await env.DB.prepare(
+      'SELECT id, title, selling_price, discount_price FROM products WHERE id = ? LIMIT 1',
+    )
+      .bind(sku)
+      .first<{ id: string; title: string; selling_price: number; discount_price: number | null }>();
+
+    if (!row) {
+      throw new Error(`Missing product for Black Friday clear: ${sku}`);
+    }
+
+    const discountBefore = row.discount_price == null ? null : Number(row.discount_price);
+    if (discountBefore != null) {
+      await env.DB.prepare('UPDATE products SET discount_price = NULL WHERE id = ?')
+        .bind(sku)
+        .run();
+    }
+
+    cleared.push({
+      sku,
+      title: row.title,
+      sellingPrice: Number(row.selling_price),
+      discountBefore,
+    });
+  }
+
+  const details = JSON.stringify({
+    window,
+    forced: Boolean(options?.force),
+    skus: [...BF_UNSQUASHABLE_RACKET_SKUS],
+    cleared,
+  });
+
+  if (already?.id) {
+    await env.DB.prepare('UPDATE ops_migrations SET details = ?, applied_at = ? WHERE id = ?')
+      .bind(details, new Date().toISOString(), BF_UNSQUASHABLE_CLEAR_ID)
+      .run();
+  } else {
+    await env.DB.prepare(
+      'INSERT INTO ops_migrations (id, applied_at, details) VALUES (?, ?, ?)',
+    ).bind(BF_UNSQUASHABLE_CLEAR_ID, new Date().toISOString(), details).run();
+  }
+
+  return { applied: true as const, window, cleared };
+}
+
+/** Status for BF Unsquashable apply + clear migrations and current window. */
+export async function blackFridayUnsquashableStatus(env: CommerceEnv) {
+  await ensureOpsSchema(env);
+  const window = blackFridayUnsquashableWindow();
+  const applyRow = await env.DB.prepare('SELECT id, applied_at, details FROM ops_migrations WHERE id = ? LIMIT 1')
+    .bind(BF_UNSQUASHABLE_APPLY_ID)
+    .first<{ id: string; applied_at: string; details: string | null }>();
+  const clearRow = await env.DB.prepare('SELECT id, applied_at, details FROM ops_migrations WHERE id = ? LIMIT 1')
+    .bind(BF_UNSQUASHABLE_CLEAR_ID)
+    .first<{ id: string; applied_at: string; details: string | null }>();
+
+  return json({
+    window,
+    startsAt: new Date(BF_UNSQUASHABLE_START_MS).toISOString(),
+    endsAt: new Date(BF_UNSQUASHABLE_END_MS).toISOString(),
+    skus: [...BF_UNSQUASHABLE_RACKET_SKUS],
+    apply: applyRow
+      ? {
+          applied: true,
+          id: applyRow.id,
+          appliedAt: applyRow.applied_at,
+          details: applyRow.details ? JSON.parse(applyRow.details) : null,
+        }
+      : { applied: false, id: BF_UNSQUASHABLE_APPLY_ID },
+    clear: clearRow
+      ? {
+          applied: true,
+          id: clearRow.id,
+          appliedAt: clearRow.applied_at,
+          details: clearRow.details ? JSON.parse(clearRow.details) : null,
+        }
+      : { applied: false, id: BF_UNSQUASHABLE_CLEAR_ID },
   });
 }
 

@@ -1,9 +1,12 @@
 import {
+	applyBlackFridayUnsquashableDiscount,
 	applyOnsiteSaleOct12026,
 	applyOnsiteSaleOct92026,
 	applyOnsiteSaleOct122026,
 	applySellableCatalogSync,
+	blackFridayUnsquashableStatus,
 	cancelAuditCodProbe,
+	clearBlackFridayUnsquashableDiscount,
 	createStorefrontOrder,
 	listStockMovements,
 	listStorefrontOrders,
@@ -43,6 +46,7 @@ let adminUserReady = false;
 let onsiteSaleOct1Attempted = false;
 let onsiteSaleOct9Attempted = false;
 let onsiteSaleOct12Attempted = false;
+let blackFridayUnsquashableAttempted = false;
 let auditCodCancelAttempted = false;
 let sellableCatalogPumpRunning = false;
 
@@ -190,6 +194,26 @@ async function maybeApplyOnsiteSaleOct12(env: WorkerEnvironment) {
 	}
 }
 
+/** Date-gated BF Unsquashable 10%: apply while live, clear after Mon 16 Sofia. */
+async function maybeApplyBlackFridayUnsquashable(env: WorkerEnvironment) {
+	if (blackFridayUnsquashableAttempted) {
+		return;
+	}
+
+	blackFridayUnsquashableAttempted = true;
+	try {
+		const applyResult = await applyBlackFridayUnsquashableDiscount(env);
+		if (
+			'reason' in applyResult
+			&& (applyResult.reason === 'after-window' || applyResult.reason === 'already-cleared')
+		) {
+			await clearBlackFridayUnsquashableDiscount(env);
+		}
+	} catch {
+		blackFridayUnsquashableAttempted = false;
+	}
+}
+
 async function maybeCancelAuditCod(env: WorkerEnvironment) {
 	if (auditCodCancelAttempted) {
 		return;
@@ -208,6 +232,7 @@ async function maybeApplyOpsMigrations(env: WorkerEnvironment) {
 	await maybeApplyOnsiteSale(env);
 	await maybeApplyOnsiteSaleOct9(env);
 	await maybeApplyOnsiteSaleOct12(env);
+	await maybeApplyBlackFridayUnsquashable(env);
 	await maybeCancelAuditCod(env);
 }
 
@@ -385,6 +410,37 @@ export default {
 					return json(result);
 				} catch (error) {
 					return fail(error instanceof Error ? error.message : 'Onsite sale failed.', 500);
+				}
+			}
+			if (path === '/api/admin/bf-unsquashable' && request.method === 'GET') {
+				await env.DB.exec(schema);
+				try {
+					await maybeApplyBlackFridayUnsquashable(env);
+					return await blackFridayUnsquashableStatus(env);
+				} catch (error) {
+					return fail(error instanceof Error ? error.message : 'Black Friday status failed.', 500);
+				}
+			}
+			if (path === '/api/admin/bf-unsquashable' && request.method === 'POST') {
+				await env.DB.exec(schema);
+				if (!await isAdmin(request, env)) {
+					return fail('Admin role required.', 403);
+				}
+				const body = await request.json<{ action?: string; force?: boolean }>().catch(() => null);
+				const action = text(body?.action, 40) || 'apply';
+				const force = Boolean(body?.force);
+				blackFridayUnsquashableAttempted = false;
+				try {
+					if (action === 'clear') {
+						const result = await clearBlackFridayUnsquashableDiscount(env, { force });
+						blackFridayUnsquashableAttempted = true;
+						return json(result);
+					}
+					const result = await applyBlackFridayUnsquashableDiscount(env, { force });
+					blackFridayUnsquashableAttempted = true;
+					return json(result);
+				} catch (error) {
+					return fail(error instanceof Error ? error.message : 'Black Friday promo failed.', 500);
 				}
 			}
 			return env.ASSETS.fetch(request);
