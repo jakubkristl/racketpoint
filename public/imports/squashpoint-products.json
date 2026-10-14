@@ -9244,8 +9244,8 @@
     "sport": "squash",
     "sub_category": "Footwear",
     "cost_price": 106.37,
-    "selling_price": 189.95,
-    "discount_price": 99.95,
+    "selling_price": 127,
+    "discount_price": null,
     "stock": 12,
     "images": [
       "https://cdn.webshopapp.com/shops/40033/files/487988238/unsquashable-y-tec-pro-120.jpg",

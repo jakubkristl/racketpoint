@@ -1,11 +1,13 @@
 import {
 	applyBlackFridayUnsquashableDiscount,
+	applyCatalogPriceYtecDunlop,
 	applyOnsiteSaleOct12026,
 	applyOnsiteSaleOct92026,
 	applyOnsiteSaleOct122026,
 	applySellableCatalogSync,
 	blackFridayUnsquashableStatus,
 	cancelAuditCodProbe,
+	catalogPriceYtecDunlopStatus,
 	clearBlackFridayUnsquashableDiscount,
 	clearTestAuditOrders,
 	clearTestAuditOrdersStatus,
@@ -48,6 +50,7 @@ let adminUserReady = false;
 let onsiteSaleOct1Attempted = false;
 let onsiteSaleOct9Attempted = false;
 let onsiteSaleOct12Attempted = false;
+let catalogPriceYtecDunlopAttempted = false;
 let blackFridayUnsquashableAttempted = false;
 let auditCodCancelAttempted = false;
 let clearTestAuditOrdersAttempted = false;
@@ -197,6 +200,20 @@ async function maybeApplyOnsiteSaleOct12(env: WorkerEnvironment) {
 	}
 }
 
+/** List-price locks for Y-TEC PRO 120/125 + Dunlop Sonic Core Ultimate 132. */
+async function maybeApplyCatalogPriceYtecDunlop(env: WorkerEnvironment) {
+	if (catalogPriceYtecDunlopAttempted) {
+		return;
+	}
+
+	catalogPriceYtecDunlopAttempted = true;
+	try {
+		await applyCatalogPriceYtecDunlop(env);
+	} catch {
+		catalogPriceYtecDunlopAttempted = false;
+	}
+}
+
 /** Date-gated BF Unsquashable 10%: apply while live, clear after Mon 16 Sofia. */
 async function maybeApplyBlackFridayUnsquashable(env: WorkerEnvironment) {
 	if (blackFridayUnsquashableAttempted) {
@@ -248,6 +265,7 @@ async function maybeApplyOpsMigrations(env: WorkerEnvironment) {
 	await maybeApplyOnsiteSale(env);
 	await maybeApplyOnsiteSaleOct9(env);
 	await maybeApplyOnsiteSaleOct12(env);
+	await maybeApplyCatalogPriceYtecDunlop(env);
 	await maybeApplyBlackFridayUnsquashable(env);
 	await maybeCancelAuditCod(env);
 	await maybeClearTestAuditOrders(env);
@@ -427,6 +445,29 @@ export default {
 					return json(result);
 				} catch (error) {
 					return fail(error instanceof Error ? error.message : 'Onsite sale failed.', 500);
+				}
+			}
+			if (path === '/api/admin/catalog-price-ytec-dunlop' && request.method === 'GET') {
+				await env.DB.exec(schema);
+				try {
+					await maybeApplyCatalogPriceYtecDunlop(env);
+					return await catalogPriceYtecDunlopStatus(env);
+				} catch (error) {
+					return fail(error instanceof Error ? error.message : 'Catalog price status failed.', 500);
+				}
+			}
+			if (path === '/api/admin/catalog-price-ytec-dunlop' && request.method === 'POST') {
+				await env.DB.exec(schema);
+				if (!await isAdmin(request, env)) {
+					return fail('Admin role required.', 403);
+				}
+				catalogPriceYtecDunlopAttempted = false;
+				try {
+					const result = await applyCatalogPriceYtecDunlop(env);
+					catalogPriceYtecDunlopAttempted = true;
+					return json(result);
+				} catch (error) {
+					return fail(error instanceof Error ? error.message : 'Catalog price update failed.', 500);
 				}
 			}
 			if (path === '/api/admin/bf-unsquashable' && request.method === 'GET') {
