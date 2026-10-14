@@ -128,7 +128,7 @@
     "sport": "squash",
     "sub_category": "Rackets",
     "cost_price": 60.5,
-    "selling_price": 95,
+    "selling_price": 132,
     "discount_price": null,
     "stock": 1,
     "images": [
@@ -344,7 +344,7 @@
     "sport": "squash",
     "sub_category": "Rackets",
     "cost_price": 75.02,
-    "selling_price": 95,
+    "selling_price": 147,
     "discount_price": null,
     "stock": 1,
     "images": [

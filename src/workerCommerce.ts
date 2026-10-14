@@ -21,6 +21,31 @@ type ResolvedOrderLine = {
 const ONSITE_SALE_OCT1_ID = 'onsite-sale-2026-10-01';
 const ONSITE_SALE_OCT9_ID = 'onsite-sale-2026-10-09';
 const ONSITE_SALE_OCT12_ID = 'onsite-sale-2026-10-12';
+/** Lock list prices for Y-TEC PRO 120/125 + Dunlop Sonic Core Ultimate 132. */
+const CATALOG_PRICE_YTEC_DUNLOP_ID = 'catalog-price-ytec-dunlop-2026-10-14';
+/**
+ * Retail list price locks (Admin / Jakub 2026-10-14).
+ * Y-TEC PRO 120 has no club POS SKU — live row is Squashpoint `USQR24014`.
+ * Dunlop “Sonic care 132” matches catalog title Dunlop Sonic Core Ultimate 132.
+ * Clears discount_price so BF/Squashpoint promo fields do not undercut list until BF window.
+ */
+export const CATALOG_PRICE_YTEC_DUNLOP_UPDATES = [
+  {
+    sku: 'USQR24014',
+    title: 'UNSQUASHABLE Y-TEC PRO 120',
+    sellingPrice: 127,
+  },
+  {
+    sku: 'POS-unsquashable-y-tec-pro-125',
+    title: 'Unsquashable Y-TEC PRO 125',
+    sellingPrice: 132,
+  },
+  {
+    sku: 'POS-dunlop-sonic-core-ultimate-132',
+    title: 'Dunlop Sonic Core Ultimate 132',
+    sellingPrice: 147,
+  },
+] as const;
 /** Apply 10% Unsquashable racket promo (Bulgarian BF 13–16 Nov 2026 Sofia). */
 const BF_UNSQUASHABLE_APPLY_ID = 'bf-unsquashable-rackets-2026-11';
 /** Clear the same promo after Mon 16 Nov 2026 23:59 Sofia. */
@@ -1064,6 +1089,149 @@ export async function onsiteSaleOct12Status(env: CommerceEnv) {
     id: row.id,
     appliedAt: row.applied_at,
     details: row.details ? JSON.parse(row.details) : null,
+  });
+}
+
+/**
+ * Ensure list selling_price and clear discount_price for the three Jakub price locks.
+ * Re-runs while the ops migration is recorded so catalog-sync cannot wipe list prices.
+ */
+async function ensureCatalogPriceYtecDunlop(
+  env: CommerceEnv,
+): Promise<Array<{
+  sku: string;
+  title: string;
+  sellingBefore: number | null;
+  discountBefore: number | null;
+  sellingAfter: number;
+  missing: boolean;
+}>> {
+  const results: Array<{
+    sku: string;
+    title: string;
+    sellingBefore: number | null;
+    discountBefore: number | null;
+    sellingAfter: number;
+    missing: boolean;
+  }> = [];
+
+  for (const update of CATALOG_PRICE_YTEC_DUNLOP_UPDATES) {
+    const row = await env.DB.prepare(
+      'SELECT id, title, selling_price, discount_price FROM products WHERE id = ? LIMIT 1',
+    )
+      .bind(update.sku)
+      .first<{ id: string; title: string; selling_price: number; discount_price: number | null }>();
+
+    if (!row) {
+      results.push({
+        sku: update.sku,
+        title: update.title,
+        sellingBefore: null,
+        discountBefore: null,
+        sellingAfter: update.sellingPrice,
+        missing: true,
+      });
+      continue;
+    }
+
+    const sellingBefore = Number(row.selling_price);
+    const discountBefore = row.discount_price == null ? null : Number(row.discount_price);
+    await env.DB.prepare(
+      'UPDATE products SET selling_price = ?, discount_price = NULL WHERE id = ?',
+    )
+      .bind(update.sellingPrice, update.sku)
+      .run();
+
+    results.push({
+      sku: update.sku,
+      title: row.title || update.title,
+      sellingBefore,
+      discountBefore,
+      sellingAfter: update.sellingPrice,
+      missing: false,
+    });
+  }
+
+  return results;
+}
+
+/**
+ * Durable ops migration: set Y-TEC PRO 120/125 + Dunlop Sonic Core Ultimate 132 list prices.
+ * Clears discount_price (null until BF 13–16 Nov recalculates Unsquashable rackets from selling).
+ */
+export async function applyCatalogPriceYtecDunlop(env: CommerceEnv) {
+  await ensureOpsSchema(env);
+
+  const already = await env.DB.prepare('SELECT id FROM ops_migrations WHERE id = ? LIMIT 1')
+    .bind(CATALOG_PRICE_YTEC_DUNLOP_ID)
+    .first<{ id: string }>();
+
+  const updates = await ensureCatalogPriceYtecDunlop(env);
+  const missing = updates.filter((row) => row.missing).map((row) => row.sku);
+  if (missing.length > 0) {
+    throw new Error(`Missing product(s) for catalog price update: ${missing.join(', ')}`);
+  }
+
+  const details = JSON.stringify({
+    updates,
+    targets: CATALOG_PRICE_YTEC_DUNLOP_UPDATES,
+  });
+
+  if (already?.id) {
+    await env.DB.prepare('UPDATE ops_migrations SET details = ?, applied_at = ? WHERE id = ?')
+      .bind(details, new Date().toISOString(), CATALOG_PRICE_YTEC_DUNLOP_ID)
+      .run();
+    return { applied: false as const, reason: 'already-applied' as const, reEnsured: true as const, updates };
+  }
+
+  await env.DB.prepare(
+    'INSERT INTO ops_migrations (id, applied_at, details) VALUES (?, ?, ?)',
+  ).bind(CATALOG_PRICE_YTEC_DUNLOP_ID, new Date().toISOString(), details).run();
+
+  return { applied: true as const, updates };
+}
+
+export async function catalogPriceYtecDunlopStatus(env: CommerceEnv) {
+  await ensureOpsSchema(env);
+  const row = await env.DB.prepare('SELECT id, applied_at, details FROM ops_migrations WHERE id = ? LIMIT 1')
+    .bind(CATALOG_PRICE_YTEC_DUNLOP_ID)
+    .first<{ id: string; applied_at: string; details: string | null }>();
+
+  const live: Array<{
+    sku: string;
+    title: string;
+    sellingPrice: number | null;
+    discountPrice: number | null;
+    missing: boolean;
+  }> = [];
+
+  for (const update of CATALOG_PRICE_YTEC_DUNLOP_UPDATES) {
+    const product = await env.DB.prepare(
+      'SELECT id, title, selling_price, discount_price FROM products WHERE id = ? LIMIT 1',
+    )
+      .bind(update.sku)
+      .first<{ id: string; title: string; selling_price: number; discount_price: number | null }>();
+
+    live.push({
+      sku: update.sku,
+      title: product?.title ?? update.title,
+      sellingPrice: product ? Number(product.selling_price) : null,
+      discountPrice: product?.discount_price == null ? null : Number(product.discount_price),
+      missing: !product,
+    });
+  }
+
+  if (!row) {
+    return json({ applied: false, id: CATALOG_PRICE_YTEC_DUNLOP_ID, targets: CATALOG_PRICE_YTEC_DUNLOP_UPDATES, live });
+  }
+
+  return json({
+    applied: true,
+    id: row.id,
+    appliedAt: row.applied_at,
+    details: row.details ? JSON.parse(row.details) : null,
+    targets: CATALOG_PRICE_YTEC_DUNLOP_UPDATES,
+    live,
   });
 }
 

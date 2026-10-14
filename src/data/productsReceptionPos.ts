@@ -135,7 +135,7 @@ const STORE_PRODUCTS: ReceptionPosSeed[] = [
   {
     id: 'unsquashable-y-tec-pro-125',
     name: 'Unsquashable Y-TEC PRO 125',
-    price: 95,
+    price: 132,
     costPrice: 60.5,
     department: 'Racket',
     stockQty: 1,
@@ -207,7 +207,7 @@ const STORE_PRODUCTS: ReceptionPosSeed[] = [
   {
     id: 'dunlop-sonic-core-ultimate-132',
     name: 'Dunlop Sonic Core Ultimate 132',
-    price: 95,
+    price: 147,
     costPrice: 75.02,
     department: 'Racket',
     stockQty: 1,
