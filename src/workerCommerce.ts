@@ -50,6 +50,12 @@ const SELLABLE_CATALOG_PROGRESS_ID = 'sellable-catalog-sync-v1-progress';
 const SELLABLE_CATALOG_CHUNK = 40;
 const AUDIT_COD_CANCEL_ID = 'cancel-audit-ord-cf478810';
 const AUDIT_COD_ORDER_ID = 'ord_cf478810-c17f-462e-99fa-f3b2eefe90df';
+/** Checkout audit (€1) + checkout-unblock verify (Pending/Cancelled probe). */
+const CLEAR_TEST_AUDIT_ORDERS_ID = 'clear-test-audit-orders-2026-10-14';
+const TEST_AUDIT_ORDER_IDS = [
+  'ord_cf478810-c17f-462e-99fa-f3b2eefe90df',
+  'ord_4c06b789-dfc1-4e93-b82d-493c6de1fcab',
+] as const;
 
 function roundMoneyEur(value: number) {
   return Math.round(value * 100) / 100;
@@ -1661,4 +1667,73 @@ export async function cancelAuditCodProbe(env: CommerceEnv) {
     status: 'Cancelled' as const,
     restocked: true as const,
   };
+}
+
+/** Hard-delete known checkout test/audit probe orders so they leave Admin + P&L. */
+export async function clearTestAuditOrders(env: CommerceEnv) {
+  await ensureOpsSchema(env);
+
+  const already = await env.DB.prepare('SELECT id FROM ops_migrations WHERE id = ? LIMIT 1')
+    .bind(CLEAR_TEST_AUDIT_ORDERS_ID)
+    .first<{ id: string }>();
+
+  if (already?.id) {
+    return { applied: false as const, reason: 'already-applied' as const };
+  }
+
+  const deleted: string[] = [];
+  const missing: string[] = [];
+
+  for (const orderId of TEST_AUDIT_ORDER_IDS) {
+    const existing = await env.DB.prepare('SELECT id, status FROM orders WHERE id = ? LIMIT 1')
+      .bind(orderId)
+      .first<{ id: string; status: string }>();
+
+    if (!existing) {
+      missing.push(orderId);
+      continue;
+    }
+
+    await env.DB.prepare('DELETE FROM orders WHERE id = ?').bind(orderId).run();
+    deleted.push(orderId);
+  }
+
+  await env.DB.prepare(
+    'INSERT INTO ops_migrations (id, applied_at, details) VALUES (?, ?, ?)',
+  ).bind(
+    CLEAR_TEST_AUDIT_ORDERS_ID,
+    new Date().toISOString(),
+    JSON.stringify({ deleted, missing, orderIds: [...TEST_AUDIT_ORDER_IDS] }),
+  ).run();
+
+  return {
+    applied: true as const,
+    deleted,
+    missing,
+  };
+}
+
+export async function clearTestAuditOrdersStatus(env: CommerceEnv) {
+  await ensureOpsSchema(env);
+  const row = await env.DB.prepare('SELECT id, applied_at, details FROM ops_migrations WHERE id = ? LIMIT 1')
+    .bind(CLEAR_TEST_AUDIT_ORDERS_ID)
+    .first<{ id: string; applied_at: string; details: string }>();
+
+  const lingering: string[] = [];
+  for (const orderId of TEST_AUDIT_ORDER_IDS) {
+    const existing = await env.DB.prepare('SELECT id FROM orders WHERE id = ? LIMIT 1')
+      .bind(orderId)
+      .first<{ id: string }>();
+    if (existing?.id) {
+      lingering.push(orderId);
+    }
+  }
+
+  return json({
+    id: CLEAR_TEST_AUDIT_ORDERS_ID,
+    applied: Boolean(row?.id),
+    appliedAt: row?.applied_at ?? null,
+    details: row?.details ? JSON.parse(row.details) : null,
+    lingering,
+  });
 }
