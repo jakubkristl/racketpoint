@@ -293,6 +293,11 @@ function AdminPage({ snapshot, onSnapshotChange, isAuthenticated, onAuthChange }
     let soldWithoutCost = 0;
 
     for (const order of snapshot.orders) {
+      // Cancelled/Refunded probes and voids must not distort shop P&L.
+      if (order.status === 'Cancelled' || order.status === 'Refunded') {
+        continue;
+      }
+
       const monthKey = order.createdAt.slice(0, 7);
       let monthProfit = monthlyProfitByMonth.get(monthKey) ?? 0;
 
@@ -342,8 +347,11 @@ function AdminPage({ snapshot, onSnapshotChange, isAuthenticated, onAuthChange }
     };
   }, [snapshot.orders, snapshot.products]);
   const paymentStats = useMemo(() => {
-    const approvedCardOrders = snapshot.orders.filter((order) => order.payment?.provider === 'borica' && order.payment?.status === 'approved');
-    const cashOnDeliveryOrders = snapshot.orders.filter((order) => order.payment?.status === 'cash_on_delivery');
+    const countable = snapshot.orders.filter(
+      (order) => order.status !== 'Cancelled' && order.status !== 'Refunded',
+    );
+    const approvedCardOrders = countable.filter((order) => order.payment?.provider === 'borica' && order.payment?.status === 'approved');
+    const cashOnDeliveryOrders = countable.filter((order) => order.payment?.status === 'cash_on_delivery');
     const approvedVolume = approvedCardOrders.reduce((sum, order) => sum + (order.payment?.amountEur ?? 0), 0);
 
     return {

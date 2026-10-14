@@ -7,6 +7,8 @@ import {
 	blackFridayUnsquashableStatus,
 	cancelAuditCodProbe,
 	clearBlackFridayUnsquashableDiscount,
+	clearTestAuditOrders,
+	clearTestAuditOrdersStatus,
 	createStorefrontOrder,
 	listStockMovements,
 	listStorefrontOrders,
@@ -48,6 +50,7 @@ let onsiteSaleOct9Attempted = false;
 let onsiteSaleOct12Attempted = false;
 let blackFridayUnsquashableAttempted = false;
 let auditCodCancelAttempted = false;
+let clearTestAuditOrdersAttempted = false;
 let sellableCatalogPumpRunning = false;
 
 const schema = `
@@ -227,6 +230,19 @@ async function maybeCancelAuditCod(env: WorkerEnvironment) {
 	}
 }
 
+async function maybeClearTestAuditOrders(env: WorkerEnvironment) {
+	if (clearTestAuditOrdersAttempted) {
+		return;
+	}
+
+	clearTestAuditOrdersAttempted = true;
+	try {
+		await clearTestAuditOrders(env);
+	} catch {
+		clearTestAuditOrdersAttempted = false;
+	}
+}
+
 /** Light migrations only — never block storefront reads on catalog seed. */
 async function maybeApplyOpsMigrations(env: WorkerEnvironment) {
 	await maybeApplyOnsiteSale(env);
@@ -234,6 +250,7 @@ async function maybeApplyOpsMigrations(env: WorkerEnvironment) {
 	await maybeApplyOnsiteSaleOct12(env);
 	await maybeApplyBlackFridayUnsquashable(env);
 	await maybeCancelAuditCod(env);
+	await maybeClearTestAuditOrders(env);
 }
 
 /**
@@ -441,6 +458,29 @@ export default {
 					return json(result);
 				} catch (error) {
 					return fail(error instanceof Error ? error.message : 'Black Friday promo failed.', 500);
+				}
+			}
+			if (path === '/api/admin/clear-test-orders' && request.method === 'GET') {
+				await env.DB.exec(schema);
+				try {
+					await maybeClearTestAuditOrders(env);
+					return await clearTestAuditOrdersStatus(env);
+				} catch (error) {
+					return fail(error instanceof Error ? error.message : 'Clear test orders status failed.', 500);
+				}
+			}
+			if (path === '/api/admin/clear-test-orders' && request.method === 'POST') {
+				await env.DB.exec(schema);
+				if (!await isAdmin(request, env)) {
+					return fail('Admin role required.', 403);
+				}
+				clearTestAuditOrdersAttempted = false;
+				try {
+					const result = await clearTestAuditOrders(env);
+					clearTestAuditOrdersAttempted = true;
+					return json(result);
+				} catch (error) {
+					return fail(error instanceof Error ? error.message : 'Clear test orders failed.', 500);
 				}
 			}
 			return env.ASSETS.fetch(request);
