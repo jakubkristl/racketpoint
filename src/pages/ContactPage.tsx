@@ -50,7 +50,7 @@ function ContactPage() {
             <p className="panel-label">Правни документи</p>
             <h2>Условия и политики</h2>
             <p><Link to="/terms">Общи условия</Link></p>
-            <p><Link to="/returns">Политика за връщане</Link></p>
+            <p><Link to="/return-policy">Политика за връщане</Link></p>
             <p><Link to="/cookies">Политика за бисквитки</Link></p>
             <p><Link to="/privacy">Политика за поверителност</Link></p>
             </article>

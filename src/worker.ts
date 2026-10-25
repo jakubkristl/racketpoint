@@ -21,6 +21,7 @@ import {
 	syncCatalogFromRequest,
 	updateStorefrontOrderStatus,
 } from './workerCommerce';
+import { renderReturnPolicyFallbackHtml } from './data/returnPolicy';
 
 type ProductPayload = {
 	title?: string;
@@ -306,6 +307,43 @@ function scheduleSellableCatalogSync(env: WorkerEnvironment, ctx?: ExecutionCont
 
 const shopInbox = 'jakubkristl77@gmail.com';
 
+async function returnPolicyDocument(request: Request, env: WorkerEnvironment) {
+	const requestUrl = new URL(request.url);
+	if (requestUrl.pathname === '/return-policy/') {
+		requestUrl.pathname = '/return-policy';
+		return Response.redirect(requestUrl.toString(), 301);
+	}
+
+	const assetUrl = new URL(request.url);
+	assetUrl.pathname = '/index.html';
+	assetUrl.search = '';
+	const asset = await env.ASSETS.fetch(new Request(assetUrl.toString(), { method: 'GET' }));
+	if (!asset.ok) {
+		return env.ASSETS.fetch(request);
+	}
+
+	let html = await asset.text();
+	const canonical = '<link rel="canonical" href="https://racketpoint.bg/return-policy" />';
+	if (!html.includes('rel="canonical"')) {
+		html = html.replace('</head>', `${canonical}</head>`);
+	}
+	const fallback = renderReturnPolicyFallbackHtml();
+	const marker = '<div id="root"></div>';
+	const body = html.includes('id="return-policy-noscript"')
+		? html
+		: html.includes(marker)
+			? html.replace(marker, `${marker}\n${fallback}`)
+			: html.replace('</body>', `${fallback}</body>`);
+	const headers = new Headers(asset.headers);
+	headers.delete('content-encoding');
+	headers.delete('content-length');
+	headers.delete('etag');
+	headers.set('content-type', 'text/html; charset=utf-8');
+	headers.set('cache-control', 'no-store');
+	headers.set('content-length', String(encoder.encode(body).byteLength));
+	return new Response(request.method === 'HEAD' ? null : body, { status: 200, headers });
+}
+
 export default {
 	async email(message) {
 		if (!/@racketpoint\.bg$/i.test(message.to)) {
@@ -523,6 +561,9 @@ export default {
 				} catch (error) {
 					return fail(error instanceof Error ? error.message : 'Clear test orders failed.', 500);
 				}
+			}
+			if ((request.method === 'GET' || request.method === 'HEAD') && (path === '/return-policy' || path === '/return-policy/')) {
+				return returnPolicyDocument(request, env);
 			}
 			return env.ASSETS.fetch(request);
 		} catch (error) {

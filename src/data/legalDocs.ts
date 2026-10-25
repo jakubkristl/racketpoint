@@ -318,3 +318,7 @@ export const legalDocuments: LegalDocument[] = [
 export function getLegalDocument(slug: string) {
   return legalDocuments.find((document) => document.slug === slug) ?? null;
 }
+
+export function legalDocumentPath(slug: string) {
+  return slug === 'returns' ? '/return-policy' : `/${slug}`;
+}

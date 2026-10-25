@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { legalCompany, legalDocuments } from '../data/legalDocs';
+import { legalCompany, legalDocumentPath, legalDocuments } from '../data/legalDocs';
 
 type StoreFooterProps = {
   onOpenCookieSettings?: () => void;
@@ -26,7 +26,7 @@ function StoreFooter({ onOpenCookieSettings }: StoreFooterProps) {
         <nav aria-label="Правна информация">
           <p className="eyebrow">Документи</p>
           {legalDocuments.map((document) => (
-            <Link key={document.slug} to={`/${document.slug}`}>{document.title}</Link>
+            <Link key={document.slug} to={legalDocumentPath(document.slug)}>{document.title}</Link>
           ))}
           {onOpenCookieSettings ? (
             <button type="button" className="site-footer-cookie-btn" onClick={onOpenCookieSettings}>

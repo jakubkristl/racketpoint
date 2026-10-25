@@ -1,5 +1,5 @@
 import { Link, Navigate, useLocation } from 'react-router-dom';
-import { getLegalDocument, legalCompany, legalDocuments } from '../data/legalDocs';
+import { getLegalDocument, legalCompany, legalDocumentPath, legalDocuments } from '../data/legalDocs';
 
 function LegalPage() {
   const location = useLocation();
@@ -23,7 +23,7 @@ function LegalPage() {
             <Link
               key={item.slug}
               className={item.slug === document.slug ? 'legal-doc-link active' : 'legal-doc-link'}
-              to={`/${item.slug}`}
+              to={legalDocumentPath(item.slug)}
             >
               {item.title}
             </Link>
