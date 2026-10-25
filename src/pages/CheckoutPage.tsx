@@ -298,7 +298,7 @@ function CheckoutPage({ products, lines, onIncrement, onDecrement, onRemove, onC
                 required
               />
               <span>
-                Съгласен съм с <Link to="/terms">Общите условия</Link>, <Link to="/returns">Политиката за връщане</Link> и <Link to="/privacy">Политиката за поверителност</Link>.
+                Съгласен съм с <Link to="/terms">Общите условия</Link>, <Link to="/return-policy">Политиката за връщане</Link> и <Link to="/privacy">Политиката за поверителност</Link>.
               </span>
             </label>
             <button className="button button-primary" type="submit" disabled={cartItems.length === 0}>

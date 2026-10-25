@@ -19,6 +19,7 @@ import CookieConsent from './components/CookieConsent';
 import StoreFooter from './components/StoreFooter';
 import StoreHeader from './components/StoreHeader';
 import LegalPage from './pages/LegalPage';
+import ReturnPolicyPage from './pages/ReturnPolicyPage';
 import ProductDetailPage from './pages/ProductDetailPage';
 import FavoritesPage from './pages/FavoritesPage';
 import CheckoutPage from './pages/CheckoutPage';
@@ -124,7 +125,7 @@ function App() {
   const isAccountRoute = location.pathname.startsWith('/account');
   const isPaymentResultRoute = location.pathname.startsWith('/payments/borica/result');
   const isCheckoutRoute = location.pathname.startsWith('/checkout');
-  const isLegalRoute = ['/terms', '/returns', '/cookies', '/privacy'].includes(location.pathname);
+  const isLegalRoute = ['/terms', '/returns', '/return-policy', '/cookies', '/privacy'].includes(location.pathname);
   const isNotFoundRoute = !['/', '/account', '/contact', '/forgot-password', '/reset-password', '/verify-email'].includes(location.pathname)
     && !isLegalRoute
     && !location.pathname.startsWith('/category/')
@@ -325,7 +326,8 @@ function App() {
         <Route path="/verify-email" element={<VerifyEmailPage />} />
         <Route path="/contact" element={<ContactPage />} />
         <Route path="/terms" element={<LegalPage />} />
-        <Route path="/returns" element={<LegalPage />} />
+        <Route path="/returns" element={<Navigate replace to="/return-policy" />} />
+        <Route path="/return-policy" element={<ReturnPolicyPage />} />
         <Route path="/cookies" element={<LegalPage />} />
         <Route path="/privacy" element={<LegalPage />} />
         <Route path="/payments/borica/result" element={<PaymentResultPage onBoricaApproved={handleBoricaApproved} />} />

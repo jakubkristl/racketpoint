@@ -3155,6 +3155,22 @@ button {
   text-decoration: underline;
 }
 
+.legal-lang + .legal-lang {
+  margin-top: 12px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+}
+
+.legal-lang > h2 {
+  margin: 0;
+  font-size: clamp(2rem, 4vw, 3.2rem);
+  letter-spacing: -0.03em;
+}
+
+.legal-lang .intro {
+  margin: 0;
+}
+
 .site-footer {
   margin-top: 24px;
   background: #11161f;
