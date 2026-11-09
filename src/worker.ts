@@ -22,6 +22,7 @@ import {
 	updateStorefrontOrderStatus,
 } from './workerCommerce';
 import { renderReturnPolicyFallbackHtml } from './data/returnPolicy';
+import { canonicalHrefForPath, withCanonical, wwwRedirectTarget } from './shopCanonical';
 
 type ProductPayload = {
 	title?: string;
@@ -322,11 +323,7 @@ async function returnPolicyDocument(request: Request, env: WorkerEnvironment) {
 		return env.ASSETS.fetch(request);
 	}
 
-	let html = await asset.text();
-	const canonical = '<link rel="canonical" href="https://racketpoint.bg/return-policy" />';
-	if (!html.includes('rel="canonical"')) {
-		html = html.replace('</head>', `${canonical}</head>`);
-	}
+	let html = withCanonical(await asset.text(), 'https://racketpoint.bg/return-policy');
 	const fallback = renderReturnPolicyFallbackHtml();
 	const marker = '<div id="root"></div>';
 	const body = html.includes('id="return-policy-noscript"')
@@ -344,6 +341,26 @@ async function returnPolicyDocument(request: Request, env: WorkerEnvironment) {
 	return new Response(request.method === 'HEAD' ? null : body, { status: 200, headers });
 }
 
+/** Apex homepage only. Other routes keep their own document and are not marked as this URL. */
+async function homepageDocument(request: Request, env: WorkerEnvironment) {
+	const assetUrl = new URL(request.url);
+	assetUrl.pathname = '/index.html';
+	assetUrl.search = '';
+	const asset = await env.ASSETS.fetch(new Request(assetUrl.toString(), { method: 'GET' }));
+	if (!asset.ok) {
+		return env.ASSETS.fetch(request);
+	}
+
+	const html = withCanonical(await asset.text(), 'https://racketpoint.bg/');
+	const headers = new Headers(asset.headers);
+	headers.delete('content-encoding');
+	headers.delete('content-length');
+	headers.delete('etag');
+	headers.set('content-type', 'text/html; charset=utf-8');
+	headers.set('content-length', String(encoder.encode(html).byteLength));
+	return new Response(request.method === 'HEAD' ? null : html, { status: 200, headers });
+}
+
 export default {
 	async email(message) {
 		if (!/@racketpoint\.bg$/i.test(message.to)) {
@@ -355,7 +372,13 @@ export default {
 	},
 	async fetch(request, env: WorkerEnvironment, ctx) {
 		try {
-			const path = new URL(request.url).pathname;
+			const preferred = wwwRedirectTarget(request.url);
+			if (preferred) {
+				return Response.redirect(preferred, 301);
+			}
+
+			const requestUrl = new URL(request.url);
+			const path = requestUrl.pathname;
 			if (path === '/api/auth/register' && request.method === 'POST') {
 				await env.DB.exec(schema);
 				await ensureAdminUser(env);
@@ -564,6 +587,13 @@ export default {
 			}
 			if ((request.method === 'GET' || request.method === 'HEAD') && (path === '/return-policy' || path === '/return-policy/')) {
 				return returnPolicyDocument(request, env);
+			}
+			if (
+				(request.method === 'GET' || request.method === 'HEAD')
+				&& requestUrl.hostname === 'racketpoint.bg'
+				&& canonicalHrefForPath(path)
+			) {
+				return homepageDocument(request, env);
 			}
 			return env.ASSETS.fetch(request);
 		} catch (error) {

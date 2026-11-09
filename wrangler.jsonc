@@ -6,7 +6,9 @@
 	"assets": {
 		"directory": "./dist",
 		"binding": "ASSETS",
-		"not_found_handling": "single-page-application"
+		"not_found_handling": "single-page-application",
+		// `/` is a static asset, so the worker never saw it. The homepage canonical and the www→apex 301 have to run first.
+		"run_worker_first": ["/"]
 	},
 	"d1_databases": [
 		{
