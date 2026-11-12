@@ -1235,6 +1235,175 @@ export async function catalogPriceYtecDunlopStatus(env: CommerceEnv) {
   });
 }
 
+const SQUASHPOINT_INVOICE_248151_ID = 'squashpoint-invoice-248151-2026-11-12';
+
+const FAST_TEC_DESCRIPTION_BG = 'Обувка за скуош UNSQUASHABLE FAST-TEC PRO — най-лекият и най-нисък модел в серията. Разработена заедно с топ играчи, сред които Мигел Родригес, за бързо ускорение и контрол във всяка посока. Ултралеката горна част и Carbon Torsion Unit дават стабилност, без да отнемат гъвкавост. Тънката междинна подметка Speed-Tec държи стъпалото близо до пода, а U-FOAM омекотява петата и предната част. Подметката AbraZone с хексагонална шарка и заоблена пета осигурява сцепление при смяна на посоката. Размер от доставката: EU 43,5 (27,5 см).';
+
+const RECOIL_ULTRA_DESCRIPTION_BG = 'Зала обувка Salming Recoil Ultra в бяло. Държи петата и средното стъпало стабилни, с мека яка и връзки за личен фит. Междинната подметка Recoil+ връща енергия и пази баланса между омекотяване и пъргавина. Подметката Hexagrip+ със заоблени ръбове държи на закрит под, а каналите отпред следват движението на стъпалото. Подходяща за скуош, волейбол, хандбал и бадминтон. Размер от доставката: EU 44 (28 см).';
+
+const HEAD_WRISTBAND_DESCRIPTION_BG = 'Лента за китка Head 2,5" (6,4 см), комплект от 2 броя. Попива потта по време на игра и дава допълнителна стабилност на китката. Лека и удобна. Материал: 90% найлон / 10% еластан. Цветове от доставката: бял, антрацит, червен, оранжев и LN.';
+
+const CYBER_TOUR_DESCRIPTION_BG = 'Ракета за скуош Head Cyber Tour за нови и любителски играчи. Капковидна глава и свеж дизайн. Най-лекият модел в линията Cyber. Технологията Amplified Fibre прави рамката по-твърда и добавя мощност, а балансът към главата помага при атакуващи удари. Кордаж 12x17, глава 500 см², тегло на рамката 160 гр, дължина 68,5 см. Доставя се с опънат кордаж, без калъф.';
+
+/**
+ * Squashpoint invoice 248151 (9 Nov 2026). Jakub's sell prices override the invoice.
+ * Existing Fast-tec, Recoil Ultra White, and Head wristband rows are updated in place.
+ * Head Cyber Tour (213054) is inserted. Stock is the invoice quantity; Fast-tec stock
+ * is left as already recorded because that pair is already the club listing.
+ */
+export async function applySquashpointInvoice248151(env: CommerceEnv) {
+  await ensureOpsSchema(env);
+
+  const already = await env.DB.prepare('SELECT id FROM ops_migrations WHERE id = ? LIMIT 1')
+    .bind(SQUASHPOINT_INVOICE_248151_ID)
+    .first<{ id: string }>();
+
+  if (already?.id) {
+    return { applied: false as const, reason: 'already-applied' as const };
+  }
+
+  const fastTec = await env.DB.prepare('SELECT id FROM products WHERE id = ? LIMIT 1')
+    .bind('POS-unsquashable-fast-tec-pro-shoe')
+    .first<{ id: string }>();
+  if (fastTec?.id) {
+    await env.DB.prepare(
+      `UPDATE products SET description = ?, selling_price = ?, cost_price = ?, discount_price = NULL WHERE id = ?`,
+    ).bind(FAST_TEC_DESCRIPTION_BG, 95, 66, 'POS-unsquashable-fast-tec-pro-shoe').run();
+  }
+
+  const recoil = await env.DB.prepare('SELECT id FROM products WHERE id = ? LIMIT 1')
+    .bind('1233072-0707-4400')
+    .first<{ id: string }>();
+  if (recoil?.id) {
+    await env.DB.prepare(
+      `UPDATE products SET description = ?, selling_price = ?, cost_price = ?, discount_price = NULL, stock = ? WHERE id = ?`,
+    ).bind(RECOIL_ULTRA_DESCRIPTION_BG, 100, 66, 1, '1233072-0707-4400').run();
+  }
+
+  const wristbandImages = JSON.stringify([
+    'https://cdn.webshopapp.com/shops/40033/files/177634211/head-wristband-25-2-pack-white.jpg',
+  ]);
+  const wristbandAttrs = JSON.stringify({
+    source: 'squashpoint.com',
+    articleCode: '285050',
+  });
+  const wristband = await env.DB.prepare('SELECT id FROM products WHERE id = ? LIMIT 1')
+    .bind('285050')
+    .first<{ id: string }>();
+  if (wristband?.id) {
+    await env.DB.prepare(
+      `UPDATE products SET title = ?, description = ?, selling_price = ?, cost_price = ?, discount_price = NULL, stock = ?, images = ?, attributes = ? WHERE id = ?`,
+    ).bind(
+      'Head Wristband 2,5" - 2 Pack',
+      HEAD_WRISTBAND_DESCRIPTION_BG,
+      10,
+      5,
+      10,
+      wristbandImages,
+      wristbandAttrs,
+      '285050',
+    ).run();
+  } else {
+    await env.DB.prepare(
+      `INSERT INTO products (
+        id, title, slug, description, brand, sport, sub_category,
+        cost_price, selling_price, discount_price, stock, images, attributes, sizes,
+        weight_grams, balance, rating, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).bind(
+      '285050',
+      'Head Wristband 2,5" - 2 Pack',
+      'head-wristband-25-2-pack-285050',
+      HEAD_WRISTBAND_DESCRIPTION_BG,
+      'Head',
+      'squash',
+      'Grips',
+      5,
+      10,
+      null,
+      10,
+      wristbandImages,
+      wristbandAttrs,
+      '[]',
+      null,
+      null,
+      4.5,
+      new Date().toISOString(),
+    ).run();
+  }
+
+  const cyberImages = JSON.stringify(['/imports/product-images/head-cyber-tour.jpg']);
+  const cyberAttrs = JSON.stringify({
+    source: 'squashpoint-invoice',
+    articleCode: '213054',
+  });
+  const cyber = await env.DB.prepare('SELECT id FROM products WHERE id = ? LIMIT 1')
+    .bind('213054')
+    .first<{ id: string }>();
+  if (cyber?.id) {
+    await env.DB.prepare(
+      `UPDATE products SET title = ?, description = ?, brand = ?, sport = ?, sub_category = ?, cost_price = ?, selling_price = ?, discount_price = NULL, stock = ?, images = ?, attributes = ?, weight_grams = ?, balance = ? WHERE id = ?`,
+    ).bind(
+      'Head Cyber Tour',
+      CYBER_TOUR_DESCRIPTION_BG,
+      'Head',
+      'squash',
+      'Rackets',
+      31.2,
+      49,
+      10,
+      cyberImages,
+      cyberAttrs,
+      160,
+      'Head-heavy',
+      '213054',
+    ).run();
+  } else {
+    await env.DB.prepare(
+      `INSERT INTO products (
+        id, title, slug, description, brand, sport, sub_category,
+        cost_price, selling_price, discount_price, stock, images, attributes, sizes,
+        weight_grams, balance, rating, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).bind(
+      '213054',
+      'Head Cyber Tour',
+      'head-cyber-tour-213054',
+      CYBER_TOUR_DESCRIPTION_BG,
+      'Head',
+      'squash',
+      'Rackets',
+      31.2,
+      49,
+      null,
+      10,
+      cyberImages,
+      cyberAttrs,
+      '[]',
+      160,
+      'Head-heavy',
+      4.5,
+      new Date().toISOString(),
+    ).run();
+  }
+
+  const details = JSON.stringify({
+    invoice: '248151',
+    products: [
+      { sku: 'POS-unsquashable-fast-tec-pro-shoe', sellingPrice: 95, updatedExisting: Boolean(fastTec?.id) },
+      { sku: '1233072-0707-4400', sellingPrice: 100, stock: 1, updatedExisting: Boolean(recoil?.id) },
+      { sku: '285050', sellingPrice: 10, stock: 10, updatedExisting: Boolean(wristband?.id) },
+      { sku: '213054', sellingPrice: 49, stock: 10, costPrice: 31.2 },
+    ],
+  });
+
+  await env.DB.prepare(
+    'INSERT INTO ops_migrations (id, applied_at, details) VALUES (?, ?, ?)',
+  ).bind(SQUASHPOINT_INVOICE_248151_ID, new Date().toISOString(), details).run();
+
+  return { applied: true as const, id: SQUASHPOINT_INVOICE_248151_ID };
+}
+
 /**
  * Bulgarian Black Friday: set discount_price = round(selling_price × 0.9, 2) on all 13
  * Unsquashable racket SKUs. Leaves selling_price / cost_price unchanged.

@@ -87,6 +87,7 @@ type ReceptionPosSeed = {
   department: 'Racket' | 'Grips' | 'Apparel' | 'Balls';
   stockQty: number;
   featured?: boolean;
+  descriptionBg?: string;
 };
 
 const STORE_PRODUCTS: ReceptionPosSeed[] = [
@@ -285,6 +286,7 @@ const STORE_PRODUCTS: ReceptionPosSeed[] = [
     costPrice: 66,
     department: 'Apparel',
     stockQty: 1,
+    descriptionBg: 'Обувка за скуош UNSQUASHABLE FAST-TEC PRO — най-лекият и най-нисък модел в серията. Разработена заедно с топ играчи, сред които Мигел Родригес, за бързо ускорение и контрол във всяка посока. Ултралеката горна част и Carbon Torsion Unit дават стабилност, без да отнемат гъвкавост. Тънката междинна подметка Speed-Tec държи стъпалото близо до пода, а U-FOAM омекотява петата и предната част. Подметката AbraZone с хексагонална шарка и заоблена пета осигурява сцепление при смяна на посоката. Размер от доставката: EU 43,5 (27,5 см).',
   },
   {
     id: 'unsquashable-tour-tec-pro-backpack',
@@ -499,9 +501,10 @@ export const receptionPosProducts: Product[] = STORE_PRODUCTS.map((item) => {
     price: `€${item.price.toFixed(2)}`,
     priceEur: item.price,
     costEur: item.costPrice,
-    details: 'Налична бройка в клуба Double Yellow. Може да се вземе на място или да се поръча за доставка.',
-    detailsBg: 'Налична бройка в клуба Double Yellow. Може да се вземе на място или да се поръча за доставка.',
-    description: item.name,
+    details: item.descriptionBg ?? 'Налична бройка в клуба Double Yellow. Може да се вземе на място или да се поръча за доставка.',
+    detailsBg: item.descriptionBg ?? 'Налична бройка в клуба Double Yellow. Може да се вземе на място или да се поръча за доставка.',
+    description: item.descriptionBg ?? item.name,
+    descriptionBg: item.descriptionBg,
     badges: item.featured ? ['На склад', 'Хит'] : ['На склад'],
     imageUrl: posImageUrl(item),
     stock,
