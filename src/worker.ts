@@ -1,6 +1,7 @@
 import {
 	applyBlackFridayUnsquashableDiscount,
 	applyCatalogPriceYtecDunlop,
+	applySquashpointInvoice248151,
 	applyOnsiteSaleOct12026,
 	applyOnsiteSaleOct92026,
 	applyOnsiteSaleOct122026,
@@ -53,6 +54,7 @@ let onsiteSaleOct1Attempted = false;
 let onsiteSaleOct9Attempted = false;
 let onsiteSaleOct12Attempted = false;
 let catalogPriceYtecDunlopAttempted = false;
+let squashpointInvoice248151Attempted = false;
 let blackFridayUnsquashableAttempted = false;
 let auditCodCancelAttempted = false;
 let clearTestAuditOrdersAttempted = false;
@@ -202,6 +204,20 @@ async function maybeApplyOnsiteSaleOct12(env: WorkerEnvironment) {
 	}
 }
 
+/** Squashpoint invoice 248151: Jakub's sell prices and the new Head Cyber Tour. */
+async function maybeApplySquashpointInvoice248151(env: WorkerEnvironment) {
+	if (squashpointInvoice248151Attempted) {
+		return;
+	}
+
+	squashpointInvoice248151Attempted = true;
+	try {
+		await applySquashpointInvoice248151(env);
+	} catch {
+		squashpointInvoice248151Attempted = false;
+	}
+}
+
 /** List-price locks for Y-TEC PRO 120/125 + Dunlop Sonic Core Ultimate 132. */
 async function maybeApplyCatalogPriceYtecDunlop(env: WorkerEnvironment) {
 	if (catalogPriceYtecDunlopAttempted) {
@@ -268,6 +284,7 @@ async function maybeApplyOpsMigrations(env: WorkerEnvironment) {
 	await maybeApplyOnsiteSaleOct9(env);
 	await maybeApplyOnsiteSaleOct12(env);
 	await maybeApplyCatalogPriceYtecDunlop(env);
+	await maybeApplySquashpointInvoice248151(env);
 	await maybeApplyBlackFridayUnsquashable(env);
 	await maybeCancelAuditCod(env);
 	await maybeClearTestAuditOrders(env);

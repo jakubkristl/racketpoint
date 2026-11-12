@@ -89,13 +89,21 @@ function CategoryRoute({
 
 function ProductRoute({
   snapshot,
+  catalogReady,
   onAddToCart,
 }: {
   snapshot: StoreSnapshot;
+  catalogReady: boolean;
   onAddToCart: (sku: string) => void;
 }) {
   const { sku } = useParams();
   const product = snapshot.products.find((item) => item.sku === sku);
+
+  // The squashpoint catalog arrives after the first paint. Redirecting before that
+  // sends a real product URL back to the homepage.
+  if (!product && !catalogReady) {
+    return <main className="page-shell"><p>Зареждане...</p></main>;
+  }
 
   if (!product) {
     return <Navigate replace to="/" />;
@@ -116,6 +124,7 @@ function FavoritesRoute({
 
 function App() {
   const [store, setStore] = useState<StoreSnapshot>(() => getStoreSnapshot());
+  const [catalogReady, setCatalogReady] = useState(false);
   const [isAdminAuthed, setIsAdminAuthed] = useState(() => isAdminAuthenticated());
   const [cartLines, setCartLines] = useState<CartLine[]>(() => loadCartLines());
   const [cookieSettingsOpen, setCookieSettingsOpen] = useState(false);
@@ -145,6 +154,7 @@ function App() {
       const snapshot = await loadStoreSnapshot().catch(() => getStoreSnapshot());
       if (!canceled) {
         setStore(snapshot);
+        setCatalogReady(true);
       }
     }
 
@@ -305,7 +315,7 @@ function App() {
           }
         />
         <Route path="/category/:slug" element={<CategoryRoute snapshot={store} onAddToCart={handleAddToCart} />} />
-        <Route path="/product/:sku" element={<ProductRoute snapshot={store} onAddToCart={handleAddToCart} />} />
+        <Route path="/product/:sku" element={<ProductRoute snapshot={store} catalogReady={catalogReady} onAddToCart={handleAddToCart} />} />
         <Route path="/favorites" element={<FavoritesRoute snapshot={store} onAddToCart={handleAddToCart} />} />
         <Route
           path="/checkout"
