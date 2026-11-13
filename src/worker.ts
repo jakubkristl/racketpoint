@@ -3,9 +3,11 @@ import {
 	applyCatalogPriceYtecDunlop,
 	applyShopPriceMatch,
 	applySquashpointInvoice248151,
+	applySquashpointInvoice247673,
 	applyOnsiteSaleOct12026,
 	applyOnsiteSaleOct92026,
 	applyOnsiteSaleOct122026,
+	applyOnsiteSaleNov132026,
 	applySellableCatalogSync,
 	blackFridayUnsquashableStatus,
 	cancelAuditCodProbe,
@@ -16,9 +18,11 @@ import {
 	createStorefrontOrder,
 	listStockMovements,
 	listStorefrontOrders,
+	invoice247673Status,
 	onsiteSaleOct1Status,
 	onsiteSaleOct9Status,
 	onsiteSaleOct12Status,
+	onsiteSaleNov13Status,
 	paymentGatewaysResponse,
 	syncCatalogFromRequest,
 	updateStorefrontOrderStatus,
@@ -54,6 +58,8 @@ let adminUserReady = false;
 let onsiteSaleOct1Attempted = false;
 let onsiteSaleOct9Attempted = false;
 let onsiteSaleOct12Attempted = false;
+let onsiteSaleNov13Attempted = false;
+let squashpointInvoice247673Attempted = false;
 let catalogPriceYtecDunlopAttempted = false;
 let shopPriceMatchAttempted = false;
 let squashpointInvoice248151Attempted = false;
@@ -207,6 +213,32 @@ async function maybeApplyOnsiteSaleOct12(env: WorkerEnvironment) {
 }
 
 /** Squashpoint invoice 248151: Jakub's sell prices and the new Head Cyber Tour. */
+async function maybeApplyOnsiteSaleNov13(env: WorkerEnvironment) {
+	if (onsiteSaleNov13Attempted) {
+		return;
+	}
+
+	onsiteSaleNov13Attempted = true;
+	try {
+		await applyOnsiteSaleNov132026(env);
+	} catch {
+		onsiteSaleNov13Attempted = false;
+	}
+}
+
+async function maybeApplySquashpointInvoice247673(env: WorkerEnvironment) {
+	if (squashpointInvoice247673Attempted) {
+		return;
+	}
+
+	squashpointInvoice247673Attempted = true;
+	try {
+		await applySquashpointInvoice247673(env);
+	} catch {
+		squashpointInvoice247673Attempted = false;
+	}
+}
+
 async function maybeApplySquashpointInvoice248151(env: WorkerEnvironment) {
 	if (squashpointInvoice248151Attempted) {
 		return;
@@ -301,6 +333,8 @@ async function maybeApplyOpsMigrations(env: WorkerEnvironment) {
 	await maybeApplyOnsiteSaleOct12(env);
 	await maybeApplyCatalogPriceYtecDunlop(env);
 	await maybeApplySquashpointInvoice248151(env);
+	await maybeApplySquashpointInvoice247673(env);
+	await maybeApplyOnsiteSaleNov13(env);
 	await maybeApplyShopPriceMatch(env);
 	await maybeApplyBlackFridayUnsquashable(env);
 	await maybeCancelAuditCod(env);
@@ -537,6 +571,56 @@ export default {
 				try {
 					const result = await applyOnsiteSaleOct122026(env);
 					onsiteSaleOct12Attempted = true;
+					return json(result);
+				} catch (error) {
+					return fail(error instanceof Error ? error.message : 'Onsite sale failed.', 500);
+				}
+			}
+			if (path === '/api/admin/invoice-247673' && request.method === 'GET') {
+				await env.DB.exec(schema);
+				try {
+					await maybeApplySquashpointInvoice247673(env);
+					return await invoice247673Status(env);
+				} catch (error) {
+					return fail(error instanceof Error ? error.message : 'Invoice status failed.', 500);
+				}
+			}
+			if (path === '/api/admin/invoice-247673' && request.method === 'POST') {
+				await env.DB.exec(schema);
+				if (!await isAdmin(request, env)) {
+					return fail('Admin role required.', 403);
+				}
+				squashpointInvoice247673Attempted = false;
+				try {
+					const result = await applySquashpointInvoice247673(env);
+					squashpointInvoice247673Attempted = true;
+					return json(result);
+				} catch (error) {
+					return fail(error instanceof Error ? error.message : 'Invoice apply failed.', 500);
+				}
+			}
+			if (path === '/api/admin/onsite-sale-nov13' && request.method === 'GET') {
+				await env.DB.exec(schema);
+				try {
+					await maybeApplySquashpointInvoice247673(env);
+					await maybeApplyOnsiteSaleNov13(env);
+					return await onsiteSaleNov13Status(env);
+				} catch (error) {
+					return fail(error instanceof Error ? error.message : 'Onsite sale status failed.', 500);
+				}
+			}
+			if (path === '/api/admin/onsite-sale-nov13' && request.method === 'POST') {
+				await env.DB.exec(schema);
+				if (!await isAdmin(request, env)) {
+					return fail('Admin role required.', 403);
+				}
+				squashpointInvoice247673Attempted = false;
+				onsiteSaleNov13Attempted = false;
+				try {
+					await applySquashpointInvoice247673(env);
+					squashpointInvoice247673Attempted = true;
+					const result = await applyOnsiteSaleNov132026(env);
+					onsiteSaleNov13Attempted = true;
 					return json(result);
 				} catch (error) {
 					return fail(error instanceof Error ? error.message : 'Onsite sale failed.', 500);

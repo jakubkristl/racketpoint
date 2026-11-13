@@ -8594,14 +8594,14 @@
     "id": "USQG21001W6",
     "title": "UNSQUASHABLE TOUR-TEC PRO PU Grip - 6 Pack",
     "slug": "unsquashable-tour-tec-pro-pu-grip-pack.html",
-    "description": "UNSQUASHABLE TOUR-TEC PRO PU Grip - 6 Pack\n The UNSQUASHABLE TOUR-TEC PRO PU Grip offers an exceptional balance of performance and comfort, making it a top choice for serious squash players. Similar in quality and feel to Karakal's renowned PU Super Grip, this grip stands out with its slightly thinner profile, measuring just 1,6 mm. This subtle difference enhances your connection to the racket, providing superior feel and precision without sacrificing comfort. Whether you're delivering powerful drives or delicate drop shots, this grip ensures you maintain control and responsiveness throughout your game.\n\nCrafted from high-quality materials, the UNSQUASHABLE TOUR-TEC PRO PU Grip is designed to withstand the rigors of intense play. Its durability ensures a long lifespan, allowing you to focus on your performance without the worry of frequent replacements. This makes it a reliable choice for players who demand consistency and longevity from their equipment. The grip’s excellent moisture absorption properties further enhance your grip, even during the most demanding matches, keeping your racket secure in your hand.\n\nBesides its impressive performance, the UNSQUASHABLE TOUR-TEC PRO PU Grip is also an environmentally conscious choice. The six grips come in recycled cardboard packaging, reflecting Unsquashable's commitment to sustainability.\n\nSuitable for squash\n Packing unit 6 replacement grips\n Colour white",
+    "description": "Комплект от 6 броя резервни грипове UNSQUASHABLE TOUR-TEC PRO PU за скуош. Тънък профил 1,6 мм за по-добър усет, попива влагата и държи хвата стабилен при дълъг мач. Бял цвят, опаковка от рециклиран картон.",
     "brand": "Unsquashable",
     "sport": "squash",
     "sub_category": "Grips",
-    "cost_price": 16.77,
+    "cost_price": 10.95,
     "selling_price": 29.95,
     "discount_price": 14.95,
-    "stock": 12,
+    "stock": 22,
     "images": [
       "https://cdn.webshopapp.com/shops/40033/files/463951897/unsquashable-tour-tec-pro-pu-grip-6-pack.jpg",
       "https://cdn.webshopapp.com/shops/40033/themes/162415/v/178121/assets/favicon.png",
@@ -9237,14 +9237,14 @@
     "id": "USQR24014",
     "title": "UNSQUASHABLE Y-TEC PRO 120",
     "slug": "unsquashable-y-tec-pro-120.html",
-    "description": "UNSQUASHABLE Y-TEC PRO 120\n The UNSQUASHABLE Y-TEC PRO 120 is built for players who set the pace—not follow it. This racket reacts instantly to every impulse, giving you the feeling of being one step ahead during high-intensity rallies. Its 120-gram construction offers a wonderfully light, floating sensation without sacrificing impact.\n\nThe strength of the UNSQUASHABLE Y-TEC PRO 120 lies in its balance of explosive power and refined control. The aerodynamic PowerProfile frame cuts through air resistance, allowing your swings to accelerate naturally. Drops, kills, and counter-attacks stay effortlessly precise, while your drives retain surprising depth and power.\n\nThanks to its PowerCore construction, the UNSQUASHABLE Y-TEC PRO 120 feels solid and stable on every contact. The 500 cm² head and 14x18 string pattern give you just the right blend of forgiveness and bite on the ball. With the UNSQUASHABLE Y-TEC PRO 120, you step onto court with total confidence.\n\nFrame weight 120 grams\n Construction graphite / PowerCore\n Technology PowerProfile\n Length 68,5 cm\n Balance head light\n Head size 500 cm2\n String pattern 14 x 18\n String DuraFibre 1,20 mm\n Grip TOUR-TEC PRO PU\n Racket cover no\n Colour black / white\n Player level expert",
+    "description": "Ракета за скуош UNSQUASHABLE Y-TEC PRO 120 за напреднали играчи. Рамка 120 грама от графит с PowerCore и PowerProfile, баланс към дръжката. Глава 500 см², кордаж 14x18, дължина 68,5 см, корда DuraFibre 1,20 мм, грип TOUR-TEC PRO PU. Цвят черен / бял. Без калъф.",
     "brand": "Unsquashable",
     "sport": "squash",
     "sub_category": "Footwear",
-    "cost_price": 106.37,
+    "cost_price": 54,
     "selling_price": 127,
     "discount_price": null,
-    "stock": 12,
+    "stock": 28,
     "images": [
       "https://cdn.webshopapp.com/shops/40033/files/487988238/unsquashable-y-tec-pro-120.jpg",
       "https://cdn.webshopapp.com/shops/40033/themes/162415/v/178121/assets/favicon.png",
@@ -27969,6 +27969,33 @@
     "weight_grams": 160,
     "weightGrams": 160,
     "balance": "Head-heavy",
+    "rating": 4.5
+  },
+  {
+    "id": "214152",
+    "title": "Head Radical Junior",
+    "slug": "head-radical-junior-214152",
+    "description": "Детска ракета за скуош Head Radical Junior за начинаещи и юноши. Алуминиева рамка с покритие Nano Titanium за стабилност. Тегло 175 гр, глава 485 см², кордаж 14x19, баланс към дръжката, профил 19 мм. Фабрично опъната със синтетична корда, грип Cushion Grip размер 06. Цвят оранжев / сребро.",
+    "brand": "Head",
+    "sport": "squash",
+    "sub_category": "Rackets",
+    "cost_price": 20,
+    "selling_price": 49,
+    "discount_price": null,
+    "stock": 9,
+    "images": [
+      "/imports/product-images/head-radical-junior.jpg"
+    ],
+    "attributes": {
+      "source": "squashpoint-invoice",
+      "articleCode": "214152",
+      "invoice": "247673",
+      "order": "102170"
+    },
+    "sizes": [],
+    "weight_grams": 175,
+    "weightGrams": 175,
+    "balance": "Head-light",
     "rating": 4.5
   }
 ]
