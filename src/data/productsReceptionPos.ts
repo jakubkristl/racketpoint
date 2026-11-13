@@ -249,7 +249,7 @@ const STORE_PRODUCTS: ReceptionPosSeed[] = [
   {
     id: 'tecnifibre-carboflex-120-x-top-v2',
     name: 'Tecnifibre Carboflex 120 X-Top V2',
-    price: 125,
+    price: 165,
     costPrice: 108,
     department: 'Racket',
     stockQty: 1,

@@ -1,6 +1,7 @@
 import {
 	applyBlackFridayUnsquashableDiscount,
 	applyCatalogPriceYtecDunlop,
+	applyShopPriceMatch,
 	applySquashpointInvoice248151,
 	applyOnsiteSaleOct12026,
 	applyOnsiteSaleOct92026,
@@ -54,6 +55,7 @@ let onsiteSaleOct1Attempted = false;
 let onsiteSaleOct9Attempted = false;
 let onsiteSaleOct12Attempted = false;
 let catalogPriceYtecDunlopAttempted = false;
+let shopPriceMatchAttempted = false;
 let squashpointInvoice248151Attempted = false;
 let blackFridayUnsquashableAttempted = false;
 let auditCodCancelAttempted = false;
@@ -232,6 +234,20 @@ async function maybeApplyCatalogPriceYtecDunlop(env: WorkerEnvironment) {
 	}
 }
 
+/** Raise Carboflex 120 X-Top V2 club shelf to €165. Does not clear sale discounts. */
+async function maybeApplyShopPriceMatch(env: WorkerEnvironment) {
+	if (shopPriceMatchAttempted) {
+		return;
+	}
+
+	shopPriceMatchAttempted = true;
+	try {
+		await applyShopPriceMatch(env);
+	} catch {
+		shopPriceMatchAttempted = false;
+	}
+}
+
 /** Date-gated BF Unsquashable 10%: apply while live, clear after Mon 16 Sofia. */
 async function maybeApplyBlackFridayUnsquashable(env: WorkerEnvironment) {
 	if (blackFridayUnsquashableAttempted) {
@@ -285,6 +301,7 @@ async function maybeApplyOpsMigrations(env: WorkerEnvironment) {
 	await maybeApplyOnsiteSaleOct12(env);
 	await maybeApplyCatalogPriceYtecDunlop(env);
 	await maybeApplySquashpointInvoice248151(env);
+	await maybeApplyShopPriceMatch(env);
 	await maybeApplyBlackFridayUnsquashable(env);
 	await maybeCancelAuditCod(env);
 	await maybeClearTestAuditOrders(env);
