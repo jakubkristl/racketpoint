@@ -543,7 +543,7 @@ export const products: Product[] = [
     categorySlug: 'badminton',
     type: 'Grip',
     brand: 'Karakal',
-    price: '€4.20',
+    price: '€4.00',
     details: 'Classic tacky replacement grip for badminton and racket handles.',
     badges: ['Grip', 'Classic'],
     stock: 0,
