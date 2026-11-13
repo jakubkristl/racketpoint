@@ -424,6 +424,8 @@ async function insertCodOrder(
     shippingEur: number;
     status: 'Pending' | 'Delivered';
     createdAt: string;
+    /** Stable id for an ops migration. Storefront orders leave this unset. */
+    id?: string;
     /** When set, skip stock checks/decrements and force these unit prices (recovery / ops). */
     skipStockDecrement?: boolean;
   },
@@ -460,7 +462,7 @@ async function insertCodOrder(
   }
 
   totalAmount += input.shippingEur;
-  const id = `ord_${crypto.randomUUID()}`;
+  const id = input.id?.trim() || `ord_${crypto.randomUUID()}`;
 
   const statements = [];
   if (!input.skipStockDecrement) {
@@ -1477,6 +1479,372 @@ export async function applySquashpointInvoice248151(env: CommerceEnv) {
   ).bind(SQUASHPOINT_INVOICE_248151_ID, new Date().toISOString(), details).run();
 
   return { applied: true as const, id: SQUASHPOINT_INVOICE_248151_ID };
+}
+
+const SQUASHPOINT_INVOICE_247673_ID = 'squashpoint-invoice-247673-2026-08-18';
+const ONSITE_SALE_NOV13_ID = 'onsite-sale-2026-11-13';
+/** Stable order id so the Friday sale can be reported before the worker runs. */
+const ONSITE_SALE_NOV13_ORDER_ID = 'ord_onsite-2026-11-13-head-radical-junior';
+const HEAD_RADICAL_JUNIOR_SKU = '214152';
+const YTEC_PRO_120_SKU = 'USQR24014';
+const TOUR_TEC_GRIP_6_SKU = 'USQG21001W6';
+/** 19:15 Europe/Sofia (UTC+2) on Friday 13 November 2026. */
+const ONSITE_SALE_NOV13_AT = '2026-11-13T17:15:00.000Z';
+
+const HEAD_RADICAL_JUNIOR_DESCRIPTION_BG = 'Детска ракета за скуош Head Radical Junior за начинаещи и юноши. Алуминиева рамка с покритие Nano Titanium за стабилност. Тегло 175 гр, глава 485 см², кордаж 14x19, баланс към дръжката, профил 19 мм. Фабрично опъната със синтетична корда, грип Cushion Grip размер 06. Цвят оранжев / сребро.';
+
+const YTEC_PRO_120_DESCRIPTION_BG = 'Ракета за скуош UNSQUASHABLE Y-TEC PRO 120 за напреднали играчи. Рамка 120 грама от графит с PowerCore и PowerProfile, баланс към дръжката. Глава 500 см², кордаж 14x18, дължина 68,5 см, корда DuraFibre 1,20 мм, грип TOUR-TEC PRO PU. Цвят черен / бял. Без калъф.';
+
+const TOUR_TEC_GRIP_DESCRIPTION_BG = 'Комплект от 6 броя резервни грипове UNSQUASHABLE TOUR-TEC PRO PU за скуош. Тънък профил 1,6 мм за по-добър усет, попива влагата и държи хвата стабилен при дълъг мач. Бял цвят, опаковка от рециклиран картон.';
+
+type InvoiceStockRow = {
+  found: boolean;
+  created: boolean;
+  stockBefore: number;
+  stockAfter: number;
+  sellingPrice: number;
+  discountPrice: number | null;
+};
+
+/**
+ * Add this invoice's units once. Keeps the selling price and any discount already on the row.
+ * A missing row is inserted at the invoice quantity, using the shop price already published for that article.
+ */
+async function receiveInvoiceUnits(
+  env: CommerceEnv,
+  input: {
+    sku: string;
+    title: string;
+    slug: string;
+    description: string;
+    brand: string;
+    subCategory: string;
+    cost: number;
+    quantity: number;
+    sellingPriceIfMissing: number;
+    discountPriceIfMissing: number | null;
+    image: string;
+    weightGrams: number | null;
+    balance: string | null;
+  },
+): Promise<InvoiceStockRow> {
+  const existing = await env.DB.prepare(
+    'SELECT id, stock, selling_price, discount_price FROM products WHERE id = ? LIMIT 1',
+  )
+    .bind(input.sku)
+    .first<{ id: string; stock: number; selling_price: number; discount_price: number | null }>();
+
+  if (!existing) {
+    await env.DB.prepare(
+      `INSERT INTO products (
+        id, title, slug, description, brand, sport, sub_category,
+        cost_price, selling_price, discount_price, stock, images, attributes, sizes,
+        weight_grams, balance, rating, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).bind(
+      input.sku,
+      input.title,
+      input.slug,
+      input.description,
+      input.brand,
+      'squash',
+      input.subCategory,
+      input.cost,
+      input.sellingPriceIfMissing,
+      input.discountPriceIfMissing,
+      input.quantity,
+      JSON.stringify([input.image]),
+      JSON.stringify({
+        source: 'squashpoint-invoice',
+        articleCode: input.sku,
+        invoice: '247673',
+        order: '102170',
+      }),
+      '[]',
+      input.weightGrams,
+      input.balance,
+      4.5,
+      new Date().toISOString(),
+    ).run();
+    await recordStockMovement(env, input.sku, input.quantity, 'invoice_247673', null);
+    return {
+      found: false,
+      created: true,
+      stockBefore: 0,
+      stockAfter: input.quantity,
+      sellingPrice: input.sellingPriceIfMissing,
+      discountPrice: input.discountPriceIfMissing,
+    };
+  }
+
+  const stockBefore = Number(existing.stock);
+  const stockAfter = stockBefore + input.quantity;
+  const sellingPrice = Number(existing.selling_price);
+  const discountPrice = existing.discount_price == null ? null : Number(existing.discount_price);
+  await env.DB.prepare(
+    'UPDATE products SET description = ?, cost_price = ?, stock = ? WHERE id = ?',
+  )
+    .bind(input.description, input.cost, stockAfter, input.sku)
+    .run();
+  await recordStockMovement(env, input.sku, input.quantity, 'invoice_247673', null);
+  return {
+    found: true,
+    created: false,
+    stockBefore,
+    stockAfter,
+    sellingPrice,
+    discountPrice,
+  };
+}
+
+/**
+ * Squashpoint invoice 247673 (18 Aug 2026, order 102170).
+ * Head Radical Junior is inserted at cost €20 / shelf €49 / stock 10 (the sale migration sells one).
+ * Y-TEC PRO 120 and the Tour-Tec grip keep their current selling prices. Each August quantity is added once.
+ */
+export async function applySquashpointInvoice247673(env: CommerceEnv) {
+  await ensureOpsSchema(env);
+
+  const already = await env.DB.prepare('SELECT id FROM ops_migrations WHERE id = ? LIMIT 1')
+    .bind(SQUASHPOINT_INVOICE_247673_ID)
+    .first<{ id: string }>();
+
+  if (already?.id) {
+    return { applied: false as const, reason: 'already-applied' as const };
+  }
+
+  const juniorExisting = await env.DB.prepare('SELECT id, stock FROM products WHERE id = ? LIMIT 1')
+    .bind(HEAD_RADICAL_JUNIOR_SKU)
+    .first<{ id: string; stock: number }>();
+
+  let junior: InvoiceStockRow;
+  if (!juniorExisting) {
+    junior = await receiveInvoiceUnits(env, {
+      sku: HEAD_RADICAL_JUNIOR_SKU,
+      title: 'Head Radical Junior',
+      slug: 'head-radical-junior-214152',
+      description: HEAD_RADICAL_JUNIOR_DESCRIPTION_BG,
+      brand: 'Head',
+      subCategory: 'Rackets',
+      cost: 20,
+      quantity: 10,
+      sellingPriceIfMissing: 49,
+      discountPriceIfMissing: null,
+      image: '/imports/product-images/head-radical-junior.jpg',
+      weightGrams: 175,
+      balance: 'Head-light',
+    });
+  } else {
+    // Already listed. Do not insert a twin and do not add another 10.
+    await env.DB.prepare(
+      'UPDATE products SET description = ?, cost_price = ?, selling_price = ?, discount_price = NULL WHERE id = ?',
+    )
+      .bind(HEAD_RADICAL_JUNIOR_DESCRIPTION_BG, 20, 49, HEAD_RADICAL_JUNIOR_SKU)
+      .run();
+    const stock = Number(juniorExisting.stock);
+    junior = {
+      found: true,
+      created: false,
+      stockBefore: stock,
+      stockAfter: stock,
+      sellingPrice: 49,
+      discountPrice: null,
+    };
+  }
+
+  const ytecShopPrice = CATALOG_PRICE_YTEC_DUNLOP_UPDATES.find((row) => row.sku === YTEC_PRO_120_SKU);
+  const ytec = await receiveInvoiceUnits(env, {
+    sku: YTEC_PRO_120_SKU,
+    title: 'UNSQUASHABLE Y-TEC PRO 120',
+    slug: 'unsquashable-y-tec-pro-120',
+    description: YTEC_PRO_120_DESCRIPTION_BG,
+    brand: 'Unsquashable',
+    subCategory: 'Rackets',
+    cost: 54,
+    quantity: 16,
+    sellingPriceIfMissing: ytecShopPrice?.sellingPrice ?? 127,
+    discountPriceIfMissing: null,
+    image: 'https://cdn.webshopapp.com/shops/40033/files/487988238/unsquashable-y-tec-pro-120.jpg',
+    weightGrams: 120,
+    balance: 'Head-light',
+  });
+
+  const grip = await receiveInvoiceUnits(env, {
+    sku: TOUR_TEC_GRIP_6_SKU,
+    title: 'UNSQUASHABLE TOUR-TEC PRO PU Grip - 6 Pack',
+    slug: 'unsquashable-tour-tec-pro-pu-grip-pack',
+    description: TOUR_TEC_GRIP_DESCRIPTION_BG,
+    brand: 'Unsquashable',
+    subCategory: 'Grips',
+    cost: 10.95,
+    quantity: 10,
+    sellingPriceIfMissing: 29.95,
+    discountPriceIfMissing: 14.95,
+    image: 'https://cdn.webshopapp.com/shops/40033/files/463951897/unsquashable-tour-tec-pro-pu-grip-6-pack.jpg',
+    weightGrams: null,
+    balance: null,
+  });
+
+  const details = JSON.stringify({
+    invoice: '247673',
+    order: '102170',
+    date: '2026-08-18',
+    products: [
+      { sku: HEAD_RADICAL_JUNIOR_SKU, ...junior, cost: 20 },
+      { sku: YTEC_PRO_120_SKU, ...ytec, cost: 54, quantityAdded: 16 },
+      { sku: TOUR_TEC_GRIP_6_SKU, ...grip, cost: 10.95, quantityAdded: 10 },
+    ],
+  });
+
+  await env.DB.prepare(
+    'INSERT INTO ops_migrations (id, applied_at, details) VALUES (?, ?, ?)',
+  ).bind(SQUASHPOINT_INVOICE_247673_ID, new Date().toISOString(), details).run();
+
+  return {
+    applied: true as const,
+    id: SQUASHPOINT_INVOICE_247673_ID,
+    junior,
+    ytec,
+    grip,
+  };
+}
+
+export async function invoice247673Status(env: CommerceEnv) {
+  await ensureOpsSchema(env);
+  const row = await env.DB.prepare('SELECT id, applied_at, details FROM ops_migrations WHERE id = ? LIMIT 1')
+    .bind(SQUASHPOINT_INVOICE_247673_ID)
+    .first<{ id: string; applied_at: string; details: string | null }>();
+
+  if (!row) {
+    return json({ applied: false, id: SQUASHPOINT_INVOICE_247673_ID });
+  }
+
+  return json({
+    applied: true,
+    id: row.id,
+    appliedAt: row.applied_at,
+    details: row.details ? JSON.parse(row.details) : null,
+  });
+}
+
+/**
+ * Onsite sale, Friday 13 November 2026: 1× Head Radical Junior at €39.
+ * Shelf stays €49. Stock goes from the invoice 10 to 9. No customer mail.
+ */
+export async function applyOnsiteSaleNov132026(env: CommerceEnv) {
+  await ensureOpsSchema(env);
+
+  const already = await env.DB.prepare('SELECT id FROM ops_migrations WHERE id = ? LIMIT 1')
+    .bind(ONSITE_SALE_NOV13_ID)
+    .first<{ id: string }>();
+
+  if (already?.id) {
+    return { applied: false as const, reason: 'already-applied' as const };
+  }
+
+  const product = await env.DB.prepare(
+    'SELECT id, stock, cost_price, selling_price FROM products WHERE id = ? LIMIT 1',
+  )
+    .bind(HEAD_RADICAL_JUNIOR_SKU)
+    .first<{ id: string; stock: number; cost_price: number; selling_price: number }>();
+
+  if (!product) {
+    throw new Error(`Missing product for onsite sale: ${HEAD_RADICAL_JUNIOR_SKU}`);
+  }
+
+  const existingOrder = await env.DB.prepare(
+    'SELECT id FROM orders WHERE id = ? OR notes LIKE ? LIMIT 1',
+  )
+    .bind(ONSITE_SALE_NOV13_ORDER_ID, `%idempotency:${ONSITE_SALE_NOV13_ID}%`)
+    .first<{ id: string }>();
+
+  const stockBefore = Number(product.stock);
+  let orderId = existingOrder?.id ?? ONSITE_SALE_NOV13_ORDER_ID;
+  let totalAmount = 39;
+
+  if (!existingOrder) {
+    if (stockBefore < 1) {
+      throw new Error(
+        `Insufficient stock for onsite sale ${HEAD_RADICAL_JUNIOR_SKU} (have ${stockBefore}, need 1).`,
+      );
+    }
+
+    const created = await insertCodOrder(env, {
+      id: ONSITE_SALE_NOV13_ORDER_ID,
+      fullName: 'Onsite sale / Jakub',
+      email: 'admin@racketpoint.bg',
+      items: [{ sku: HEAD_RADICAL_JUNIOR_SKU, quantity: 1, priceEur: 39 }],
+      billingAddress: {
+        city: 'Sofia',
+        address: 'Onsite / Double Yellow',
+        phone: '-',
+      },
+      notes: [
+        'onsite',
+        ONSITE_SALE_NOV13_ID,
+        '1× Head Radical Junior @ €39',
+        `idempotency:${ONSITE_SALE_NOV13_ID}`,
+      ].join('\n'),
+      shippingEur: 0,
+      status: 'Delivered',
+      createdAt: ONSITE_SALE_NOV13_AT,
+    });
+    orderId = created.id;
+    totalAmount = created.totalAmount;
+  }
+
+  const after = await env.DB.prepare('SELECT stock, cost_price FROM products WHERE id = ? LIMIT 1')
+    .bind(HEAD_RADICAL_JUNIOR_SKU)
+    .first<{ stock: number; cost_price: number }>();
+  const stockAfter = Number(after?.stock ?? stockBefore);
+  const cost = Number(after?.cost_price ?? product.cost_price ?? 0);
+
+  const details = JSON.stringify({
+    orderId,
+    totalAmount,
+    revenue: totalAmount,
+    costTotal: cost,
+    profit: totalAmount - cost,
+    sellingPrice: Number(product.selling_price),
+    items: [{ sku: HEAD_RADICAL_JUNIOR_SKU, quantity: 1, priceEur: 39 }],
+    stockBefore,
+    stockAfter,
+    at: ONSITE_SALE_NOV13_AT,
+    timezone: 'Europe/Sofia',
+  });
+
+  await env.DB.prepare(
+    'INSERT INTO ops_migrations (id, applied_at, details) VALUES (?, ?, ?)',
+  ).bind(ONSITE_SALE_NOV13_ID, new Date().toISOString(), details).run();
+
+  return {
+    applied: true as const,
+    orderId,
+    totalAmount,
+    revenue: totalAmount,
+    costTotal: cost,
+    profit: totalAmount - cost,
+    stockBefore,
+    stockAfter,
+  };
+}
+
+export async function onsiteSaleNov13Status(env: CommerceEnv) {
+  await ensureOpsSchema(env);
+  const row = await env.DB.prepare('SELECT id, applied_at, details FROM ops_migrations WHERE id = ? LIMIT 1')
+    .bind(ONSITE_SALE_NOV13_ID)
+    .first<{ id: string; applied_at: string; details: string | null }>();
+
+  if (!row) {
+    return json({ applied: false, id: ONSITE_SALE_NOV13_ID });
+  }
+
+  return json({
+    applied: true,
+    id: row.id,
+    appliedAt: row.applied_at,
+    details: row.details ? JSON.parse(row.details) : null,
+  });
 }
 
 /**
