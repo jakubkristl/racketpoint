@@ -46,6 +46,14 @@ export const CATALOG_PRICE_YTEC_DUNLOP_UPDATES = [
     sellingPrice: 147,
   },
 ] as const;
+/**
+ * Club website shelf was €165; racketpoint club listing was €125.
+ * Raise the club selling price only. Do not touch discount_price — Black Weekend
+ * 13–16 Nov 2026 keeps its own discount on the Unsquashable rackets.
+ */
+const SHOP_PRICE_MATCH_ID = 'shop-price-match-2026-11-13';
+const CARBOFLEX_120_XTOP_V2_SKU = 'POS-tecnifibre-carboflex-120-x-top-v2';
+const CARBOFLEX_120_XTOP_V2_SELL_EUR = 165;
 /** Apply 10% Unsquashable racket promo (Bulgarian BF 13–16 Nov 2026 Sofia). */
 const BF_UNSQUASHABLE_APPLY_ID = 'bf-unsquashable-rackets-2026-11';
 /** Clear the same promo after Mon 16 Nov 2026 23:59 Sofia. */
@@ -1233,6 +1241,73 @@ export async function catalogPriceYtecDunlopStatus(env: CommerceEnv) {
     targets: CATALOG_PRICE_YTEC_DUNLOP_UPDATES,
     live,
   });
+}
+
+/**
+ * Raise Tecnifibre Carboflex 120 X-Top V2 club shelf to €165 when it is lower.
+ * Leaves discount_price unchanged so a temporary sale is not cleared.
+ */
+export async function applyShopPriceMatch(env: CommerceEnv) {
+  await ensureOpsSchema(env);
+
+  const row = await env.DB.prepare(
+    'SELECT id, title, selling_price, discount_price FROM products WHERE id = ? LIMIT 1',
+  )
+    .bind(CARBOFLEX_120_XTOP_V2_SKU)
+    .first<{ id: string; title: string; selling_price: number; discount_price: number | null }>();
+
+  const sellingBefore = row ? Number(row.selling_price) : null;
+  const discountBefore = row?.discount_price == null ? null : Number(row.discount_price);
+  const needsRaise = sellingBefore != null && sellingBefore < CARBOFLEX_120_XTOP_V2_SELL_EUR;
+
+  if (needsRaise) {
+    await env.DB.prepare('UPDATE products SET selling_price = ? WHERE id = ?')
+      .bind(CARBOFLEX_120_XTOP_V2_SELL_EUR, CARBOFLEX_120_XTOP_V2_SKU)
+      .run();
+  }
+
+  const details = JSON.stringify({
+    sku: CARBOFLEX_120_XTOP_V2_SKU,
+    title: row?.title ?? 'Tecnifibre Carboflex 120 X-Top V2',
+    sellingBefore,
+    sellingAfter: needsRaise ? CARBOFLEX_120_XTOP_V2_SELL_EUR : sellingBefore,
+    discountPrice: discountBefore,
+    missing: !row,
+    raised: needsRaise,
+  });
+
+  const already = await env.DB.prepare('SELECT id FROM ops_migrations WHERE id = ? LIMIT 1')
+    .bind(SHOP_PRICE_MATCH_ID)
+    .first<{ id: string }>();
+
+  if (already?.id) {
+    if (needsRaise) {
+      await env.DB.prepare('UPDATE ops_migrations SET details = ?, applied_at = ? WHERE id = ?')
+        .bind(details, new Date().toISOString(), SHOP_PRICE_MATCH_ID)
+        .run();
+    }
+    return {
+      applied: false as const,
+      reason: 'already-applied' as const,
+      reEnsured: needsRaise,
+      sellingBefore,
+      discountPrice: discountBefore,
+      missing: !row,
+    };
+  }
+
+  await env.DB.prepare(
+    'INSERT INTO ops_migrations (id, applied_at, details) VALUES (?, ?, ?)',
+  ).bind(SHOP_PRICE_MATCH_ID, new Date().toISOString(), details).run();
+
+  return {
+    applied: true as const,
+    sellingBefore,
+    sellingAfter: needsRaise ? CARBOFLEX_120_XTOP_V2_SELL_EUR : sellingBefore,
+    discountPrice: discountBefore,
+    missing: !row,
+    raised: needsRaise,
+  };
 }
 
 const SQUASHPOINT_INVOICE_248151_ID = 'squashpoint-invoice-248151-2026-11-12';
