@@ -130,7 +130,7 @@
     "cost_price": 60.5,
     "selling_price": 132,
     "discount_price": null,
-    "stock": 1,
+    "stock": 0,
     "images": [
       "https://cdn.shopify.com/s/files/1/0510/5264/2502/files/Y-TECPROSquashRacket-2022-Shopify-2600x4000-IMG001_c2e87c8a-9e74-41db-a1f7-88ed2d367c4f.jpg?v=1771870985&width=900"
     ],
@@ -562,7 +562,7 @@
     "cost_price": 66,
     "selling_price": 95,
     "discount_price": null,
-    "stock": 1,
+    "stock": 0,
     "images": [
       "/imports/club-shop/unsquashable-fast-tec-pro-shoe.webp"
     ],

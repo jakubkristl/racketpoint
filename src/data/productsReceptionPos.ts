@@ -139,7 +139,7 @@ const STORE_PRODUCTS: ReceptionPosSeed[] = [
     price: 132,
     costPrice: 60.5,
     department: 'Racket',
-    stockQty: 1,
+    stockQty: 0,
   },
   {
     id: 'unsquashable-y-tec-pro-110',
@@ -285,7 +285,7 @@ const STORE_PRODUCTS: ReceptionPosSeed[] = [
     price: 95,
     costPrice: 66,
     department: 'Apparel',
-    stockQty: 1,
+    stockQty: 0,
     descriptionBg: 'Обувка за скуош UNSQUASHABLE FAST-TEC PRO — най-лекият и най-нисък модел в серията. Разработена заедно с топ играчи, сред които Мигел Родригес, за бързо ускорение и контрол във всяка посока. Ултралеката горна част и Carbon Torsion Unit дават стабилност, без да отнемат гъвкавост. Тънката междинна подметка Speed-Tec държи стъпалото близо до пода, а U-FOAM омекотява петата и предната част. Подметката AbraZone с хексагонална шарка и заоблена пета осигурява сцепление при смяна на посоката. Размер от доставката: EU 43,5 (27,5 см).',
   },
   {
