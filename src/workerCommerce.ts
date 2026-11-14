@@ -1847,6 +1847,173 @@ export async function onsiteSaleNov13Status(env: CommerceEnv) {
   });
 }
 
+const ONSITE_SALE_NOV14_ID = 'onsite-sale-2026-11-14';
+/** 18:07 Europe/Sofia on Saturday 14 November 2026. */
+const ONSITE_SALE_NOV14_AT = '2026-11-14T16:07:00.000Z';
+
+const ONSITE_NOV14_LINES = [
+  {
+    sku: YTEC_PRO_120_SKU,
+    orderId: 'ord_onsite-2026-11-14-ytec-pro-120',
+    priceEur: 79,
+    label: '1× UNSQUASHABLE Y-TEC PRO 120 @ €79',
+  },
+  {
+    sku: HEAD_RADICAL_JUNIOR_SKU,
+    orderId: 'ord_onsite-2026-11-14-head-radical-junior',
+    priceEur: 39,
+    label: '1× Head Radical Junior @ €39',
+  },
+  {
+    sku: 'POS-unsquashable-y-tec-pro-125',
+    orderId: 'ord_onsite-2026-11-14-ytec-pro-125',
+    priceEur: 75,
+    label: '1× Unsquashable Y-TEC PRO 125 @ €75',
+  },
+  {
+    sku: FAST_TEC_PRO_SHOE_SKU,
+    orderId: 'ord_onsite-2026-11-14-fast-tec-pro-shoe',
+    priceEur: 95,
+    label: '1× Unsquashable FAST-TEC Pro shoe @ €95',
+  },
+] as const;
+
+type OnsiteNov14Line = {
+  sku: string;
+  orderId: string;
+  priceEur: number;
+  stockBefore: number | null;
+  stockAfter: number | null;
+  sellingPrice: number | null;
+  discountPrice: number | null;
+  missing: boolean;
+  note: string | null;
+};
+
+export async function onsiteSaleNov14Status(env: CommerceEnv) {
+  await ensureOpsSchema(env);
+  const row = await env.DB.prepare('SELECT id, applied_at, details FROM ops_migrations WHERE id = ? LIMIT 1')
+    .bind(ONSITE_SALE_NOV14_ID)
+    .first<{ id: string; applied_at: string; details: string | null }>();
+
+  if (!row) {
+    return json({ applied: false, id: ONSITE_SALE_NOV14_ID });
+  }
+
+  return json({
+    applied: true,
+    id: row.id,
+    appliedAt: row.applied_at,
+    at: ONSITE_SALE_NOV14_AT,
+    timezone: 'Europe/Sofia',
+    details: row.details ? JSON.parse(row.details) : null,
+  });
+}
+
+/**
+ * Four onsite sales on Saturday 14 November 2026.
+ * The price paid is the order line only. Shelf prices and discounts stay as they are.
+ * A missing product is skipped. A unit is taken off the shelf only when stock is at least 1.
+ */
+export async function applyOnsiteSaleNov142026(env: CommerceEnv) {
+  await ensureOpsSchema(env);
+
+  const already = await env.DB.prepare('SELECT id FROM ops_migrations WHERE id = ? LIMIT 1')
+    .bind(ONSITE_SALE_NOV14_ID)
+    .first<{ id: string }>();
+  if (already?.id) {
+    return { applied: false as const, reason: 'already-applied' as const, id: ONSITE_SALE_NOV14_ID };
+  }
+
+  const sales: OnsiteNov14Line[] = [];
+  for (const line of ONSITE_NOV14_LINES) {
+    const existingOrder = await env.DB.prepare('SELECT id FROM orders WHERE id = ? LIMIT 1')
+      .bind(line.orderId)
+      .first<{ id: string }>();
+    const product = await env.DB.prepare(
+      'SELECT id, stock, selling_price, discount_price FROM products WHERE id = ? LIMIT 1',
+    )
+      .bind(line.sku)
+      .first<{ id: string; stock: number; selling_price: number; discount_price: number | null }>();
+
+    if (!product) {
+      sales.push({
+        sku: line.sku,
+        orderId: line.orderId,
+        priceEur: line.priceEur,
+        stockBefore: null,
+        stockAfter: null,
+        sellingPrice: null,
+        discountPrice: null,
+        missing: true,
+        note: 'Product is not on the shop. No listing was created.',
+      });
+      continue;
+    }
+
+    const stockBefore = Number(product.stock);
+    if (!existingOrder) {
+      await insertCodOrder(env, {
+        id: line.orderId,
+        fullName: 'Onsite sale / Jakub',
+        email: 'admin@racketpoint.bg',
+        items: [{ sku: line.sku, quantity: 1, priceEur: line.priceEur }],
+        billingAddress: {
+          city: 'Sofia',
+          address: 'Onsite / Double Yellow',
+          phone: '-',
+        },
+        notes: [
+          'onsite',
+          ONSITE_SALE_NOV14_ID,
+          line.label,
+          `idempotency:${ONSITE_SALE_NOV14_ID}:${line.sku}`,
+        ].join('\n'),
+        shippingEur: 0,
+        status: 'Delivered',
+        createdAt: ONSITE_SALE_NOV14_AT,
+      });
+    }
+
+    const after = await env.DB.prepare(
+      'SELECT stock, selling_price, discount_price FROM products WHERE id = ? LIMIT 1',
+    )
+      .bind(line.sku)
+      .first<{ stock: number; selling_price: number; discount_price: number | null }>();
+    const stockAfter = after ? Number(after.stock) : stockBefore;
+    sales.push({
+      sku: line.sku,
+      orderId: line.orderId,
+      priceEur: line.priceEur,
+      stockBefore,
+      stockAfter,
+      sellingPrice: after ? Number(after.selling_price) : Number(product.selling_price),
+      discountPrice: after?.discount_price == null ? null : Number(after.discount_price),
+      missing: false,
+      note: stockBefore < 1
+        ? 'Live stock was already 0, so this sale did not take another unit.'
+        : null,
+    });
+  }
+
+  const details = JSON.stringify({
+    at: ONSITE_SALE_NOV14_AT,
+    timezone: 'Europe/Sofia',
+    sales,
+  });
+  await env.DB.prepare(
+    'INSERT INTO ops_migrations (id, applied_at, details) VALUES (?, ?, ?)',
+  ).bind(ONSITE_SALE_NOV14_ID, new Date().toISOString(), details).run();
+
+  return {
+    applied: true as const,
+    id: ONSITE_SALE_NOV14_ID,
+    at: ONSITE_SALE_NOV14_AT,
+    timezone: 'Europe/Sofia',
+    sales,
+  };
+}
+
 /**
  * Bulgarian Black Friday: set discount_price = round(selling_price × 0.9, 2) on all 13
  * Unsquashable racket SKUs. Leaves selling_price / cost_price unchanged.
