@@ -6920,7 +6920,7 @@
     "sport": "squash",
     "sub_category": "Balls",
     "cost_price": 2.1,
-    "selling_price": 3.75,
+    "selling_price": 4,
     "discount_price": null,
     "stock": 12,
     "images": [
@@ -16767,7 +16767,7 @@
     "sport": "squash",
     "sub_category": "Bags",
     "cost_price": 12.85,
-    "selling_price": 22.95,
+    "selling_price": 29,
     "discount_price": null,
     "stock": 12,
     "images": [

@@ -1,6 +1,7 @@
 import {
 	applyBlackFridayUnsquashableDiscount,
 	applyCatalogPriceYtecDunlop,
+	applyDunlopEyewearAndBallPrices,
 	applyShopPriceMatch,
 	applySquashpointInvoice248151,
 	applySquashpointInvoice247673,
@@ -67,6 +68,7 @@ let onsiteSaleNov14Attempted = false;
 let onsiteSaleNov15Attempted = false;
 let squashpointInvoice247673Attempted = false;
 let catalogPriceYtecDunlopAttempted = false;
+let dunlopEyewearBallPriceAttempted = false;
 let shopPriceMatchAttempted = false;
 let squashpointInvoice248151Attempted = false;
 let blackFridayUnsquashableAttempted = false;
@@ -298,6 +300,20 @@ async function maybeApplyCatalogPriceYtecDunlop(env: WorkerEnvironment) {
 	}
 }
 
+/** Dunlop Junior Eyewear €29 and the single Pro double-yellow ball €4. */
+async function maybeApplyDunlopEyewearAndBallPrices(env: WorkerEnvironment) {
+	if (dunlopEyewearBallPriceAttempted) {
+		return;
+	}
+
+	dunlopEyewearBallPriceAttempted = true;
+	try {
+		await applyDunlopEyewearAndBallPrices(env);
+	} catch {
+		dunlopEyewearBallPriceAttempted = false;
+	}
+}
+
 /** Raise Carboflex 120 X-Top V2 club shelf to €165. Does not clear sale discounts. */
 async function maybeApplyShopPriceMatch(env: WorkerEnvironment) {
 	if (shopPriceMatchAttempted) {
@@ -370,6 +386,7 @@ async function maybeApplyOpsMigrations(env: WorkerEnvironment) {
 	await maybeApplyOnsiteSaleNov14(env);
 	await maybeApplyOnsiteSaleNov15(env);
 	await maybeApplyShopPriceMatch(env);
+	await maybeApplyDunlopEyewearAndBallPrices(env);
 	await maybeApplyBlackFridayUnsquashable(env);
 	await maybeCancelAuditCod(env);
 	await maybeClearTestAuditOrders(env);

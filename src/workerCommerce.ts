@@ -54,6 +54,30 @@ export const CATALOG_PRICE_YTEC_DUNLOP_UPDATES = [
 const SHOP_PRICE_MATCH_ID = 'shop-price-match-2026-11-13';
 const CARBOFLEX_120_XTOP_V2_SKU = 'POS-tecnifibre-carboflex-120-x-top-v2';
 const CARBOFLEX_120_XTOP_V2_SELL_EUR = 165;
+/**
+ * Dunlop Junior Protective Eyewear €29 and the single Dunlop Pro double-yellow ball €4.
+ * Shelf (selling_price) and the price charged now are the same: discount_price is cleared
+ * so a sale cannot undercut these two, and the shelf cannot jump back up later.
+ * Does not touch the Black Weekend / Unsquashable racket sale.
+ */
+const DUNLOP_EYEWEAR_BALL_PRICE_ID = 'dunlop-eyewear-ball-prices-2026-11-15';
+export const DUNLOP_EYEWEAR_BALL_PRICE_UPDATES = [
+  {
+    sku: '10352187',
+    title: 'Dunlop Junior Protective Eyewear',
+    sellingPrice: 29,
+  },
+  {
+    sku: 'POS-dunlop-junior-protective-eyewear',
+    title: 'Dunlop Junior Protective Eyewear',
+    sellingPrice: 29,
+  },
+  {
+    sku: '1000',
+    title: 'Dunlop Pro Squash Ball (double yellow dot)',
+    sellingPrice: 4,
+  },
+] as const;
 /** Apply 10% Unsquashable racket promo (Bulgarian BF 13–16 Nov 2026 Sofia). */
 const BF_UNSQUASHABLE_APPLY_ID = 'bf-unsquashable-rackets-2026-11';
 /** Clear the same promo after Mon 16 Nov 2026 23:59 Sofia. */
@@ -1243,6 +1267,89 @@ export async function catalogPriceYtecDunlopStatus(env: CommerceEnv) {
     targets: CATALOG_PRICE_YTEC_DUNLOP_UPDATES,
     live,
   });
+}
+
+/**
+ * Lock the two Dunlop prices. Re-runs after it is recorded so a catalog chunk
+ * cannot put the old shelf or a sale price back.
+ */
+async function ensureDunlopEyewearAndBallPrices(env: CommerceEnv) {
+  const results: Array<{
+    sku: string;
+    title: string;
+    sellingBefore: number | null;
+    discountBefore: number | null;
+    sellingAfter: number;
+    missing: boolean;
+  }> = [];
+
+  for (const update of DUNLOP_EYEWEAR_BALL_PRICE_UPDATES) {
+    const row = await env.DB.prepare(
+      'SELECT id, title, selling_price, discount_price FROM products WHERE id = ? LIMIT 1',
+    )
+      .bind(update.sku)
+      .first<{ id: string; title: string; selling_price: number; discount_price: number | null }>();
+
+    if (!row) {
+      results.push({
+        sku: update.sku,
+        title: update.title,
+        sellingBefore: null,
+        discountBefore: null,
+        sellingAfter: update.sellingPrice,
+        missing: true,
+      });
+      continue;
+    }
+
+    const sellingBefore = Number(row.selling_price);
+    const discountBefore = row.discount_price == null ? null : Number(row.discount_price);
+    await env.DB.prepare(
+      'UPDATE products SET selling_price = ?, discount_price = NULL WHERE id = ?',
+    )
+      .bind(update.sellingPrice, update.sku)
+      .run();
+
+    results.push({
+      sku: update.sku,
+      title: row.title || update.title,
+      sellingBefore,
+      discountBefore,
+      sellingAfter: update.sellingPrice,
+      missing: false,
+    });
+  }
+
+  return results;
+}
+
+export async function applyDunlopEyewearAndBallPrices(env: CommerceEnv) {
+  await ensureOpsSchema(env);
+
+  const already = await env.DB.prepare('SELECT id FROM ops_migrations WHERE id = ? LIMIT 1')
+    .bind(DUNLOP_EYEWEAR_BALL_PRICE_ID)
+    .first<{ id: string }>();
+
+  const updates = await ensureDunlopEyewearAndBallPrices(env);
+  const missing = updates.filter((row) => row.missing).map((row) => row.sku);
+  if (missing.length > 0) {
+    throw new Error(`Missing product(s) for Dunlop price update: ${missing.join(', ')}`);
+  }
+
+  const details = JSON.stringify({ updates, targets: DUNLOP_EYEWEAR_BALL_PRICE_UPDATES });
+
+  if (already?.id) {
+    await env.DB.prepare('UPDATE ops_migrations SET details = ?, applied_at = ? WHERE id = ?')
+      .bind(details, new Date().toISOString(), DUNLOP_EYEWEAR_BALL_PRICE_ID)
+      .run();
+    return { applied: false as const, reason: 'already-applied' as const, reEnsured: true as const, updates };
+  }
+
+  await env.DB.prepare(
+    'INSERT INTO ops_migrations (id, applied_at, details) VALUES (?, ?, ?)',
+  ).bind(DUNLOP_EYEWEAR_BALL_PRICE_ID, new Date().toISOString(), details).run();
+
+  return { applied: true as const, updates };
 }
 
 /**
