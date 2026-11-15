@@ -2014,6 +2014,143 @@ export async function applyOnsiteSaleNov142026(env: CommerceEnv) {
   };
 }
 
+const ONSITE_SALE_NOV15_ID = 'onsite-sale-2026-11-15';
+const ONSITE_SALE_NOV15_ORDER_ID = 'ord_onsite-2026-11-15-ytec-pro-120';
+const ONSITE_SALE_NOV15_PRICE = 79;
+/** 11:53 Europe/Sofia on Sunday 15 November 2026. */
+const ONSITE_SALE_NOV15_AT = '2026-11-15T09:53:00.000Z';
+
+export async function onsiteSaleNov15Status(env: CommerceEnv) {
+  await ensureOpsSchema(env);
+  const row = await env.DB.prepare('SELECT id, applied_at, details FROM ops_migrations WHERE id = ? LIMIT 1')
+    .bind(ONSITE_SALE_NOV15_ID)
+    .first<{ id: string; applied_at: string; details: string | null }>();
+
+  if (!row) {
+    return json({ applied: false, id: ONSITE_SALE_NOV15_ID });
+  }
+
+  return json({
+    applied: true,
+    id: row.id,
+    appliedAt: row.applied_at,
+    at: ONSITE_SALE_NOV15_AT,
+    timezone: 'Europe/Sofia',
+    details: row.details ? JSON.parse(row.details) : null,
+  });
+}
+
+/**
+ * Onsite sale, Sunday 15 November 2026: 1× Y-TEC PRO 120 at €79.
+ * Shelf stays €127. This is a new order, not Saturday's sale.
+ */
+export async function applyOnsiteSaleNov152026(env: CommerceEnv) {
+  await ensureOpsSchema(env);
+
+  const already = await env.DB.prepare('SELECT id FROM ops_migrations WHERE id = ? LIMIT 1')
+    .bind(ONSITE_SALE_NOV15_ID)
+    .first<{ id: string }>();
+  if (already?.id) {
+    return { applied: false as const, reason: 'already-applied' as const, id: ONSITE_SALE_NOV15_ID };
+  }
+
+  const product = await env.DB.prepare(
+    'SELECT id, stock, selling_price, discount_price FROM products WHERE id = ? LIMIT 1',
+  )
+    .bind(YTEC_PRO_120_SKU)
+    .first<{ id: string; stock: number; selling_price: number; discount_price: number | null }>();
+
+  if (!product) {
+    const details = JSON.stringify({
+      at: ONSITE_SALE_NOV15_AT,
+      timezone: 'Europe/Sofia',
+      sku: YTEC_PRO_120_SKU,
+      orderId: ONSITE_SALE_NOV15_ORDER_ID,
+      priceEur: ONSITE_SALE_NOV15_PRICE,
+      missing: true,
+      note: 'Product is not on the shop. No listing was created.',
+    });
+    await env.DB.prepare(
+      'INSERT INTO ops_migrations (id, applied_at, details) VALUES (?, ?, ?)',
+    ).bind(ONSITE_SALE_NOV15_ID, new Date().toISOString(), details).run();
+    return {
+      applied: true as const,
+      id: ONSITE_SALE_NOV15_ID,
+      missing: true,
+      orderId: ONSITE_SALE_NOV15_ORDER_ID,
+      priceEur: ONSITE_SALE_NOV15_PRICE,
+    };
+  }
+
+  const existingOrder = await env.DB.prepare('SELECT id FROM orders WHERE id = ? LIMIT 1')
+    .bind(ONSITE_SALE_NOV15_ORDER_ID)
+    .first<{ id: string }>();
+  const stockBefore = Number(product.stock);
+
+  if (!existingOrder) {
+    await insertCodOrder(env, {
+      id: ONSITE_SALE_NOV15_ORDER_ID,
+      fullName: 'Onsite sale / Jakub',
+      email: 'admin@racketpoint.bg',
+      items: [{ sku: YTEC_PRO_120_SKU, quantity: 1, priceEur: ONSITE_SALE_NOV15_PRICE }],
+      billingAddress: {
+        city: 'Sofia',
+        address: 'Onsite / Double Yellow',
+        phone: '-',
+      },
+      notes: [
+        'onsite',
+        ONSITE_SALE_NOV15_ID,
+        '1× UNSQUASHABLE Y-TEC PRO 120 @ €79',
+        `idempotency:${ONSITE_SALE_NOV15_ID}:${YTEC_PRO_120_SKU}`,
+      ].join('\n'),
+      shippingEur: 0,
+      status: 'Delivered',
+      createdAt: ONSITE_SALE_NOV15_AT,
+    });
+  }
+
+  const after = await env.DB.prepare(
+    'SELECT stock, selling_price, discount_price FROM products WHERE id = ? LIMIT 1',
+  )
+    .bind(YTEC_PRO_120_SKU)
+    .first<{ stock: number; selling_price: number; discount_price: number | null }>();
+  const stockAfter = after ? Number(after.stock) : stockBefore;
+  const details = JSON.stringify({
+    at: ONSITE_SALE_NOV15_AT,
+    timezone: 'Europe/Sofia',
+    sku: YTEC_PRO_120_SKU,
+    orderId: ONSITE_SALE_NOV15_ORDER_ID,
+    priceEur: ONSITE_SALE_NOV15_PRICE,
+    stockBefore,
+    stockAfter,
+    sellingPrice: after ? Number(after.selling_price) : Number(product.selling_price),
+    discountPrice: after?.discount_price == null ? null : Number(after.discount_price),
+    missing: false,
+    note: stockBefore < 1
+      ? 'Live stock was already 0, so this sale did not take another unit.'
+      : null,
+  });
+
+  await env.DB.prepare(
+    'INSERT INTO ops_migrations (id, applied_at, details) VALUES (?, ?, ?)',
+  ).bind(ONSITE_SALE_NOV15_ID, new Date().toISOString(), details).run();
+
+  return {
+    applied: true as const,
+    id: ONSITE_SALE_NOV15_ID,
+    at: ONSITE_SALE_NOV15_AT,
+    timezone: 'Europe/Sofia',
+    sku: YTEC_PRO_120_SKU,
+    orderId: ONSITE_SALE_NOV15_ORDER_ID,
+    priceEur: ONSITE_SALE_NOV15_PRICE,
+    stockBefore,
+    stockAfter,
+    sellingPrice: after ? Number(after.selling_price) : Number(product.selling_price),
+    missing: false,
+  };
+}
+
 /**
  * Bulgarian Black Friday: set discount_price = round(selling_price × 0.9, 2) on all 13
  * Unsquashable racket SKUs. Leaves selling_price / cost_price unchanged.
