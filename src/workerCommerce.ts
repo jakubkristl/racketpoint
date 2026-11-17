@@ -2258,6 +2258,308 @@ export async function applyOnsiteSaleNov152026(env: CommerceEnv) {
   };
 }
 
+const ONSITE_SALE_NOV17_ID = 'onsite-sale-2026-11-17';
+/** 17:27 Europe/Sofia on Tuesday 17 November 2026. */
+const ONSITE_SALE_NOV17_AT = '2026-11-17T15:27:00.000Z';
+const HEAD_WRISTBAND_2PACK_SKU = '285050';
+
+type OnsiteNov17Line = {
+  sku: string | null;
+  orderId: string;
+  title: string;
+  quantity: number;
+  priceEur: number;
+  stockBefore: number | null;
+  stockAfter: number | null;
+  sellingPrice: number | null;
+  missing: boolean;
+  note: string | null;
+};
+
+async function insertRecordedOnsiteOrder(
+  env: CommerceEnv,
+  input: {
+    id: string;
+    sku: string;
+    quantity: number;
+    priceEur: number;
+    notes: string;
+    createdAt: string;
+  },
+) {
+  const items = [{
+    sku: input.sku,
+    quantity: input.quantity,
+    priceEur: input.priceEur,
+    reserved: false,
+    fulfillment: 'made_to_order',
+  }];
+  const totalAmount = input.priceEur * input.quantity;
+  await env.DB.prepare(
+    `INSERT INTO orders (
+      id, email, full_name, status, total_amount, payment_method, payment_status, address, items, notes, created_at
+    ) VALUES (?, ?, ?, 'Delivered', ?, 'cash_on_delivery', 'cash_on_delivery', ?, ?, ?, ?)`,
+  ).bind(
+    input.id,
+    'admin@racketpoint.bg',
+    'Onsite sale / Jakub',
+    totalAmount,
+    JSON.stringify({ city: 'Sofia', address: 'Onsite / Double Yellow', phone: '-' }),
+    JSON.stringify(items),
+    input.notes,
+    input.createdAt,
+  ).run();
+}
+
+export async function onsiteSaleNov17Status(env: CommerceEnv) {
+  await ensureOpsSchema(env);
+  const row = await env.DB.prepare('SELECT id, applied_at, details FROM ops_migrations WHERE id = ? LIMIT 1')
+    .bind(ONSITE_SALE_NOV17_ID)
+    .first<{ id: string; applied_at: string; details: string | null }>();
+
+  if (!row) {
+    return json({ applied: false, id: ONSITE_SALE_NOV17_ID });
+  }
+
+  return json({
+    applied: true,
+    id: row.id,
+    appliedAt: row.applied_at,
+    at: ONSITE_SALE_NOV17_AT,
+    timezone: 'Europe/Sofia',
+    details: row.details ? JSON.parse(row.details) : null,
+  });
+}
+
+/**
+ * Onsite sales, Tuesday 17 November 2026.
+ * Two pairs of Victor A170 A at €102.25 each, and one Head wristband 2-pack at €10.
+ * Shelf prices stay as they are. A missing listing is recorded without creating a product.
+ */
+export async function applyOnsiteSaleNov172026(env: CommerceEnv) {
+  await ensureOpsSchema(env);
+
+  const already = await env.DB.prepare('SELECT id FROM ops_migrations WHERE id = ? LIMIT 1')
+    .bind(ONSITE_SALE_NOV17_ID)
+    .first<{ id: string }>();
+  if (already?.id) {
+    return { applied: false as const, reason: 'already-applied' as const, id: ONSITE_SALE_NOV17_ID };
+  }
+
+  const sales: OnsiteNov17Line[] = [];
+  sales.push(await recordNov17VictorShoes(env));
+  sales.push(await recordNov17HeadWristband(env));
+
+  const details = JSON.stringify({
+    at: ONSITE_SALE_NOV17_AT,
+    timezone: 'Europe/Sofia',
+    sales,
+  });
+  await env.DB.prepare(
+    'INSERT INTO ops_migrations (id, applied_at, details) VALUES (?, ?, ?)',
+  ).bind(ONSITE_SALE_NOV17_ID, new Date().toISOString(), details).run();
+
+  return {
+    applied: true as const,
+    id: ONSITE_SALE_NOV17_ID,
+    at: ONSITE_SALE_NOV17_AT,
+    timezone: 'Europe/Sofia',
+    sales,
+  };
+}
+
+async function recordNov17VictorShoes(env: CommerceEnv): Promise<OnsiteNov17Line> {
+  const orderId = 'ord_onsite-2026-11-17-victor-a170-a';
+  const quantity = 2;
+  const priceEur = 102.25;
+  const title = 'Victor shoes A170 A';
+  const existingOrder = await env.DB.prepare('SELECT id FROM orders WHERE id = ? LIMIT 1')
+    .bind(orderId)
+    .first<{ id: string }>();
+  const matches = await env.DB.prepare(
+    `SELECT id, title, stock, selling_price, discount_price FROM products
+     WHERE lower(title) LIKE '%victor%'
+       AND (lower(title) LIKE '%a170%' OR lower(title) LIKE '%shoe%' OR lower(title) LIKE '%обув%')
+     LIMIT 5`,
+  ).all<{ id: string; title: string; stock: number; selling_price: number; discount_price: number | null }>();
+  const rows = matches.results ?? [];
+
+  if (rows.length !== 1) {
+    if (!existingOrder) {
+      await insertRecordedOnsiteOrder(env, {
+        id: orderId,
+        sku: 'victor-a170-a',
+        quantity,
+        priceEur,
+        notes: [
+          'onsite',
+          ONSITE_SALE_NOV17_ID,
+          '2× Victor shoes A170 A @ €102.25',
+          `idempotency:${ONSITE_SALE_NOV17_ID}:victor-a170-a`,
+          rows.length === 0
+            ? 'Listing is not on the shop. No product was created.'
+            : `More than one possible listing (${rows.map((row) => row.id).join(', ')}). No stock was changed.`,
+        ].join('\n'),
+        createdAt: ONSITE_SALE_NOV17_AT,
+      });
+    }
+    return {
+      sku: null,
+      orderId,
+      title,
+      quantity,
+      priceEur,
+      stockBefore: null,
+      stockAfter: null,
+      sellingPrice: null,
+      missing: true,
+      note: rows.length === 0
+        ? 'Listing is not on the shop. The sale is recorded and no product was created.'
+        : `More than one possible listing (${rows.map((row) => row.id).join(', ')}). The sale is recorded and no stock was changed.`,
+    };
+  }
+
+  return recordStockedOnsiteLine(env, {
+    orderId,
+    product: rows[0],
+    quantity,
+    priceEur,
+    label: '2× Victor shoes A170 A @ €102.25',
+    idempotency: `${ONSITE_SALE_NOV17_ID}:victor-a170-a`,
+  });
+}
+
+async function recordNov17HeadWristband(env: CommerceEnv): Promise<OnsiteNov17Line> {
+  const orderId = 'ord_onsite-2026-11-17-head-wristband';
+  const product = await env.DB.prepare(
+    'SELECT id, title, stock, selling_price, discount_price FROM products WHERE id = ? LIMIT 1',
+  )
+    .bind(HEAD_WRISTBAND_2PACK_SKU)
+    .first<{ id: string; title: string; stock: number; selling_price: number; discount_price: number | null }>();
+
+  if (!product) {
+    const existingOrder = await env.DB.prepare('SELECT id FROM orders WHERE id = ? LIMIT 1')
+      .bind(orderId)
+      .first<{ id: string }>();
+    if (!existingOrder) {
+      await insertRecordedOnsiteOrder(env, {
+        id: orderId,
+        sku: HEAD_WRISTBAND_2PACK_SKU,
+        quantity: 1,
+        priceEur: 10,
+        notes: [
+          'onsite',
+          ONSITE_SALE_NOV17_ID,
+          '1× Head Wristband 2.5" - 2 Pack @ €10',
+          `idempotency:${ONSITE_SALE_NOV17_ID}:${HEAD_WRISTBAND_2PACK_SKU}`,
+          'Listing is not on the shop. No product was created.',
+        ].join('\n'),
+        createdAt: ONSITE_SALE_NOV17_AT,
+      });
+    }
+    return {
+      sku: HEAD_WRISTBAND_2PACK_SKU,
+      orderId,
+      title: 'Head Wristband 2.5" - 2 Pack',
+      quantity: 1,
+      priceEur: 10,
+      stockBefore: null,
+      stockAfter: null,
+      sellingPrice: null,
+      missing: true,
+      note: 'Listing is not on the shop. The sale is recorded and no product was created.',
+    };
+  }
+
+  return recordStockedOnsiteLine(env, {
+    orderId,
+    product,
+    quantity: 1,
+    priceEur: 10,
+    label: '1× Head Wristband 2.5" - 2 Pack @ €10',
+    idempotency: `${ONSITE_SALE_NOV17_ID}:${HEAD_WRISTBAND_2PACK_SKU}`,
+  });
+}
+
+async function recordStockedOnsiteLine(
+  env: CommerceEnv,
+  input: {
+    orderId: string;
+    product: { id: string; title: string; stock: number; selling_price: number; discount_price: number | null };
+    quantity: number;
+    priceEur: number;
+    label: string;
+    idempotency: string;
+  },
+): Promise<OnsiteNov17Line> {
+  const existingOrder = await env.DB.prepare('SELECT id FROM orders WHERE id = ? LIMIT 1')
+    .bind(input.orderId)
+    .first<{ id: string }>();
+  const stockBefore = Number(input.product.stock);
+  const canTake = stockBefore >= input.quantity;
+
+  if (!existingOrder) {
+    const notes = [
+      'onsite',
+      ONSITE_SALE_NOV17_ID,
+      input.label,
+      `idempotency:${input.idempotency}`,
+    ];
+    if (canTake) {
+      await insertCodOrder(env, {
+        id: input.orderId,
+        fullName: 'Onsite sale / Jakub',
+        email: 'admin@racketpoint.bg',
+        items: [{ sku: input.product.id, quantity: input.quantity, priceEur: input.priceEur }],
+        billingAddress: {
+          city: 'Sofia',
+          address: 'Onsite / Double Yellow',
+          phone: '-',
+        },
+        notes: notes.join('\n'),
+        shippingEur: 0,
+        status: 'Delivered',
+        createdAt: ONSITE_SALE_NOV17_AT,
+      });
+    } else {
+      notes.push(stockBefore <= 0
+        ? 'Live stock was already 0, so this sale did not take another unit.'
+        : `Live stock was ${stockBefore}, which is less than ${input.quantity}, so this sale did not change stock.`);
+      await insertRecordedOnsiteOrder(env, {
+        id: input.orderId,
+        sku: input.product.id,
+        quantity: input.quantity,
+        priceEur: input.priceEur,
+        notes: notes.join('\n'),
+        createdAt: ONSITE_SALE_NOV17_AT,
+      });
+    }
+  }
+
+  const after = await env.DB.prepare(
+    'SELECT stock, selling_price, discount_price FROM products WHERE id = ? LIMIT 1',
+  )
+    .bind(input.product.id)
+    .first<{ stock: number; selling_price: number; discount_price: number | null }>();
+  const stockAfter = after ? Number(after.stock) : stockBefore;
+  return {
+    sku: input.product.id,
+    orderId: input.orderId,
+    title: input.product.title,
+    quantity: input.quantity,
+    priceEur: input.priceEur,
+    stockBefore,
+    stockAfter,
+    sellingPrice: after ? Number(after.selling_price) : Number(input.product.selling_price),
+    missing: false,
+    note: canTake
+      ? null
+      : stockBefore <= 0
+        ? 'Live stock was already 0, so this sale did not take another unit.'
+        : `Live stock was ${stockBefore}, which is less than ${input.quantity}, so stock was left unchanged.`,
+  };
+}
+
 /**
  * Bulgarian Black Friday: set discount_price = round(selling_price × 0.9, 2) on all 13
  * Unsquashable racket SKUs. Leaves selling_price / cost_price unchanged.

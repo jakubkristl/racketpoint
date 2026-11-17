@@ -11,6 +11,7 @@ import {
 	applyOnsiteSaleNov132026,
 	applyOnsiteSaleNov142026,
 	applyOnsiteSaleNov152026,
+	applyOnsiteSaleNov172026,
 	applySellableCatalogSync,
 	blackFridayUnsquashableStatus,
 	cancelAuditCodProbe,
@@ -28,6 +29,7 @@ import {
 	onsiteSaleNov13Status,
 	onsiteSaleNov14Status,
 	onsiteSaleNov15Status,
+	onsiteSaleNov17Status,
 	paymentGatewaysResponse,
 	syncCatalogFromRequest,
 	updateStorefrontOrderStatus,
@@ -66,6 +68,7 @@ let onsiteSaleOct12Attempted = false;
 let onsiteSaleNov13Attempted = false;
 let onsiteSaleNov14Attempted = false;
 let onsiteSaleNov15Attempted = false;
+let onsiteSaleNov17Attempted = false;
 let squashpointInvoice247673Attempted = false;
 let catalogPriceYtecDunlopAttempted = false;
 let dunlopEyewearBallPriceAttempted = false;
@@ -260,6 +263,19 @@ async function maybeApplyOnsiteSaleNov15(env: WorkerEnvironment) {
 	}
 }
 
+async function maybeApplyOnsiteSaleNov17(env: WorkerEnvironment) {
+	if (onsiteSaleNov17Attempted) {
+		return;
+	}
+
+	onsiteSaleNov17Attempted = true;
+	try {
+		await applyOnsiteSaleNov172026(env);
+	} catch {
+		onsiteSaleNov17Attempted = false;
+	}
+}
+
 async function maybeApplySquashpointInvoice247673(env: WorkerEnvironment) {
 	if (squashpointInvoice247673Attempted) {
 		return;
@@ -385,6 +401,7 @@ async function maybeApplyOpsMigrations(env: WorkerEnvironment) {
 	await maybeApplyOnsiteSaleNov13(env);
 	await maybeApplyOnsiteSaleNov14(env);
 	await maybeApplyOnsiteSaleNov15(env);
+	await maybeApplyOnsiteSaleNov17(env);
 	await maybeApplyShopPriceMatch(env);
 	await maybeApplyDunlopEyewearAndBallPrices(env);
 	await maybeApplyBlackFridayUnsquashable(env);
@@ -718,6 +735,29 @@ export default {
 				try {
 					const result = await applyOnsiteSaleNov152026(env);
 					onsiteSaleNov15Attempted = true;
+					return json(result);
+				} catch (error) {
+					return fail(error instanceof Error ? error.message : 'Onsite sale failed.', 500);
+				}
+			}
+			if (path === '/api/admin/onsite-sale-nov17' && request.method === 'GET') {
+				await env.DB.exec(schema);
+				try {
+					await maybeApplyOnsiteSaleNov17(env);
+					return await onsiteSaleNov17Status(env);
+				} catch (error) {
+					return fail(error instanceof Error ? error.message : 'Onsite sale status failed.', 500);
+				}
+			}
+			if (path === '/api/admin/onsite-sale-nov17' && request.method === 'POST') {
+				await env.DB.exec(schema);
+				if (!await isAdmin(request, env)) {
+					return fail('Admin role required.', 403);
+				}
+				onsiteSaleNov17Attempted = false;
+				try {
+					const result = await applyOnsiteSaleNov172026(env);
+					onsiteSaleNov17Attempted = true;
 					return json(result);
 				} catch (error) {
 					return fail(error instanceof Error ? error.message : 'Onsite sale failed.', 500);
