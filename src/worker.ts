@@ -12,6 +12,7 @@ import {
 	applyOnsiteSaleNov142026,
 	applyOnsiteSaleNov152026,
 	applyOnsiteSaleNov172026,
+	applyVictorA170AListing,
 	applySellableCatalogSync,
 	blackFridayUnsquashableStatus,
 	cancelAuditCodProbe,
@@ -30,6 +31,7 @@ import {
 	onsiteSaleNov14Status,
 	onsiteSaleNov15Status,
 	onsiteSaleNov17Status,
+	victorA170AStatus,
 	paymentGatewaysResponse,
 	syncCatalogFromRequest,
 	updateStorefrontOrderStatus,
@@ -69,6 +71,7 @@ let onsiteSaleNov13Attempted = false;
 let onsiteSaleNov14Attempted = false;
 let onsiteSaleNov15Attempted = false;
 let onsiteSaleNov17Attempted = false;
+let victorA170AAttempted = false;
 let squashpointInvoice247673Attempted = false;
 let catalogPriceYtecDunlopAttempted = false;
 let dunlopEyewearBallPriceAttempted = false;
@@ -276,6 +279,19 @@ async function maybeApplyOnsiteSaleNov17(env: WorkerEnvironment) {
 	}
 }
 
+async function maybeApplyVictorA170A(env: WorkerEnvironment) {
+	if (victorA170AAttempted) {
+		return;
+	}
+
+	victorA170AAttempted = true;
+	try {
+		await applyVictorA170AListing(env);
+	} catch {
+		victorA170AAttempted = false;
+	}
+}
+
 async function maybeApplySquashpointInvoice247673(env: WorkerEnvironment) {
 	if (squashpointInvoice247673Attempted) {
 		return;
@@ -402,6 +418,7 @@ async function maybeApplyOpsMigrations(env: WorkerEnvironment) {
 	await maybeApplyOnsiteSaleNov14(env);
 	await maybeApplyOnsiteSaleNov15(env);
 	await maybeApplyOnsiteSaleNov17(env);
+	await maybeApplyVictorA170A(env);
 	await maybeApplyShopPriceMatch(env);
 	await maybeApplyDunlopEyewearAndBallPrices(env);
 	await maybeApplyBlackFridayUnsquashable(env);
@@ -761,6 +778,29 @@ export default {
 					return json(result);
 				} catch (error) {
 					return fail(error instanceof Error ? error.message : 'Onsite sale failed.', 500);
+				}
+			}
+			if (path === '/api/admin/victor-a170-a' && request.method === 'GET') {
+				await env.DB.exec(schema);
+				try {
+					await maybeApplyVictorA170A(env);
+					return await victorA170AStatus(env);
+				} catch (error) {
+					return fail(error instanceof Error ? error.message : 'Victor shoe status failed.', 500);
+				}
+			}
+			if (path === '/api/admin/victor-a170-a' && request.method === 'POST') {
+				await env.DB.exec(schema);
+				if (!await isAdmin(request, env)) {
+					return fail('Admin role required.', 403);
+				}
+				victorA170AAttempted = false;
+				try {
+					const result = await applyVictorA170AListing(env);
+					victorA170AAttempted = true;
+					return json(result);
+				} catch (error) {
+					return fail(error instanceof Error ? error.message : 'Victor shoe listing failed.', 500);
 				}
 			}
 			if (path === '/api/admin/catalog-price-ytec-dunlop' && request.method === 'GET') {

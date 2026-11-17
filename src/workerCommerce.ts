@@ -2560,6 +2560,141 @@ async function recordStockedOnsiteLine(
   };
 }
 
+const VICTOR_A170_A_ID = 'victor-a170-a';
+const VICTOR_A170_A_LISTING_ID = 'victor-a170-a-listing';
+const VICTOR_A170_A_SELL_EUR = 102.25;
+const VICTOR_A170_A_COST_EUR = 58.8;
+const VICTOR_A170_A_STOCK = 2;
+const VICTOR_A170_A_SIZES = ['38', '42'] as const;
+const VICTOR_A170_A_DESCRIPTION_BG = 'Обувки за зала Victor A170 A, подходящи за скуош. Горна част от PU и мрежа, междинна подметка EVA с ENERGYMAX, гумена подметка без следи. Цвят бял със синя подметка. На склад: EU 38 и EU 42, по един чифт.';
+
+export async function victorA170AStatus(env: CommerceEnv) {
+  await ensureOpsSchema(env);
+  const row = await env.DB.prepare('SELECT id, applied_at, details FROM ops_migrations WHERE id = ? LIMIT 1')
+    .bind(VICTOR_A170_A_LISTING_ID)
+    .first<{ id: string; applied_at: string; details: string | null }>();
+  const product = await env.DB.prepare(
+    'SELECT id, selling_price, cost_price, stock, sizes FROM products WHERE id = ? LIMIT 1',
+  )
+    .bind(VICTOR_A170_A_ID)
+    .first<{ id: string; selling_price: number; cost_price: number; stock: number; sizes: string }>();
+
+  if (!row) {
+    return json({ applied: false, id: VICTOR_A170_A_LISTING_ID, product: product ?? null });
+  }
+
+  return json({
+    applied: true,
+    id: row.id,
+    appliedAt: row.applied_at,
+    details: row.details ? JSON.parse(row.details) : null,
+    product: product
+      ? {
+          id: product.id,
+          sellingPrice: Number(product.selling_price),
+          costPrice: Number(product.cost_price),
+          stock: Number(product.stock),
+          sizes: JSON.parse(product.sizes || '[]'),
+        }
+      : null,
+  });
+}
+
+/**
+ * Add the Victor A170 A shoe that is already on the shelf.
+ * Stock 2 is what remains after today's sale. That sale is not recorded again.
+ */
+export async function applyVictorA170AListing(env: CommerceEnv) {
+  await ensureOpsSchema(env);
+  const already = await env.DB.prepare('SELECT id FROM ops_migrations WHERE id = ? LIMIT 1')
+    .bind(VICTOR_A170_A_LISTING_ID)
+    .first<{ id: string }>();
+  if (already?.id) {
+    return { applied: false as const, reason: 'already-applied' as const, id: VICTOR_A170_A_LISTING_ID };
+  }
+
+  const existing = await env.DB.prepare('SELECT id, stock, selling_price, cost_price FROM products WHERE id = ? LIMIT 1')
+    .bind(VICTOR_A170_A_ID)
+    .first<{ id: string; stock: number; selling_price: number; cost_price: number }>();
+  const ordersBefore = await env.DB.prepare(
+    'SELECT COUNT(*) AS n FROM orders WHERE id = ?',
+  )
+    .bind('ord_onsite-2026-11-17-victor-a170-a')
+    .first<{ n: number }>();
+
+  if (!existing) {
+    await env.DB.prepare(
+      `INSERT INTO products (
+        id, title, slug, description, brand, sport, sub_category,
+        cost_price, selling_price, discount_price, stock, images, attributes, sizes,
+        weight_grams, balance, rating, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).bind(
+      VICTOR_A170_A_ID,
+      'Victor A170 A shoes',
+      'victor-a170-a',
+      VICTOR_A170_A_DESCRIPTION_BG,
+      'Victor',
+      'squash',
+      'Apparel',
+      VICTOR_A170_A_COST_EUR,
+      VICTOR_A170_A_SELL_EUR,
+      null,
+      VICTOR_A170_A_STOCK,
+      JSON.stringify(['/imports/product-images/victor-a170-a.jpg']),
+      JSON.stringify({
+        source: 'club-stock',
+        articleCode: VICTOR_A170_A_ID,
+        size: 'EU 38 и EU 42, по един чифт',
+        color: 'White / Blue',
+        productType: 'Shoe',
+      }),
+      JSON.stringify(VICTOR_A170_A_SIZES),
+      null,
+      null,
+      4.5,
+      new Date().toISOString(),
+    ).run();
+  }
+
+  const product = await env.DB.prepare(
+    'SELECT id, selling_price, cost_price, stock, sizes FROM products WHERE id = ? LIMIT 1',
+  )
+    .bind(VICTOR_A170_A_ID)
+    .first<{ id: string; selling_price: number; cost_price: number; stock: number; sizes: string }>();
+  const ordersAfter = await env.DB.prepare(
+    'SELECT COUNT(*) AS n FROM orders WHERE id = ?',
+  )
+    .bind('ord_onsite-2026-11-17-victor-a170-a')
+    .first<{ n: number }>();
+
+  const details = JSON.stringify({
+    sku: VICTOR_A170_A_ID,
+    created: !existing,
+    sellingPrice: product ? Number(product.selling_price) : null,
+    costPrice: product ? Number(product.cost_price) : null,
+    stock: product ? Number(product.stock) : null,
+    sizes: product ? JSON.parse(product.sizes || '[]') : [],
+    saleOrderId: 'ord_onsite-2026-11-17-victor-a170-a',
+    saleOrdersBefore: Number(ordersBefore?.n ?? 0),
+    saleOrdersAfter: Number(ordersAfter?.n ?? 0),
+  });
+  await env.DB.prepare(
+    'INSERT INTO ops_migrations (id, applied_at, details) VALUES (?, ?, ?)',
+  ).bind(VICTOR_A170_A_LISTING_ID, new Date().toISOString(), details).run();
+
+  return {
+    applied: true as const,
+    id: VICTOR_A170_A_LISTING_ID,
+    sku: VICTOR_A170_A_ID,
+    created: !existing,
+    sellingPrice: VICTOR_A170_A_SELL_EUR,
+    costPrice: VICTOR_A170_A_COST_EUR,
+    stock: existing ? Number(existing.stock) : VICTOR_A170_A_STOCK,
+    sizes: [...VICTOR_A170_A_SIZES],
+  };
+}
+
 /**
  * Bulgarian Black Friday: set discount_price = round(selling_price × 0.9, 2) on all 13
  * Unsquashable racket SKUs. Leaves selling_price / cost_price unchanged.
