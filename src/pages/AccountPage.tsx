@@ -52,16 +52,16 @@ function AccountPage() {
       }
 
       try {
-        const [profile, orders] = await Promise.all([
-          refreshProfile(),
-          fetchOrders(),
-        ]);
-
+        const profile = await refreshProfile();
         if (canceled) {
           return;
         }
-
         setSessionUser(profile);
+
+        const orders = await fetchOrders().catch(() => [] as OrderRecord[]);
+        if (canceled) {
+          return;
+        }
         setUserOrders(orders);
       } catch (error) {
         if (canceled) {
@@ -172,163 +172,181 @@ function AccountPage() {
     }
   }
 
+  const roleLabel = sessionUser?.role === 'ADMIN' ? 'Админ' : 'Потребител';
+
   return (
     <div className="page-shell">
       <main className="account-page">
-        <section className="section category-mood-banner static-banner">
-          <img src="https://images.pexels.com/photos/7648297/pexels-photo-7648297.jpeg?auto=compress&cs=tinysrgb&w=1800" alt="Account and support banner" loading="lazy" />
-          <div className="category-mood-overlay">
-            <p className="eyebrow">Account center</p>
-            <h2>Manage profile, addresses and orders in one place.</h2>
-          </div>
-        </section>
-
-        <div className="account-toolbar">
-          <a className="button button-secondary" href="/">Към магазина</a>
-          {sessionUser?.role === 'ADMIN' ? <a className="button button-secondary" href="/admin">Админ панел</a> : null}
-          {sessionUser ? <button className="button button-primary" type="button" onClick={handleLogout}>Изход</button> : null}
-        </div>
-
-      {!sessionUser ? (
-        <section>
-          <div className="account-mode-switch">
-              <button className={mode === 'login' ? 'button button-primary' : 'button button-secondary'} type="button" onClick={() => setMode('login')}>
-              Вход
-            </button>
-            <button className={mode === 'signup' ? 'button button-primary' : 'button button-secondary'} type="button" onClick={() => setMode('signup')}>
-              Регистрация
-            </button>
+        <header className="account-header">
+          <div className="account-header-copy">
+            <p className="eyebrow">Racketpoint</p>
+            <h1>Профил</h1>
+            <p className="account-header-lead">
+              {sessionUser
+                ? 'Управлявайте профила, адресите и поръчките си.'
+                : 'Влезте или създайте акаунт, за да пазите адреси и поръчки.'}
+            </p>
           </div>
 
-          <form className="order-form" onSubmit={handleSubmit}>
-            {mode === 'signup' ? (
-              <>
-                <label>
-                  Пълно име
-                  <input value={name} onChange={(event) => setName(event.target.value)} required />
-                </label>
-                <label>
-                  Улица за доставка
-                  <input
-                    value={signupAddress.street}
-                    onChange={(event) => setSignupAddress((prev) => ({ ...prev, street: event.target.value }))}
-                    required
-                  />
-                </label>
-                <label>
-                  Град за доставка
-                  <input
-                    value={signupAddress.city}
-                    onChange={(event) => setSignupAddress((prev) => ({ ...prev, city: event.target.value }))}
-                    required
-                  />
-                </label>
-                <label>
-                  Пощенски код за доставка
-                  <input
-                    value={signupAddress.zipCode}
-                    onChange={(event) => setSignupAddress((prev) => ({ ...prev, zipCode: event.target.value }))}
-                    required
-                  />
-                </label>
-                <label>
-                  Държава за доставка
-                  <input
-                    value={signupAddress.country}
-                    onChange={(event) => setSignupAddress((prev) => ({ ...prev, country: event.target.value }))}
-                    required
-                  />
-                </label>
-              </>
-            ) : null}
-            <label>
-              Имейл
-              <input type="email" value={email} onChange={(event) => setEmail(event.target.value)} required />
-            </label>
-            <label>
-              Парола
-              <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} required />
-            </label>
-            <button className="button button-primary" type="submit">{mode === 'login' ? 'Вход' : 'Създай акаунт'}</button>
-            {mode === 'login' ? (
-              <p className="support-copy">
-                Забравена парола? <Link to="/forgot-password">Нулирайте я тук</Link>.
-              </p>
-            ) : null}
-            {mode === 'login' ? (
-              <button
-                className="button button-secondary"
-                type="button"
-                onClick={handleResendVerification}
-                disabled={resendLoading}
-              >
-                {resendLoading ? 'Изпращане на потвърждение...' : 'Изпрати потвърждение отново'}
+          <div className="account-toolbar">
+            <div className="account-toolbar-nav">
+              <Link className="button button-secondary" to="/">Към магазина</Link>
+              {sessionUser?.role === 'ADMIN' ? (
+                <Link className="button button-secondary" to="/admin">Админ панел</Link>
+              ) : null}
+            </div>
+            {sessionUser ? (
+              <button className="button button-secondary account-logout" type="button" onClick={handleLogout}>
+                Изход
               </button>
             ) : null}
-            {status ? <p className="form-status">{status}</p> : null}
-          </form>
-        </section>
-      ) : (
-        <section className="account-stack">
-          <form className="order-form" onSubmit={handleNameSave}>
-            <p className="eyebrow">Профил</p>
-            <label>
-              Показвано име
-              <input value={name || sessionUser.name} onChange={(event) => setName(event.target.value)} required />
-            </label>
-            <p className="support-copy">{sessionUser.email} · {sessionUser.role}</p>
-            <button className="button button-primary" type="submit">Запази профила</button>
-          </form>
+          </div>
+        </header>
 
-          <form className="order-form" onSubmit={handleSaveAddress}>
-            <p className="eyebrow">Адресна книга</p>
-            <div className="brand-grid account-cards">
-              {sessionUser.addresses.length > 0 ? sessionUser.addresses.map((address) => (
-                <article className="brand-card" key={address.id}>
-                  <h3>{address.label}</h3>
-                  <p>{address.street}</p>
-                  <p>{address.city}, {address.zipCode}</p>
-                  <p>{address.country}</p>
-                </article>
-              )) : <article className="empty-state"><h3>Все още няма запазени адреси.</h3></article>}
-            </div>
-            <label>
-              Етикет
-              <input value={addressForm.label} onChange={(event) => setAddressForm((prev) => ({ ...prev, label: event.target.value }))} required />
-            </label>
-            <label>
-              Улица
-              <input value={addressForm.street} onChange={(event) => setAddressForm((prev) => ({ ...prev, street: event.target.value }))} required />
-            </label>
-            <label>
-              Град
-              <input value={addressForm.city} onChange={(event) => setAddressForm((prev) => ({ ...prev, city: event.target.value }))} required />
-            </label>
-            <label>
-              Пощенски код
-              <input value={addressForm.zipCode} onChange={(event) => setAddressForm((prev) => ({ ...prev, zipCode: event.target.value }))} required />
-            </label>
-            <label>
-              Държава
-              <input value={addressForm.country} onChange={(event) => setAddressForm((prev) => ({ ...prev, country: event.target.value }))} required />
-            </label>
-            <button className="button button-primary" type="submit">Запази адреса</button>
-          </form>
+        {status ? <p className="form-status account-status">{status}</p> : null}
 
-          <section className="order-form">
-            <p className="eyebrow">История на поръчките</p>
-            <div className="brand-grid account-cards">
-              {userOrders.length > 0 ? userOrders.map((order) => (
-                <article className="brand-card" key={order.reference}>
-                  <h3>{order.reference}</h3>
-                  <p>{new Date(order.createdAt).toLocaleString()}</p>
-                  <p>{order.items.map((item) => `${item.sku} x${item.quantity}`).join(', ')}</p>
-                </article>
-              )) : <article className="empty-state"><h3>Все още няма поръчки.</h3></article>}
+        {!sessionUser ? (
+          <section className="account-stack">
+            <div className="account-mode-switch">
+              <button className={mode === 'login' ? 'button button-primary' : 'button button-secondary'} type="button" onClick={() => setMode('login')}>
+                Вход
+              </button>
+              <button className={mode === 'signup' ? 'button button-primary' : 'button button-secondary'} type="button" onClick={() => setMode('signup')}>
+                Регистрация
+              </button>
             </div>
+
+            <form className="order-form" onSubmit={handleSubmit}>
+              {mode === 'signup' ? (
+                <>
+                  <label>
+                    Пълно име
+                    <input value={name} onChange={(event) => setName(event.target.value)} required />
+                  </label>
+                  <label>
+                    Улица за доставка
+                    <input
+                      value={signupAddress.street}
+                      onChange={(event) => setSignupAddress((prev) => ({ ...prev, street: event.target.value }))}
+                      required
+                    />
+                  </label>
+                  <label>
+                    Град за доставка
+                    <input
+                      value={signupAddress.city}
+                      onChange={(event) => setSignupAddress((prev) => ({ ...prev, city: event.target.value }))}
+                      required
+                    />
+                  </label>
+                  <label>
+                    Пощенски код за доставка
+                    <input
+                      value={signupAddress.zipCode}
+                      onChange={(event) => setSignupAddress((prev) => ({ ...prev, zipCode: event.target.value }))}
+                      required
+                    />
+                  </label>
+                  <label>
+                    Държава за доставка
+                    <input
+                      value={signupAddress.country}
+                      onChange={(event) => setSignupAddress((prev) => ({ ...prev, country: event.target.value }))}
+                      required
+                    />
+                  </label>
+                </>
+              ) : null}
+              <label>
+                Имейл
+                <input type="email" value={email} onChange={(event) => setEmail(event.target.value)} required />
+              </label>
+              <label>
+                Парола
+                <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} required />
+              </label>
+              <button className="button button-primary" type="submit">{mode === 'login' ? 'Вход' : 'Създай акаунт'}</button>
+              {mode === 'login' ? (
+                <p className="support-copy">
+                  Забравена парола? <Link to="/forgot-password">Нулирайте я тук</Link>.
+                </p>
+              ) : null}
+              {mode === 'login' ? (
+                <button
+                  className="button button-secondary"
+                  type="button"
+                  onClick={handleResendVerification}
+                  disabled={resendLoading}
+                >
+                  {resendLoading ? 'Изпращане на потвърждение...' : 'Изпрати потвърждение отново'}
+                </button>
+              ) : null}
+            </form>
           </section>
-        </section>
-      )}
+        ) : (
+          <section className="account-stack">
+            <form className="order-form account-profile-card" onSubmit={handleNameSave}>
+              <div className="account-profile-meta">
+                <p className="eyebrow">Профил</p>
+                <p className="account-profile-email">{sessionUser.email}</p>
+                <p className="account-role-pill">{roleLabel}</p>
+              </div>
+              <label>
+                Показвано име
+                <input value={name || sessionUser.name} onChange={(event) => setName(event.target.value)} required />
+              </label>
+              <button className="button button-primary" type="submit">Запази профила</button>
+            </form>
+
+            <form className="order-form" onSubmit={handleSaveAddress}>
+              <p className="eyebrow">Адресна книга</p>
+              <div className="brand-grid account-cards">
+                {sessionUser.addresses.length > 0 ? sessionUser.addresses.map((address) => (
+                  <article className="brand-card" key={address.id}>
+                    <h3>{address.label}</h3>
+                    <p>{address.street}</p>
+                    <p>{address.city}, {address.zipCode}</p>
+                    <p>{address.country}</p>
+                  </article>
+                )) : <article className="empty-state"><h3>Все още няма запазени адреси.</h3></article>}
+              </div>
+              <label>
+                Етикет
+                <input value={addressForm.label} onChange={(event) => setAddressForm((prev) => ({ ...prev, label: event.target.value }))} required />
+              </label>
+              <label>
+                Улица
+                <input value={addressForm.street} onChange={(event) => setAddressForm((prev) => ({ ...prev, street: event.target.value }))} required />
+              </label>
+              <label>
+                Град
+                <input value={addressForm.city} onChange={(event) => setAddressForm((prev) => ({ ...prev, city: event.target.value }))} required />
+              </label>
+              <label>
+                Пощенски код
+                <input value={addressForm.zipCode} onChange={(event) => setAddressForm((prev) => ({ ...prev, zipCode: event.target.value }))} required />
+              </label>
+              <label>
+                Държава
+                <input value={addressForm.country} onChange={(event) => setAddressForm((prev) => ({ ...prev, country: event.target.value }))} required />
+              </label>
+              <button className="button button-primary" type="submit">Запази адреса</button>
+            </form>
+
+            <section className="order-form">
+              <p className="eyebrow">История на поръчките</p>
+              <div className="brand-grid account-cards">
+                {userOrders.length > 0 ? userOrders.map((order) => (
+                  <article className="brand-card" key={order.reference}>
+                    <h3>{order.reference}</h3>
+                    <p>{new Date(order.createdAt).toLocaleString()}</p>
+                    <p>{order.items.map((item) => `${item.sku} x${item.quantity}`).join(', ')}</p>
+                  </article>
+                )) : <article className="empty-state"><h3>Все още няма поръчки.</h3></article>}
+              </div>
+            </section>
+          </section>
+        )}
       </main>
     </div>
   );
