@@ -27997,5 +27997,35 @@
     "weightGrams": 175,
     "balance": "Head-light",
     "rating": 4.5
+  },
+  {
+    "id": "victor-a170-a",
+    "title": "Victor A170 A shoes",
+    "slug": "victor-a170-a",
+    "description": "Обувки за зала Victor A170 A, подходящи за скуош. Горна част от PU и мрежа, междинна подметка EVA с ENERGYMAX, гумена подметка без следи. Цвят бял със синя подметка. На склад: EU 38 и EU 42, по един чифт.",
+    "brand": "Victor",
+    "sport": "squash",
+    "sub_category": "Apparel",
+    "cost_price": 58.8,
+    "selling_price": 102.25,
+    "discount_price": null,
+    "stock": 2,
+    "images": [
+      "/imports/product-images/victor-a170-a.jpg"
+    ],
+    "attributes": {
+      "source": "club-stock",
+      "articleCode": "victor-a170-a",
+      "size": "EU 38 и EU 42, по един чифт",
+      "color": "White / Blue",
+      "productType": "Shoe"
+    },
+    "sizes": [
+      "38",
+      "42"
+    ],
+    "weight_grams": null,
+    "balance": null,
+    "rating": 4.5
   }
 ]
